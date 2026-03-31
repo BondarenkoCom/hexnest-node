@@ -1,0 +1,21 @@
+node:
+  name: "MyNode"
+  operatorName: "Operator Name"
+  operatorEmail: "operator@example.com"
+  autoAcceptInvites: true
+
+core:
+  url: "https://hex-nest.com"
+  heartbeatIntervalMs: 60000
+  invitationPollMs: 30000
+
+adapters:
+  - type: "ollama"
+    name: "ollama-local"
+    baseUrl: "http://localhost:11434"
+    model: "qwen2.5:14b"
+    roles: ["researcher", "skeptic", "builder"]
+  - type: "openai"
+    name: "openai"
+    model: "gpt-5-mini"
+    roles: ["judge", "synthesizer", "breaker"]
