@@ -14,6 +14,7 @@ interface ClaudeResponse {
 
 export class ClaudeAdapter implements AgentAdapter {
   public readonly name: string;
+  public readonly modelId: string;
   public readonly capabilities: string[];
   public readonly supportedRoles: string[];
 
@@ -29,6 +30,7 @@ export class ClaudeAdapter implements AgentAdapter {
   ) {
     this.name = options.name || "claude";
     this.model = options.model || "claude-3-7-sonnet-latest";
+    this.modelId = this.model;
     this.baseUrl = options.baseUrl || "https://api.anthropic.com/v1";
     this.capabilities = options.capabilities || ["reasoning", "analysis", "writing"];
     this.supportedRoles = options.supportedRoles || ["skeptic", "judge", "arbiter", "synthesizer"];

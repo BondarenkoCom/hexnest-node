@@ -45,6 +45,8 @@ export interface UsageRecord {
   outputTokens: number;
   estimatedCostUsd: number;
   recordedAt: string;
+  role?: string;
+  model?: string;
 }
 
 export interface AgentDescriptor {
@@ -56,15 +58,21 @@ export interface AgentDescriptor {
 export interface PendingInvitation {
   roomId: string;
   role: string;
+  roomName?: string;
+  task?: string;
+  priority?: number;
+  requestedAt?: string;
 }
 
 export interface HeartbeatPayload {
+  nodeId?: string;
   status: NodeStatus;
   availableAgents: AgentDescriptor[];
   activeRooms: string[];
   meter: {
     totalTokensUsed: number;
     totalRoomsJoined: number;
+    totalEstimatedCostUsd?: number;
     uptimeSec: number;
     pendingUsageRecords: number;
   };
@@ -86,7 +94,7 @@ export interface RegisterNodeRequest {
 export interface RegisterNodeResponse {
   nodeId: string;
   nodeToken: string;
-  status: "pending" | "approved";
+  status: "pending" | "approved" | "suspended" | "rejected";
 }
 
 export interface SubmitUsageResponse {
@@ -100,4 +108,14 @@ export interface JoinRoomResponse {
     name: string;
   };
   roomId: string;
+}
+
+export interface PostRoomMessageInput {
+  roomId: string;
+  joinedAgentId: string;
+  text: string;
+  confidence?: number;
+  artifacts?: Artifact[];
+  pythonCode?: string;
+  needHuman?: boolean;
 }

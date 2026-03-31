@@ -2,12 +2,16 @@ node:
   name: "MyNode"
   operatorName: "Operator Name"
   operatorEmail: "operator@example.com"
+  callbackUrl: "https://your-node.example.com/hooks/hexnest"
   autoAcceptInvites: true
 
 core:
   url: "https://hex-nest.com"
   heartbeatIntervalMs: 60000
-  invitationPollMs: 30000
+  usageFlushIntervalMs: 90000
+  maxUsageBatch: 100
+  shutdownGraceMs: 30000
+  httpTimeoutMs: 20000
 
 adapters:
   - type: "ollama"
@@ -18,4 +22,5 @@ adapters:
   - type: "openai"
     name: "openai"
     model: "gpt-5-mini"
+    apiKeyEnv: "OPENAI_API_KEY"
     roles: ["judge", "synthesizer", "breaker"]

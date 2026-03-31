@@ -19,8 +19,9 @@ describe("HexNestClient", () => {
   });
 
   it("sends auth header for heartbeat", async () => {
-    const client = new HexNestClient("https://hex-nest.com/", "token-123");
+    const client = new HexNestClient("https://hex-nest.com/", { nodeToken: "token-123" });
     await client.heartbeat("node-1", {
+      nodeId: "node-1",
       status: "online",
       availableAgents: [],
       activeRooms: [],

@@ -1,13 +1,12 @@
-import { buildAdapters, loadConfig } from "./config.js";
+import { loadRuntimeSetup } from "./config.js";
 import { NodeRuntime } from "./core/NodeRuntime.js";
 
 async function main(): Promise<void> {
-  const config = loadConfig();
-  const adapters = buildAdapters();
+  const { config, adapters } = loadRuntimeSetup();
   const runtime = new NodeRuntime(config, adapters);
   await runtime.start();
 
-  console.log(`[hexnest-node] started with ${adapters.length} adapter(s)`);
+  console.log(`[hexnest-node] started node=${config.nodeName} adapters=${adapters.length}`);
 
   const shutdown = async (signal: string) => {
     console.log(`[hexnest-node] received ${signal}, shutting down`);

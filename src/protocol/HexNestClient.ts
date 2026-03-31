@@ -3,6 +3,7 @@ import {
   HeartbeatPayload,
   HeartbeatResponse,
   JoinRoomResponse,
+  PostRoomMessageInput,
   RegisterNodeRequest,
   RegisterNodeResponse,
   RoomContext,
@@ -10,15 +11,31 @@ import {
   UsageRecord
 } from "./types.js";
 
-export class HexNestClient {
-  constructor(
-    coreUrl: string,
-    private readonly nodeToken?: string
-  ) {
+export interface HexNestClientOptions {
+  nodeToken?: string;
+  timeoutMs?: number;
+}
+
+export interface HexNestClientLike {
+  registerNode(payload: RegisterNodeRequest): Promise<RegisterNodeResponse>;
+  heartbeat(nodeId: string, payload: HeartbeatPayload): Promise<HeartbeatResponse>;
+  submitUsage(nodeId: string, records: UsageRecord[]): Promise<SubmitUsageResponse>;
+  markOffline(nodeId: string): Promise<void>;
+  joinRoom(roomId: string, agentName: string, role: string): Promise<JoinRoomResponse>;
+  postRoomMessage(input: PostRoomMessageInput): Promise<void>;
+  getRoomContext(roomId: string, role: string): Promise<RoomContext>;
+}
+
+export class HexNestClient implements HexNestClientLike {
+  constructor(coreUrl: string, options: HexNestClientOptions = {}) {
     this.coreUrl = sanitizeBaseUrl(coreUrl);
+    this.nodeToken = options.nodeToken;
+    this.timeoutMs = options.timeoutMs ?? 20_000;
   }
 
   private readonly coreUrl: string;
+  private readonly nodeToken?: string;
+  private readonly timeoutMs: number;
 
   async registerNode(payload: RegisterNodeRequest): Promise<RegisterNodeResponse> {
     return this.request<RegisterNodeResponse>("/api/nodes/register", {
@@ -61,19 +78,25 @@ export class HexNestClient {
     });
   }
 
-  async postRoomMessage(
-    roomId: string,
-    joinedAgentId: string,
-    text: string,
-    confidence = 0.75
-  ): Promise<void> {
-    await this.request(`/api/rooms/${encodeURIComponent(roomId)}/messages`, {
+  async postRoomMessage(input: PostRoomMessageInput): Promise<void> {
+    const body: Record<string, unknown> = {
+      agentId: input.joinedAgentId,
+      text: input.text,
+      confidence: input.confidence ?? 0.75
+    };
+    if (Array.isArray(input.artifacts) && input.artifacts.length > 0) {
+      body.artifacts = input.artifacts;
+    }
+    if (input.pythonCode) {
+      body.pythonCode = input.pythonCode;
+    }
+    if (typeof input.needHuman === "boolean") {
+      body.needHuman = input.needHuman;
+    }
+
+    await this.request(`/api/rooms/${encodeURIComponent(input.roomId)}/messages`, {
       method: "POST",
-      body: {
-        agentId: joinedAgentId,
-        text,
-        confidence
-      }
+      body
     });
   }
 
@@ -88,12 +111,25 @@ export class HexNestClient {
       return {
         id: String(value.id || ""),
         timestamp: String(value.timestamp || ""),
-        phase: "open_room",
+        phase: String(value.phase || room.phase || "open_room"),
         from: String(value.from || "unknown"),
         to: String(value.to || "room"),
         scope,
         text: String(value.text || ""),
         confidence: typeof value.confidence === "number" ? value.confidence : undefined
+      };
+    });
+
+    const rawArtifacts = Array.isArray(room.artifacts) ? room.artifacts : [];
+    const artifacts = rawArtifacts.map((item, index) => {
+      const value = item as Record<string, unknown>;
+      return {
+        id: String(value.id || `artifact-${index}`),
+        type: (String(value.type || "note") as "synthesis" | "critique" | "note" | "data"),
+        label: String(value.label || ""),
+        content: String(value.content || ""),
+        producer: String(value.producer || ""),
+        timestamp: String(value.timestamp || "")
       };
     });
 
@@ -104,7 +140,7 @@ export class HexNestClient {
       role,
       phase: String(room.phase || "open_room"),
       timeline,
-      artifacts: [],
+      artifacts,
       rules: String((room.template as Record<string, unknown> | undefined)?.rules || "")
     };
   }
@@ -117,30 +153,46 @@ export class HexNestClient {
       body?: unknown;
     } = {}
   ): Promise<T> {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json"
-    };
-    if (options.authRequired) {
-      if (!this.nodeToken) {
-        throw new Error("Node token is required for this request");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
+      if (options.authRequired) {
+        if (!this.nodeToken) {
+          throw new Error("Node token is required for this request");
+        }
+        headers.Authorization = bearer(this.nodeToken);
       }
-      headers.Authorization = bearer(this.nodeToken);
-    }
 
-    const response = await fetch(`${this.coreUrl}${path}`, {
-      method: options.method || "GET",
-      headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body)
-    });
+      const response = await fetch(`${this.coreUrl}${path}`, {
+        method: options.method || "GET",
+        headers,
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        signal: controller.signal
+      });
 
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`Core API failed ${response.status} ${response.statusText}: ${body}`);
-    }
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`Core API failed ${response.status} ${response.statusText}: ${body}`);
+      }
 
-    if (response.status === 204) {
-      return undefined as T;
+      if (response.status === 204) {
+        return undefined as T;
+      }
+
+      const text = await response.text();
+      if (!text) return undefined as T;
+      return JSON.parse(text) as T;
+    } catch (error) {
+      if ((error as Error).name === "AbortError") {
+        throw new Error(`Core API timeout after ${this.timeoutMs}ms: ${path}`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
     }
-    return (await response.json()) as T;
   }
 }

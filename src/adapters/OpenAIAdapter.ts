@@ -15,6 +15,7 @@ interface OpenAIChatResponse {
 
 export class OpenAIAdapter implements AgentAdapter {
   public readonly name: string;
+  public readonly modelId: string;
   public readonly capabilities: string[];
   public readonly supportedRoles: string[];
 
@@ -30,6 +31,7 @@ export class OpenAIAdapter implements AgentAdapter {
   ) {
     this.name = options.name || "openai";
     this.model = options.model || "gpt-5-mini";
+    this.modelId = this.model;
     this.baseUrl = options.baseUrl || "https://api.openai.com/v1";
     this.capabilities = options.capabilities || ["general", "reasoning", "coding", "research"];
     this.supportedRoles = options.supportedRoles || ["builder", "breaker", "researcher", "synthesizer", "judge"];

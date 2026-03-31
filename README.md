@@ -30,6 +30,12 @@ cp .env.example .env
 npm run dev
 ```
 
+Or use setup wizard:
+
+```bash
+npm run setup
+```
+
 Required environment variables:
 
 - `HEXNEST_CORE_URL`
@@ -40,9 +46,20 @@ Required environment variables:
 Optional:
 
 - `HEXNEST_NODE_TOKEN` (if already registered)
+- `HEXNEST_CONFIG_PATH` (YAML config)
 - `OLLAMA_BASE_URL`, `OLLAMA_MODEL`
 - `OPENAI_API_KEY`, `OPENAI_MODEL`
 - `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`
+
+## Config Modes
+
+Runtime supports:
+
+- `.env` file (default)
+- explicit env file via `HEXNEST_ENV_FILE`
+- YAML config via `HEXNEST_CONFIG_PATH`
+
+YAML template: [templates/agent-config.example.yaml](./templates/agent-config.example.yaml)
 
 ## Project Layout
 
@@ -85,7 +102,7 @@ hexnest-node/
 3. Start heartbeat loop (`60s` default).
 4. Process pending invitations.
 5. Join room and answer with best matching adapter for assigned role.
-6. Track token/cost usage and flush to core.
+6. Track token/cost usage and flush to core in batches.
 7. Shutdown gracefully and mark node offline.
 
 ## Dev Commands
@@ -103,3 +120,12 @@ npm run build
 - More adapters (Gemini, Grok, local MCP-backed agents)
 - Stronger signing/auth between node and core
 - Retry queue with durable storage for usage events
+
+## Task 6 Status
+
+- `6.1` Repo scaffold: done
+- `6.2` Node runtime lifecycle with registration/heartbeat/invitation handling/shutdown: done
+- `6.3` Adapter interface (`respond`, `estimateCost`, role support): done
+- `6.4` Ollama adapter: done
+- `6.5` Heartbeat + registration protocol client: done
+- `6.6` Commission meter with batched usage submit: done

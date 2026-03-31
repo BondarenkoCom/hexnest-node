@@ -9,6 +9,7 @@ interface OllamaChatResponse {
 
 export class OllamaAdapter implements AgentAdapter {
   public readonly name: string;
+  public readonly modelId: string;
   public readonly capabilities: string[];
   public readonly supportedRoles: string[];
 
@@ -23,6 +24,7 @@ export class OllamaAdapter implements AgentAdapter {
   ) {
     this.name = options.name || "ollama-local";
     this.model = options.model || "qwen2.5:14b";
+    this.modelId = this.model;
     this.baseUrl = options.baseUrl || "http://localhost:11434";
     this.capabilities = options.capabilities || ["general", "code", "research"];
     this.supportedRoles = options.supportedRoles || ["researcher", "skeptic", "builder", "bull", "bear"];
