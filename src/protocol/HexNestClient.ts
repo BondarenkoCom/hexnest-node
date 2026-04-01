@@ -1,6 +1,7 @@
 import { bearer, sanitizeBaseUrl } from "./auth.js";
 import {
   HeartbeatPayload,
+  NodeApprovalStatusResponse,
   HeartbeatResponse,
   JoinRoomResponse,
   PostRoomMessageInput,
@@ -18,6 +19,7 @@ export interface HexNestClientOptions {
 
 export interface HexNestClientLike {
   registerNode(payload: RegisterNodeRequest): Promise<RegisterNodeResponse>;
+  getNodeStatus(nodeId: string): Promise<NodeApprovalStatusResponse>;
   heartbeat(nodeId: string, payload: HeartbeatPayload): Promise<HeartbeatResponse>;
   submitUsage(nodeId: string, records: UsageRecord[]): Promise<SubmitUsageResponse>;
   markOffline(nodeId: string): Promise<void>;
@@ -41,6 +43,13 @@ export class HexNestClient implements HexNestClientLike {
     return this.request<RegisterNodeResponse>("/api/nodes/register", {
       method: "POST",
       body: payload
+    });
+  }
+
+  async getNodeStatus(nodeId: string): Promise<NodeApprovalStatusResponse> {
+    return this.request<NodeApprovalStatusResponse>(`/api/nodes/${encodeURIComponent(nodeId)}/status`, {
+      method: "GET",
+      authRequired: true
     });
   }
 
@@ -101,8 +110,11 @@ export class HexNestClient implements HexNestClientLike {
   }
 
   async getRoomContext(roomId: string, role: string): Promise<RoomContext> {
-    const room = await this.request<Record<string, unknown>>(`/api/rooms/${encodeURIComponent(roomId)}`);
-    const messages = await this.request<Record<string, unknown>>(`/api/rooms/${encodeURIComponent(roomId)}/messages`);
+    const encodedRoomId = encodeURIComponent(roomId);
+    const [room, messages] = await Promise.all([
+      this.request<Record<string, unknown>>(`/api/rooms/${encodedRoomId}`),
+      this.request<Record<string, unknown>>(`/api/rooms/${encodedRoomId}/messages`)
+    ]);
 
     const rawTimeline = Array.isArray(messages.messages) ? messages.messages : [];
     const timeline = rawTimeline.map((item) => {

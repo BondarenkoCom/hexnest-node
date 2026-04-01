@@ -15,7 +15,9 @@ export interface NodeConfig {
   callbackUrl?: string;
   nodeId?: string;
   nodeToken?: string;
+  identityPath?: string;
   heartbeatIntervalMs: number;
+  approvalPollIntervalMs: number;
   usageFlushIntervalMs: number;
   maxUsageBatch: number;
   shutdownGraceMs: number;
@@ -126,6 +128,24 @@ function loadYamlConfig(env: Record<string, string>): YamlNodeConfig {
   return parsed as YamlNodeConfig;
 }
 
+function loadIdentity(pathname: string | null): { nodeId?: string; nodeToken?: string } {
+  if (!pathname || !fs.existsSync(pathname)) {
+    return {};
+  }
+  try {
+    const raw = fs.readFileSync(pathname, "utf8");
+    const parsed = JSON.parse(raw) as { nodeId?: unknown; nodeToken?: unknown };
+    const nodeId = str(parsed.nodeId);
+    const nodeToken = str(parsed.nodeToken);
+    return {
+      nodeId: nodeId || undefined,
+      nodeToken: nodeToken || undefined
+    };
+  } catch {
+    return {};
+  }
+}
+
 function adapterFromSource(source: AdapterConfigSource, env: Record<string, string>): AgentAdapter | null {
   const type = str(source.type)?.toLowerCase();
   const name = str(source.name);
@@ -152,7 +172,7 @@ function adapterFromSource(source: AdapterConfigSource, env: Record<string, stri
     if (!apiKey) return null;
     return new OpenAIAdapter(apiKey, {
       name,
-      model: model || str(env.OPENAI_MODEL) || "gpt-5-mini",
+      model: model || str(env.OPENAI_MODEL) || "gpt-4o-mini",
       baseUrl,
       capabilities: capabilities.length ? capabilities : undefined,
       supportedRoles: supportedRoles.length ? supportedRoles : undefined
@@ -186,6 +206,8 @@ function registerAdapter(
 export function loadConfig(baseEnv: NodeJS.ProcessEnv = process.env): NodeConfig {
   const env = loadEnvMap(baseEnv);
   const yaml = loadYamlConfig(env);
+  const identityPath = resolveOptionalPath(env.HEXNEST_IDENTITY_PATH || ".hexnest-identity.json");
+  const identity = loadIdentity(identityPath);
 
   const coreUrl = str(env.HEXNEST_CORE_URL) || str(yaml.core?.url);
   const nodeName = str(env.HEXNEST_NODE_NAME) || str(yaml.node?.name);
@@ -200,12 +222,14 @@ export function loadConfig(baseEnv: NodeJS.ProcessEnv = process.env): NodeConfig
     operatorName,
     operatorEmail: str(env.HEXNEST_OPERATOR_EMAIL) || str(yaml.node?.operatorEmail),
     callbackUrl: str(env.HEXNEST_CALLBACK_URL) || str(yaml.node?.callbackUrl),
-    nodeId: str(env.HEXNEST_NODE_ID),
-    nodeToken: str(env.HEXNEST_NODE_TOKEN),
+    nodeId: str(env.HEXNEST_NODE_ID) || identity.nodeId,
+    nodeToken: str(env.HEXNEST_NODE_TOKEN) || identity.nodeToken,
+    identityPath: identityPath || undefined,
     heartbeatIntervalMs: parseNumber(
       env.HEXNEST_HEARTBEAT_INTERVAL_MS ?? yaml.core?.heartbeatIntervalMs,
       60_000
     ),
+    approvalPollIntervalMs: parseNumber(env.HEXNEST_APPROVAL_POLL_INTERVAL_MS, 15_000),
     usageFlushIntervalMs: parseNumber(
       env.HEXNEST_USAGE_FLUSH_INTERVAL_MS ?? yaml.core?.usageFlushIntervalMs,
       90_000
@@ -251,7 +275,7 @@ export function buildAdapters(baseEnv: NodeJS.ProcessEnv = process.env): AgentAd
     registerAdapter(
       adaptersByName,
       new OpenAIAdapter(openAiKey, {
-        model: str(env.OPENAI_MODEL) || "gpt-5-mini"
+        model: str(env.OPENAI_MODEL) || "gpt-4o-mini"
       })
     );
   }

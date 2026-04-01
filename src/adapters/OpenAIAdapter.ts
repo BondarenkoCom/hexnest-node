@@ -1,4 +1,10 @@
-import { AgentAdapter, AgentResponse } from "./AgentAdapter.js";
+import {
+  AgentAdapter,
+  AgentResponse,
+  estimateTokensFromText,
+  estimateUsdFromModel,
+  inferConfidence
+} from "./AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../protocol/types.js";
 
 interface OpenAIChatResponse {
@@ -30,15 +36,17 @@ export class OpenAIAdapter implements AgentAdapter {
     } = {}
   ) {
     this.name = options.name || "openai";
-    this.model = options.model || "gpt-5-mini";
+    this.model = options.model || "gpt-4o-mini";
     this.modelId = this.model;
     this.baseUrl = options.baseUrl || "https://api.openai.com/v1";
     this.capabilities = options.capabilities || ["general", "reasoning", "coding", "research"];
     this.supportedRoles = options.supportedRoles || ["builder", "breaker", "researcher", "synthesizer", "judge"];
+    this.maxTokens = Math.max(64, Number(process.env.OPENAI_MAX_TOKENS || 1200));
   }
 
   private readonly model: string;
   private readonly baseUrl: string;
+  private readonly maxTokens: number;
   private lastUsage: { input: number; output: number } = { input: 0, output: 0 };
 
   async respond(context: RoomContext): Promise<AgentResponse> {
@@ -70,7 +78,8 @@ export class OpenAIAdapter implements AgentAdapter {
             content: `Task: ${context.task}\nPhase: ${context.phase}\nTimeline:\n${timeline || "(empty)"}`
           }
         ],
-        temperature: 0.3
+        temperature: 0.3,
+        max_tokens: this.maxTokens
       })
     });
 
@@ -90,7 +99,7 @@ export class OpenAIAdapter implements AgentAdapter {
     }
     return {
       text,
-      confidence: 0.8
+      confidence: inferConfidence(text, context.phase)
     };
   }
 
@@ -99,16 +108,20 @@ export class OpenAIAdapter implements AgentAdapter {
       return {
         inputTokens: this.lastUsage.input,
         outputTokens: this.lastUsage.output,
-        estimatedCostUsd: 0
+        estimatedCostUsd: estimateUsdFromModel(this.modelId, this.lastUsage.input, this.lastUsage.output)
       };
     }
 
-    const inputChars = context.task.length + context.rules.length;
-    const outputChars = responseText.length;
+    const inputTokens = estimateTokensFromText([
+      context.task,
+      context.rules,
+      context.timeline.map((item) => item.text).join("\n")
+    ].join("\n"));
+    const outputTokens = estimateTokensFromText(responseText);
     return {
-      inputTokens: Math.max(1, Math.ceil(inputChars / 4)),
-      outputTokens: Math.max(1, Math.ceil(outputChars / 4)),
-      estimatedCostUsd: 0
+      inputTokens,
+      outputTokens,
+      estimatedCostUsd: estimateUsdFromModel(this.modelId, inputTokens, outputTokens)
     };
   }
 }

@@ -1,4 +1,10 @@
-import { AgentAdapter, AgentResponse } from "./AgentAdapter.js";
+import {
+  AgentAdapter,
+  AgentResponse,
+  estimateTokensFromText,
+  estimateUsdFromModel,
+  inferConfidence
+} from "./AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../protocol/types.js";
 
 interface ClaudeResponse {
@@ -45,11 +51,15 @@ export class ClaudeAdapter implements AgentAdapter {
       throw new Error("ANTHROPIC_API_KEY is missing");
     }
 
-    const prompt = [
-      `Role: ${context.role}`,
+    const systemPrompt = [
+      `You are ${this.name}.`,
+      `Assigned role: ${context.role}.`,
+      `Rules: ${context.rules}`,
+      "Respond with concise, evidence-oriented reasoning."
+    ].join("\n");
+    const userPrompt = [
       `Task: ${context.task}`,
       `Phase: ${context.phase}`,
-      `Rules: ${context.rules}`,
       "Recent messages:",
       context.timeline.slice(-10).map((event) => `${event.from}: ${event.text}`).join("\n") || "(empty)"
     ].join("\n\n");
@@ -65,7 +75,8 @@ export class ClaudeAdapter implements AgentAdapter {
         model: this.model,
         max_tokens: 900,
         temperature: 0.25,
-        messages: [{ role: "user", content: prompt }]
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }]
       })
     });
 
@@ -85,7 +96,7 @@ export class ClaudeAdapter implements AgentAdapter {
     }
     return {
       text,
-      confidence: 0.79
+      confidence: inferConfidence(text, context.phase)
     };
   }
 
@@ -94,15 +105,19 @@ export class ClaudeAdapter implements AgentAdapter {
       return {
         inputTokens: this.lastUsage.input,
         outputTokens: this.lastUsage.output,
-        estimatedCostUsd: 0
+        estimatedCostUsd: estimateUsdFromModel(this.modelId, this.lastUsage.input, this.lastUsage.output)
       };
     }
-    const inputTokens = Math.max(1, Math.ceil((context.task.length + context.rules.length) / 4));
-    const outputTokens = Math.max(1, Math.ceil(responseText.length / 4));
+    const inputTokens = estimateTokensFromText([
+      context.task,
+      context.rules,
+      context.timeline.map((event) => event.text).join("\n")
+    ].join("\n"));
+    const outputTokens = estimateTokensFromText(responseText);
     return {
       inputTokens,
       outputTokens,
-      estimatedCostUsd: 0
+      estimatedCostUsd: estimateUsdFromModel(this.modelId, inputTokens, outputTokens)
     };
   }
 }

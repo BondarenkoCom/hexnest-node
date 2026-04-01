@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { AgentAdapter, AgentResponse } from "../adapters/AgentAdapter.js";
 import { NodeConfig } from "../config.js";
 import { HexNestClient, HexNestClientLike } from "../protocol/HexNestClient.js";
 import {
   AgentDescriptor,
   HeartbeatPayload,
+  NodeApprovalStatusResponse,
   NodeStatus,
   PendingInvitation,
   RegisterNodeRequest,
@@ -29,6 +32,9 @@ export interface NodeRuntimeDependencies {
 
 // Section 9 Protocol: autonomous field unit with central coordination.
 export class NodeRuntime {
+  private static readonly MAX_INVITATION_ATTEMPTS = 3;
+  private static readonly INVITATION_RETRY_BASE_MS = 2_000;
+
   private readonly meter = new CommissionMeter();
   private readonly adapters = new Map<string, AgentAdapter>();
   private readonly logger: RuntimeLogger;
@@ -44,6 +50,8 @@ export class NodeRuntime {
   private usageFlushTimer: NodeJS.Timeout | null = null;
   private activeRoomRuns = new Map<string, Promise<void>>();
   private usageSubmitInFlight: Promise<void> | null = null;
+  private invitationAttempts = new Map<string, number>();
+  private invitationRetryTimers = new Map<string, NodeJS.Timeout>();
   private isRunning = false;
   private stopRequested = false;
   private status: NodeStatus = "offline";
@@ -73,38 +81,45 @@ export class NodeRuntime {
     }
     this.isRunning = true;
     this.stopRequested = false;
-
-    await this.ensureRegistered();
-    if (!this.nodeId || !this.nodeToken) {
-      throw new Error("Node identity is missing after registration");
-    }
-
-    this.authedClient = this.createClient(this.config.coreUrl, {
-      nodeToken: this.nodeToken,
-      timeoutMs: this.config.httpTimeoutMs
-    });
-    this.status = "online";
-
-    this.heartbeat = new Heartbeat(
-      this.authedClient,
-      this.nodeId,
-      this.config.heartbeatIntervalMs,
-      () => this.buildHeartbeatPayload(),
-      async (response) => {
-        await this.processInvitations(response.pendingInvitations || []);
+    try {
+      await this.ensureRegistered();
+      if (!this.nodeId || !this.nodeToken) {
+        throw new Error("Node identity is missing after registration");
       }
-    );
-    this.heartbeat.start(true);
 
-    this.usageFlushTimer = setInterval(() => {
-      void this.flushUsage("periodic").catch((error) => {
-        this.logger.error("[node] periodic usage flush failed:", this.err(error));
+      this.authedClient = this.createClient(this.config.coreUrl, {
+        nodeToken: this.nodeToken,
+        timeoutMs: this.config.httpTimeoutMs
       });
-    }, this.config.usageFlushIntervalMs);
+      await this.waitUntilApproved();
+      this.status = "online";
 
-    this.logger.info(
-      `[node] started id=${this.nodeId} adapters=${this.adapters.size} heartbeatMs=${this.config.heartbeatIntervalMs}`
-    );
+      this.heartbeat = new Heartbeat(
+        this.authedClient,
+        this.nodeId,
+        this.config.heartbeatIntervalMs,
+        () => this.buildHeartbeatPayload(),
+        async (response) => {
+          await this.processInvitations(response.pendingInvitations || []);
+        },
+        this.logger
+      );
+      this.heartbeat.start(true);
+
+      this.usageFlushTimer = setInterval(() => {
+        void this.flushUsage("periodic").catch((error) => {
+          this.logger.error("[node] periodic usage flush failed:", this.err(error));
+        });
+      }, this.config.usageFlushIntervalMs);
+
+      this.logger.info(
+        `[node] started id=${this.nodeId} adapters=${this.adapters.size} heartbeatMs=${this.config.heartbeatIntervalMs}`
+      );
+    } catch (error) {
+      this.isRunning = false;
+      this.status = "offline";
+      throw error;
+    }
   }
 
   async stop(): Promise<void> {
@@ -119,6 +134,11 @@ export class NodeRuntime {
 
     this.heartbeat?.stop();
     this.heartbeat = null;
+    for (const timer of this.invitationRetryTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.invitationRetryTimers.clear();
+    this.invitationAttempts.clear();
 
     await this.waitForActiveRooms(this.config.shutdownGraceMs);
     await this.flushUsage("shutdown");
@@ -136,7 +156,7 @@ export class NodeRuntime {
     this.logger.info("[node] stopped");
   }
 
-  async handleRoomInvitation(roomId: string, role: string): Promise<void> {
+  async handleRoomInvitation(roomId: string, role: string, taskHint = ""): Promise<void> {
     if (!this.isRunning) {
       throw new Error("Node is not running");
     }
@@ -146,7 +166,7 @@ export class NodeRuntime {
     }
     if (this.activeRoomRuns.has(roomId)) return;
 
-    const run = this.runRoomInvitation(roomId, role).finally(() => {
+    const run = this.runRoomInvitation(roomId, role, taskHint).finally(() => {
       this.activeRoomRuns.delete(roomId);
       this.refreshStatus();
     });
@@ -187,16 +207,16 @@ export class NodeRuntime {
     const registration = await registrationClient.registerNode(payload);
     this.nodeId = registration.nodeId;
     this.nodeToken = registration.nodeToken;
+    await this.persistIdentity(registration.nodeId, registration.nodeToken);
     this.logger.info(`[node] registered id=${this.nodeId} status=${registration.status}`);
   }
 
-  private async runRoomInvitation(roomId: string, role: string): Promise<void> {
+  private async runRoomInvitation(roomId: string, role: string, taskHint = ""): Promise<void> {
     if (!this.authedClient) {
       throw new Error("Authenticated client is not initialized");
     }
 
-    const contextTaskHint = await this.safeFetchRoomTask(roomId);
-    const adapter = this.pickAdapterForInvitation(role, contextTaskHint);
+    const adapter = this.pickAdapterForInvitation(role, taskHint);
     this.logger.info(`[node] handling room=${roomId} role=${role} adapter=${adapter.name}`);
 
     const joined = await this.authedClient.joinRoom(roomId, adapter.name, role);
@@ -257,16 +277,6 @@ export class NodeRuntime {
     return best;
   }
 
-  private async safeFetchRoomTask(roomId: string): Promise<string> {
-    if (!this.authedClient) return "";
-    try {
-      const ctx = await this.authedClient.getRoomContext(roomId, "observer");
-      return ctx.task;
-    } catch {
-      return "";
-    }
-  }
-
   private async processInvitations(invitations: PendingInvitation[]): Promise<void> {
     if (!this.config.autoAcceptInvites || invitations.length === 0) return;
     if (this.stopRequested || this.status === "draining") return;
@@ -274,13 +284,114 @@ export class NodeRuntime {
     const sorted = [...invitations].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
     for (const invitation of sorted) {
       if (!invitation.roomId || !invitation.role) continue;
-      if (this.activeRoomRuns.has(invitation.roomId)) continue;
-      void this.handleRoomInvitation(invitation.roomId, invitation.role).catch((error) => {
-        this.logger.error(
-          `[node] invitation failed room=${invitation.roomId} role=${invitation.role}:`,
-          this.err(error)
+      this.dispatchInvitationWithRetry(invitation);
+    }
+  }
+
+  private dispatchInvitationWithRetry(invitation: PendingInvitation): void {
+    const key = this.invitationKey(invitation.roomId, invitation.role);
+    if (this.activeRoomRuns.has(invitation.roomId)) {
+      return;
+    }
+    if (this.invitationRetryTimers.has(key)) {
+      return;
+    }
+
+    const nextAttempt = (this.invitationAttempts.get(key) || 0) + 1;
+    this.invitationAttempts.set(key, nextAttempt);
+
+    void this.handleRoomInvitation(invitation.roomId, invitation.role, invitation.task || "")
+      .then(() => {
+        this.invitationAttempts.delete(key);
+        const timer = this.invitationRetryTimers.get(key);
+        if (timer) {
+          clearTimeout(timer);
+          this.invitationRetryTimers.delete(key);
+        }
+      })
+      .catch((error) => {
+        if (this.stopRequested || this.status === "draining") {
+          this.logger.warn(
+            `[node] invitation dropped while draining room=${invitation.roomId} role=${invitation.role}`
+          );
+          return;
+        }
+
+        if (nextAttempt >= NodeRuntime.MAX_INVITATION_ATTEMPTS) {
+          this.invitationAttempts.delete(key);
+          this.logger.error(
+            `[node] invitation failed room=${invitation.roomId} role=${invitation.role} attempts=${nextAttempt}:`,
+            this.err(error)
+          );
+          return;
+        }
+
+        const delayMs = NodeRuntime.INVITATION_RETRY_BASE_MS * 2 ** (nextAttempt - 1);
+        this.logger.warn(
+          `[node] invitation retry scheduled room=${invitation.roomId} role=${invitation.role} attempt=${nextAttempt + 1} in ${delayMs}ms`
         );
+        const timer = setTimeout(() => {
+          this.invitationRetryTimers.delete(key);
+          this.dispatchInvitationWithRetry(invitation);
+        }, delayMs);
+        if (typeof timer.unref === "function") {
+          timer.unref();
+        }
+        this.invitationRetryTimers.set(key, timer);
       });
+  }
+
+  private invitationKey(roomId: string, role: string): string {
+    return `${roomId}::${role}`;
+  }
+
+  private async waitUntilApproved(): Promise<void> {
+    if (!this.authedClient || !this.nodeId) {
+      throw new Error("Authenticated client is not initialized");
+    }
+
+    let statusPayload: NodeApprovalStatusResponse | null = null;
+    while (!this.stopRequested) {
+      statusPayload = await this.authedClient.getNodeStatus(this.nodeId);
+      const approvalStatus = statusPayload.approvalStatus;
+      if (approvalStatus === "approved") {
+        if (statusPayload.lastHeartbeatStatus === "online" || statusPayload.lastHeartbeatStatus === "busy") {
+          this.status = statusPayload.lastHeartbeatStatus;
+        }
+        return;
+      }
+      if (approvalStatus === "suspended" || approvalStatus === "rejected") {
+        throw new Error(`node is ${approvalStatus}; startup halted`);
+      }
+
+      this.logger.info(
+        `[node] waiting for approval node=${this.nodeId} status=${approvalStatus}; retry in ${this.config.approvalPollIntervalMs}ms`
+      );
+      await this.sleep(this.config.approvalPollIntervalMs);
+    }
+
+    throw new Error("startup interrupted while waiting for node approval");
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, Math.max(50, ms)));
+  }
+
+  private async persistIdentity(nodeId: string, nodeToken: string): Promise<void> {
+    const identityPath = this.config.identityPath;
+    if (!identityPath) {
+      return;
+    }
+    try {
+      await fs.mkdir(path.dirname(identityPath), { recursive: true });
+      await fs.writeFile(
+        identityPath,
+        JSON.stringify({ nodeId, nodeToken, updatedAt: new Date(this.now()).toISOString() }, null, 2),
+        "utf8"
+      );
+      this.logger.info(`[node] identity saved: ${identityPath}`);
+    } catch (error) {
+      this.logger.warn(`[node] failed to persist identity at ${identityPath}: ${this.err(error)}`);
     }
   }
 

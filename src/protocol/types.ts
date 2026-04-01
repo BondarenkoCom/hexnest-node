@@ -97,6 +97,14 @@ export interface RegisterNodeResponse {
   status: "pending" | "approved" | "suspended" | "rejected";
 }
 
+export interface NodeApprovalStatusResponse {
+  nodeId: string;
+  approvalStatus: "pending" | "approved" | "suspended" | "rejected";
+  status?: "online" | "busy" | "draining" | "offline" | "pending" | "approved" | "suspended" | "rejected";
+  lastHeartbeatAt?: string | null;
+  lastHeartbeatStatus?: "online" | "busy" | "draining" | "offline" | null;
+}
+
 export interface SubmitUsageResponse {
   accepted: number;
   totalOwed: number;

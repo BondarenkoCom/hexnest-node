@@ -46,6 +46,13 @@ describe("NodeRuntime", () => {
         calls.register += 1;
         return { nodeId: "node-1", nodeToken: "token-1", status: "approved" as const };
       },
+      getNodeStatus: async () => ({
+        nodeId: "node-1",
+        approvalStatus: "approved" as const,
+        status: "online" as const,
+        lastHeartbeatAt: null,
+        lastHeartbeatStatus: null
+      }),
       heartbeat: async () => {
         calls.heartbeat += 1;
         if (calls.heartbeat === 1) {
@@ -89,6 +96,7 @@ describe("NodeRuntime", () => {
       nodeName: "node-test",
       operatorName: "operator",
       heartbeatIntervalMs: 60_000,
+      approvalPollIntervalMs: 1_000,
       usageFlushIntervalMs: 60_000,
       maxUsageBatch: 1,
       shutdownGraceMs: 3_000,

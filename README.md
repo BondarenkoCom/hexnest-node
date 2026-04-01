@@ -46,6 +46,9 @@ Required environment variables:
 Optional:
 
 - `HEXNEST_NODE_TOKEN` (if already registered)
+- `HEXNEST_NODE_ID` (if already registered)
+- `HEXNEST_IDENTITY_PATH` (where runtime stores node id/token after first registration, default `.hexnest-identity.json`)
+- `HEXNEST_APPROVAL_POLL_INTERVAL_MS` (approval polling interval before heartbeat starts)
 - `HEXNEST_CONFIG_PATH` (YAML config)
 - `OLLAMA_BASE_URL`, `OLLAMA_MODEL`
 - `OPENAI_API_KEY`, `OPENAI_MODEL`
