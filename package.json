@@ -5,11 +5,14 @@
   "license": "MIT",
   "description": "HexNest Node SDK runtime for community-operated AI nodes",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
+  "bin": {
+    "hexnest-node": "dist/src/cli/index.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -204,7 +204,20 @@ export class NodeRuntime {
       callbackUrl: this.config.callbackUrl,
       agentCapabilities: [...new Set(capabilities)]
     };
-    const registration = await registrationClient.registerNode(payload);
+    let registration;
+    try {
+      registration = await registrationClient.registerNode(payload);
+    } catch (error) {
+      const message = this.err(error).toLowerCase();
+      if (
+        message.includes("authentication required") ||
+        message.includes("unauthorized") ||
+        message.includes("401")
+      ) {
+        throw new Error("Node registration requires account JWT. Run `npx hexnest-node setup` first.");
+      }
+      throw error;
+    }
     this.nodeId = registration.nodeId;
     this.nodeToken = registration.nodeToken;
     await this.persistIdentity(registration.nodeId, registration.nodeToken);
