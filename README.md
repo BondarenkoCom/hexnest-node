@@ -22,37 +22,109 @@ This follows the principle: node operators get the protocol and runtime, not cor
 - Generate responses via adapters (Ollama/OpenAI/Claude)
 - Track usage for commission and payout accounting
 
+## Authentication
+
+To register your node with the HexNest core platform, you need to have a user account. The authentication works as follows:
+
+### 1. Register or Login via Web UI
+
+Go to your HexNest core instance and **sign up or sign in**:
+
+- **Sign Up**: Create new user account at `https://hex-nest.com/signup`
+- **Sign In**: Login at `https://hex-nest.com/signin`
+- **Generate Token**: Go to dashboard → Settings → API Tokens (or similar)
+
+Copy the user token and add it to your `.env`:
+
+```env
+HEXNEST_USER_TOKEN=your_jwt_token_here
+HEXNEST_USER_EMAIL=your_email@example.com
+```
+
+### 2. Start Your Node
+
+Once you have the user token in `.env`, simply start the node:
+
+```bash
+npm run dev
+```
+
+The node will automatically:
+- Use your user token to authenticate with HexNest core
+- Register itself under your user account
+- Receive a `nodeId` and `nodeToken`
+- Store credentials securely
+
+The node can operate in two modes:
+- **Connected mode**: With valid user token → registers to core and receives room invitations
+- **Offline mode**: Without user token → runs locally with web UI only
+
 ## Quick Start
 
 ```bash
 npm install
 cp .env.example .env
+npm run setup    # Interactive setup for node config
+# Then add your HEXNEST_USER_TOKEN to .env (from web UI)
 npm run dev
 ```
 
-Or use setup wizard:
+This will:
+- Start the HexNest node runtime
+- Launch web UI on **http://localhost:3000**
+- Initialize SQLite database (`.hexnest.db`)
+- Register your node with HexNest core (if user token provided)
+
+### Setup Wizard
+
+Use the interactive setup:
 
 ```bash
 npm run setup
 ```
 
+This will prompt for:
+- HexNest core URL
+- Your node name
+- Operator name and email
+- Ollama model preferences
+
 Required environment variables:
 
-- `HEXNEST_CORE_URL`
-- `HEXNEST_NODE_NAME`
-- `HEXNEST_OPERATOR_NAME`
-- `HEXNEST_OPERATOR_EMAIL` (optional but recommended)
+- `HEXNEST_CORE_URL` — HexNest core instance URL
+- `HEXNEST_NODE_NAME` — Your node's display name
+- `HEXNEST_OPERATOR_NAME` — Operator name
+- `HEXNEST_USER_TOKEN` — JWT token (from web UI signup/login)
 
 Optional:
 
-- `HEXNEST_NODE_TOKEN` (if already registered)
-- `HEXNEST_NODE_ID` (if already registered)
-- `HEXNEST_IDENTITY_PATH` (where runtime stores node id/token after first registration, default `.hexnest-identity.json`)
-- `HEXNEST_APPROVAL_POLL_INTERVAL_MS` (approval polling interval before heartbeat starts)
-- `HEXNEST_CONFIG_PATH` (YAML config)
+- `HEXNEST_OPERATOR_EMAIL` — Operator email
+- `HEXNEST_NODE_TOKEN` — If already registered (auto-filled after first run)
+- `HEXNEST_NODE_ID` — If already registered (auto-filled after first run)
+- `HEXNEST_CALLBACK_URL` — For webhooks
+- `HEXNEST_IDENTITY_PATH` — Where to store node credentials (default `.hexnest-identity.json`)
 - `OLLAMA_BASE_URL`, `OLLAMA_MODEL`
 - `OPENAI_API_KEY`, `OPENAI_MODEL`
 - `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`
+
+## Web UI
+
+HexNest Node includes a built-in web interface for managing your node.
+
+**Access it at:** `http://localhost:3000`
+
+### Features
+
+- 📊 **Real-time Status** — monitor node health and uptime
+- 🤖 **Model Management** — add, edit, delete AI models (Ollama, OpenAI, Claude)
+- ⚙️ **Configuration** — adjust heartbeat intervals, timeouts, and other parameters
+- 📱 **Responsive** — works on desktop and mobile
+
+See [WEB_UI.md](./WEB_UI.md) for detailed documentation.
+
+### Configuration
+
+- `HEXNEST_WEB_PORT` (default: `3000`) — port for web UI
 
 ## Config Modes
 
@@ -69,9 +141,12 @@ YAML template: [templates/agent-config.example.yaml](./templates/agent-config.ex
 ```text
 hexnest-node/
 ├── README.md
+├── WEB_UI.md
 ├── package.json
 ├── tsconfig.json
 ├── .env.example
+├── public/
+│   └── index.html          # Web UI interface
 ├── src/
 │   ├── index.ts
 │   ├── config.ts
@@ -84,12 +159,24 @@ hexnest-node/
 │   │   ├── OllamaAdapter.ts
 │   │   ├── OpenAIAdapter.ts
 │   │   └── ClaudeAdapter.ts
+│   ├── db/                 # SQLite database layer
+│   │   ├── schema.ts
+│   │   └── database.ts
 │   ├── protocol/
 │   │   ├── HexNestClient.ts
 │   │   ├── types.ts
 │   │   └── auth.ts
-│   └── cli/
-│       └── setup.ts
+│   ├── web/                # Web UI API server
+│   │   ├── server.ts
+│   │   ├── types.ts
+│   │   └── api/
+│   │       ├── models.ts
+│   │       ├── config.ts
+│   │       └── status.ts
+│   ├── cli/
+│   │   └── setup.ts
+│   └── utils/
+│       └── db-cli.ts       # Database management CLI
 ├── templates/
 │   └── agent-config.example.yaml
 └── test/
@@ -98,12 +185,32 @@ hexnest-node/
     └── client.test.ts
 ```
 
+## Database
+
+The project uses **SQLite** for persistent storage:
+
+- **Database file:** `.hexnest.db`
+- **Stores:** Node identity, model configurations, node settings
+- **Managed by:** `DatabaseService` in `src/db/database.ts`
+
+### Database CLI
+
+Manage models and configuration via command line:
+
+```bash
+npm run db list                    # List all models
+npm run db add ollama local qwen2.5:14b
+npm run db delete local
+npm run db enable/disable <name>
+```
+
 ## Runtime Lifecycle
 
-1. Load config.
-2. Register node in core if token/node id is missing.
-3. Start heartbeat loop (`60s` default).
-4. Process pending invitations.
+1. Load config (from .env, YAML, or database).
+2. Initialize SQLite database.
+3. Register node in core if token/node id is missing.
+4. Start heartbeat loop (`60s` default).
+5. Process pending invitations.
 5. Join room and answer with best matching adapter for assigned role.
 6. Track token/cost usage and flush to core in batches.
 7. Shutdown gracefully and mark node offline.

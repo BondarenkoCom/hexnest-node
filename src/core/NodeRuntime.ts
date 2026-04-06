@@ -16,6 +16,7 @@ import {
 } from "../protocol/types.js";
 import { CommissionMeter } from "./CommissionMeter.js";
 import { Heartbeat } from "./Heartbeat.js";
+import { DatabaseService } from "../db/database.js";
 
 interface RuntimeLogger {
   info(...args: unknown[]): void;
@@ -28,6 +29,7 @@ export interface NodeRuntimeDependencies {
   logger?: RuntimeLogger;
   uuidFactory?: () => string;
   now?: () => number;
+  database?: DatabaseService;
 }
 
 // Section 9 Protocol: autonomous field unit with central coordination.
@@ -42,6 +44,7 @@ export class NodeRuntime {
   private readonly makeUuid: () => string;
   private readonly now: () => number;
   private readonly startedAt: number;
+  private readonly database: DatabaseService | null;
 
   private nodeId: string | null;
   private nodeToken: string | null;
@@ -55,6 +58,9 @@ export class NodeRuntime {
   private isRunning = false;
   private stopRequested = false;
   private status: NodeStatus = "offline";
+  private coreConnected = false;
+  private lastHeartbeatAt: number | null = null;
+  private lastCoreError: string | null = null;
 
   constructor(
     private readonly config: NodeConfig,
@@ -68,6 +74,7 @@ export class NodeRuntime {
     this.makeUuid = deps.uuidFactory ?? randomUUID;
     this.now = deps.now ?? Date.now;
     this.startedAt = this.now();
+    this.database = deps.database ?? null;
 
     for (const adapter of adapters) {
       this.adapters.set(adapter.name, adapter);
@@ -82,29 +89,12 @@ export class NodeRuntime {
     this.isRunning = true;
     this.stopRequested = false;
     try {
-      await this.ensureRegistered();
-      if (!this.nodeId || !this.nodeToken) {
-        throw new Error("Node identity is missing after registration");
+      // Try to connect to core, but allow offline operation
+      try {
+        await this.connectToCore();
+      } catch (coreError) {
+        this.enterLocalMode(coreError);
       }
-
-      this.authedClient = this.createClient(this.config.coreUrl, {
-        nodeToken: this.nodeToken,
-        timeoutMs: this.config.httpTimeoutMs
-      });
-      await this.waitUntilApproved();
-      this.status = "online";
-
-      this.heartbeat = new Heartbeat(
-        this.authedClient,
-        this.nodeId,
-        this.config.heartbeatIntervalMs,
-        () => this.buildHeartbeatPayload(),
-        async (response) => {
-          await this.processInvitations(response.pendingInvitations || []);
-        },
-        this.logger
-      );
-      this.heartbeat.start(true);
 
       this.usageFlushTimer = setInterval(() => {
         void this.flushUsage("periodic").catch((error) => {
@@ -113,13 +103,71 @@ export class NodeRuntime {
       }, this.config.usageFlushIntervalMs);
 
       this.logger.info(
-        `[node] started id=${this.nodeId} adapters=${this.adapters.size} heartbeatMs=${this.config.heartbeatIntervalMs}`
+        `[node] ready node=${this.config.nodeName} adapters=${this.adapters.size} status=${this.status}`
       );
     } catch (error) {
       this.isRunning = false;
       this.status = "offline";
       throw error;
     }
+  }
+
+  async reconnectToCore(
+    coreUrl?: string,
+    auth?: { userToken?: string; userEmail?: string }
+  ): Promise<{ coreUrl: string; coreConnected: boolean; nodeId: string | null }> {
+    if (!this.isRunning) {
+      throw new Error("Node runtime is not running");
+    }
+
+    const providedUserToken = auth?.userToken?.trim();
+    const providedUserEmail = auth?.userEmail?.trim();
+    if (providedUserToken) {
+      this.config.userToken = providedUserToken;
+      this.database?.setNodeConfig("user_token", providedUserToken);
+    }
+    if (providedUserEmail) {
+      this.config.userEmail = providedUserEmail;
+      this.database?.setNodeConfig("user_email", providedUserEmail);
+    }
+
+    const requestedCoreUrl = coreUrl?.trim();
+    const nextCoreUrl = requestedCoreUrl || this.config.coreUrl;
+    if (!nextCoreUrl) {
+      throw new Error("Core connection is not configured in node settings");
+    }
+
+    const normalizedCurrentUrl = this.config.coreUrl.replace(/\/+$/, "");
+    const normalizedNextUrl = nextCoreUrl.replace(/\/+$/, "");
+    const coreUrlChanged = normalizedCurrentUrl !== normalizedNextUrl;
+
+    if (coreUrlChanged && !this.resolveUserToken()) {
+      throw new Error("User token is required to connect this node to a different core");
+    }
+
+    await this.disconnectFromCore(coreUrlChanged);
+
+    this.config.coreUrl = nextCoreUrl;
+    this.database?.setNodeConfig("core_url", nextCoreUrl);
+
+    if (coreUrlChanged) {
+      this.nodeId = null;
+      this.nodeToken = null;
+      this.database?.clearNodeIdentity();
+    }
+
+    try {
+      await this.connectToCore();
+    } catch (error) {
+      this.enterLocalMode(error);
+      throw error;
+    }
+
+    return {
+      coreUrl: this.config.coreUrl,
+      coreConnected: this.coreConnected,
+      nodeId: this.nodeId
+    };
   }
 
   async stop(): Promise<void> {
@@ -194,8 +242,10 @@ export class NodeRuntime {
   private async ensureRegistered(): Promise<void> {
     if (this.nodeId && this.nodeToken) return;
     const registrationClient = this.createClient(this.config.coreUrl, {
+      nodeToken: undefined,
+      userToken: this.resolveUserToken(),
       timeoutMs: this.config.httpTimeoutMs
-    });
+    } as any);
     const capabilities = this.getAvailableAgents().flatMap((agent) => agent.capabilities);
     const payload: RegisterNodeRequest = {
       name: this.config.nodeName,
@@ -377,7 +427,87 @@ export class NodeRuntime {
     return new Promise((resolve) => setTimeout(resolve, Math.max(50, ms)));
   }
 
+  private resolveUserToken(): string | undefined {
+    return this.config.userToken || this.database?.getNodeConfig("user_token") || undefined;
+  }
+
+  private async connectToCore(): Promise<void> {
+    await this.ensureRegistered();
+    if (!this.nodeId || !this.nodeToken) {
+      throw new Error("Node identity is missing after registration");
+    }
+
+    this.authedClient = this.createClient(this.config.coreUrl, {
+      nodeToken: this.nodeToken,
+      timeoutMs: this.config.httpTimeoutMs
+    });
+    await this.waitUntilApproved();
+    this.coreConnected = true;
+    this.status = "online";
+    this.lastCoreError = null;
+
+    this.heartbeat?.stop();
+    this.heartbeat = new Heartbeat(
+      this.authedClient,
+      this.nodeId,
+      this.config.heartbeatIntervalMs,
+      () => this.buildHeartbeatPayload(),
+      async (response) => {
+        this.lastHeartbeatAt = this.now();
+        await this.processInvitations(response.pendingInvitations || []);
+      },
+      this.logger
+    );
+    this.heartbeat.start(true);
+  }
+
+  private async disconnectFromCore(clearHeartbeatState = false): Promise<void> {
+    this.heartbeat?.stop();
+    this.heartbeat = null;
+
+    if (this.coreConnected && this.nodeId && this.authedClient) {
+      try {
+        await this.authedClient.markOffline(this.nodeId);
+      } catch (error) {
+        this.logger.warn("[node] failed to mark offline during reconnect:", this.err(error));
+      }
+    }
+
+    this.authedClient = null;
+    this.coreConnected = false;
+    if (clearHeartbeatState) {
+      this.lastHeartbeatAt = null;
+    }
+    if (!this.stopRequested) {
+      this.status = "offline";
+    }
+  }
+
+  private enterLocalMode(coreError: unknown): void {
+    this.lastCoreError = coreError instanceof Error ? coreError.message : String(coreError);
+    this.coreConnected = false;
+    this.authedClient = null;
+    this.heartbeat?.stop();
+    this.heartbeat = null;
+    this.logger.warn(
+      `[node] failed to connect to core: ${this.lastCoreError}`
+    );
+    this.logger.warn(`[node] operating in local mode - web UI is available at http://localhost:${process.env.HEXNEST_WEB_PORT || 3000}`);
+    this.status = "offline";
+  }
+
   private async persistIdentity(nodeId: string, nodeToken: string): Promise<void> {
+    // Save to database if available
+    if (this.database) {
+      try {
+        this.database.setNodeIdentity(nodeId, nodeToken);
+        this.logger.info(`[node] identity saved to database: id=${nodeId}`);
+      } catch (error) {
+        this.logger.warn(`[node] failed to persist identity to database: ${this.err(error)}`);
+      }
+    }
+
+    // Also save to filesystem for backward compatibility
     const identityPath = this.config.identityPath;
     if (!identityPath) {
       return;
@@ -452,6 +582,41 @@ export class NodeRuntime {
         uptimeSec: Math.floor((this.now() - this.startedAt) / 1000),
         pendingUsageRecords: meter.pendingUsageRecords
       }
+    };
+  }
+
+  async registerUser(email: string, password: string, name: string): Promise<{ userId: string; token: string }> {
+    const registrationClient = this.createClient(this.config.coreUrl, {
+      timeoutMs: this.config.httpTimeoutMs
+    });
+    const response = await registrationClient.registerUser({ email, password, name });
+    this.logger.info(`[node] user registered email=${email} userId=${response.userId}`);
+    return { userId: response.userId, token: response.token };
+  }
+
+  async loginUser(email: string, password: string): Promise<{ userId: string; token: string }> {
+    const loginClient = this.createClient(this.config.coreUrl, {
+      timeoutMs: this.config.httpTimeoutMs
+    });
+    const response = await loginClient.loginUser({ email, password });
+    this.logger.info(`[node] user logged in email=${email} userId=${response.userId}`);
+    return { userId: response.userId, token: response.token };
+  }
+
+  getNodeStatus() {
+    const meter = this.meter.getSnapshot();
+    return {
+      id: this.nodeId,
+      isRunning: this.isRunning,
+      uptime: this.now() - this.startedAt,
+      adaptersCount: this.adapters.size,
+      coreConnected: this.coreConnected,
+      coreConnectionReason: this.lastCoreError,
+      runtimeStatus: this.status,
+      heartbeatIntervalMs: this.config.heartbeatIntervalMs,
+      lastHeartbeatAt: this.lastHeartbeatAt ? new Date(this.lastHeartbeatAt).toISOString() : null,
+      activeRoomsCount: this.activeRoomRuns.size,
+      pendingUsageRecords: meter.pendingUsageRecords
     };
   }
 

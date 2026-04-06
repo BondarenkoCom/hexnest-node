@@ -127,3 +127,29 @@ export interface PostRoomMessageInput {
   pythonCode?: string;
   needHuman?: boolean;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface AuthRegisterRequest {
+  email: string;
+  password: string;
+  name: string;
+}
+
+export interface AuthLoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  userId: string;
+  token: string;
+  expiresAt: string;
+  user: User;
+}

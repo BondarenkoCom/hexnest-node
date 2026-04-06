@@ -13,16 +13,22 @@
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "setup": "tsx src/cli/setup.ts"
+    "db": "tsx src/utils/db-cli.ts",
+    "setup": "tsx src/cli/setup.ts",
+    "config:test": "tsx src/cli/config-test.ts",
+    "auth:login": "tsx src/cli/auth-login.ts"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "sql.js": "^1.14.1",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "@types/node": "^24.7.2",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",

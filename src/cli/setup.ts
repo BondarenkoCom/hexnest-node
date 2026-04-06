@@ -11,6 +11,7 @@ async function run(): Promise<void> {
     const operatorName = (await rl.question("Operator name: ")).trim();
     const operatorEmail = (await rl.question("Operator email (optional): ")).trim();
     const callbackUrl = (await rl.question("Callback URL (optional): ")).trim();
+    const userEmail = (await rl.question("Operator email for login (optional, if different from above): ")).trim();
     const ollamaModel = (await rl.question("Ollama model [qwen2.5:14b]: ")).trim() || "qwen2.5:14b";
     const autoAccept = (await rl.question("Auto-accept invitations? [yes/no, default yes]: ")).trim().toLowerCase();
     const autoAcceptInvites = autoAccept === "" || autoAccept === "yes" || autoAccept === "y";
@@ -27,6 +28,8 @@ async function run(): Promise<void> {
       `HEXNEST_CALLBACK_URL=${callbackUrl}`,
       "HEXNEST_NODE_TOKEN=",
       "HEXNEST_NODE_ID=",
+      `HEXNEST_USER_EMAIL=${userEmail}`,
+      "HEXNEST_USER_TOKEN=",
       "HEXNEST_HEARTBEAT_INTERVAL_MS=60000",
       "HEXNEST_USAGE_FLUSH_INTERVAL_MS=90000",
       "HEXNEST_USAGE_MAX_BATCH=100",

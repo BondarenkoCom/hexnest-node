@@ -1,0 +1,2650 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HexNest Node | Manager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --void: #04060a;
+        --deep: #081527;
+        --deep-2: #0f2842;
+        --panel: rgba(6, 12, 21, 0.9);
+        --line: rgba(61, 176, 255, 0.35);
+        --line-soft: rgba(61, 176, 255, 0.18);
+        --text: #eef5ff;
+        --muted: #9dbdd8;
+        --cyan: #16d2ff;
+        --cyan-soft: #8fe7ff;
+        --blood: #9f1230;
+        --blood-soft: #ff6e8b;
+        --warn: #ffc06e;
+
+        --fs-xs: 0.82rem;
+        --fs-sm: 0.92rem;
+        --fs-base: 1.05rem;
+        --fs-md: 1.15rem;
+        --fs-lg: 1.35rem;
+        --lh: 1.55;
+        --font-mono: "IBM Plex Mono", monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        font-family: "Oxanium", sans-serif;
+        font-size: 16px;
+        color: var(--text);
+        line-height: var(--lh);
+      }
+
+      body {
+        background:
+          radial-gradient(circle at 10% 20%, rgba(159, 18, 48, 0.21), transparent 40%),
+          radial-gradient(circle at 90% 0%, rgba(45, 142, 222, 0.28), transparent 38%),
+          linear-gradient(170deg, #09121f 0%, #050a12 54%, #030406 100%);
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background: repeating-linear-gradient(
+          to bottom,
+          rgba(22, 210, 255, 0.025) 0,
+          rgba(22, 210, 255, 0.025) 1px,
+          transparent 3px,
+          transparent 6px
+        );
+      }
+
+      .shell {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 24px 20px 40px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 18px;
+        align-items: start;
+      }
+
+      .panel {
+        border: 1px solid var(--line-soft);
+        border-radius: 18px;
+        background:
+          linear-gradient(180deg, rgba(9, 19, 33, 0.93), rgba(4, 8, 14, 0.96)),
+          var(--panel);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.05),
+          inset 0 -8px 20px rgba(0, 0, 0, 0.5),
+          0 0 14px rgba(22, 210, 255, 0.12);
+      }
+
+      .content {
+        min-width: 0;
+        display: grid;
+        gap: 18px;
+      }
+
+      .nav-shell {
+        position: sticky;
+        top: 14px;
+        padding: 16px;
+      }
+
+      .brand-mini {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .brand-mini div {
+        min-width: 0;
+      }
+
+      .eyebrow {
+        margin: 0;
+        color: var(--cyan-soft);
+        font-size: var(--fs-xs);
+        font-family: var(--font-mono);
+        letter-spacing: 0.1em;
+      }
+
+      .nav-sub {
+        margin: 2px 0 0;
+        color: var(--muted);
+        font-size: var(--fs-xs);
+        letter-spacing: 0.05em;
+      }
+
+      .nav-links {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+
+      .nav-link {
+        display: block;
+        text-decoration: none;
+        color: var(--text);
+        border: 1px solid rgba(22, 210, 255, 0.2);
+        border-radius: 11px;
+        padding: 10px 12px;
+        background: rgba(8, 20, 33, 0.75);
+        font-weight: 600;
+        font-size: var(--fs-sm);
+        cursor: pointer;
+      }
+
+      .nav-link:hover {
+        border-color: rgba(22, 210, 255, 0.48);
+      }
+
+      .nav-link.active {
+        border-color: rgba(255, 110, 139, 0.58);
+        box-shadow: 0 0 12px rgba(159, 18, 48, 0.24);
+      }
+
+      .hero {
+        padding: 20px;
+      }
+
+      .hero-frame {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .node-avatar {
+        width: 120px;
+        height: 120px;
+        border-radius: 18px;
+        border: 1px solid rgba(22, 210, 255, 0.45);
+        background:
+          radial-gradient(circle at 25% 12%, rgba(22, 210, 255, 0.15), transparent 64%),
+          radial-gradient(circle at 80% 92%, rgba(159, 18, 48, 0.28), transparent 58%),
+          #050b12;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 2.5rem;
+      }
+
+      h1 {
+        margin: 4px 0 6px;
+        font-size: clamp(1.5rem, 3vw, 2.5rem);
+        text-shadow: 0 0 10px rgba(22, 210, 255, 0.28);
+      }
+
+      h2 {
+        margin: 0 0 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--cyan-soft);
+        font-size: var(--fs-lg);
+      }
+
+      h3 {
+        margin: 12px 0 8px;
+        color: var(--cyan-soft);
+        font-size: var(--fs-md);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .sub {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: var(--fs-base);
+      }
+
+      .chips {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip {
+        border: 1px solid rgba(22, 210, 255, 0.35);
+        border-radius: 999px;
+        padding: 5px 14px;
+        font-size: var(--fs-xs);
+        color: var(--cyan-soft);
+        font-family: var(--font-mono);
+      }
+
+      .chip-alert {
+        border-color: rgba(255, 110, 139, 0.5);
+        color: #ffaec0;
+        background: rgba(159, 18, 48, 0.22);
+      }
+
+      .prose {
+        padding: 20px;
+      }
+
+      .stats-bar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 12px;
+        margin-top: 10px;
+      }
+
+      .stat-box {
+        border: 1px solid rgba(22, 210, 255, 0.2);
+        border-radius: 12px;
+        padding: 12px;
+        background: rgba(7, 18, 29, 0.88);
+        text-align: center;
+      }
+
+      .stat-num {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--cyan);
+        font-family: var(--font-mono);
+      }
+
+      .stat-label {
+        margin-top: 4px;
+        font-size: var(--fs-xs);
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      @media (max-width: 1024px) {
+        .feature-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 640px) {
+        .feature-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .hero-frame {
+          grid-template-columns: 1fr;
+        }
+
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .feature-card {
+        border: 1px solid rgba(22, 210, 255, 0.2);
+        border-radius: 12px;
+        padding: 14px;
+        background: rgba(7, 18, 29, 0.88);
+      }
+
+      .feature-head {
+        margin: 0 0 8px;
+        color: var(--cyan-soft);
+        font-size: var(--fs-sm);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-family: var(--font-mono);
+      }
+
+      .feature-body {
+        margin: 0;
+        color: #d0e4f4;
+        font-size: var(--fs-sm);
+        line-height: var(--lh);
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      button,
+      .button-link {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 11px;
+        background:
+          linear-gradient(120deg, rgba(14, 37, 61, 0.96), rgba(12, 27, 43, 0.96)),
+          #0d1d2f;
+        color: #e7f8ff;
+        font-family: "Oxanium", sans-serif;
+        font-weight: 700;
+        font-size: var(--fs-sm);
+        letter-spacing: 0.03em;
+        padding: 11px 18px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+      }
+
+      button:hover:not([disabled]),
+      .button-link:hover {
+        border-color: rgba(22, 210, 255, 0.45);
+        box-shadow: 0 0 14px rgba(22, 210, 255, 0.2), 0 0 10px rgba(159, 18, 48, 0.17);
+      }
+
+      .button-ghost {
+        background: rgba(6, 15, 24, 0.8);
+        border-color: rgba(22, 210, 255, 0.35);
+      }
+
+      button[disabled] {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      label {
+        display: block;
+        margin: 14px 0 6px;
+        color: var(--muted);
+        text-transform: uppercase;
+        font-size: var(--fs-xs);
+        letter-spacing: 0.06em;
+      }
+
+      input[type="text"],
+      textarea,
+      select,
+      input[type="password"] {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid rgba(22, 210, 255, 0.25);
+        background: linear-gradient(180deg, rgba(5, 12, 20, 0.96), rgba(3, 8, 13, 0.98));
+        color: var(--text);
+        padding: 12px 14px;
+        font-family: var(--font-mono);
+        font-size: var(--fs-sm);
+        outline: none;
+        line-height: var(--lh);
+      }
+
+      select {
+        appearance: none;
+        padding-right: 40px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238fe7ff' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        background-color: rgba(5, 12, 20, 0.96);
+        cursor: pointer;
+      }
+
+      select:hover {
+        border-color: rgba(22, 210, 255, 0.48);
+      }
+
+      input[type="text"]:focus,
+      input[type="password"]:focus,
+      textarea:focus,
+      select:focus {
+        border-color: rgba(22, 210, 255, 0.64);
+        box-shadow: 0 0 0 2px rgba(22, 210, 255, 0.18);
+      }
+
+      textarea {
+        resize: vertical;
+        min-height: 100px;
+      }
+
+      .form-group {
+        margin: 14px 0;
+      }
+
+      .model-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .model-item {
+        border: 1px solid rgba(22, 210, 255, 0.2);
+        border-radius: 12px;
+        padding: 14px;
+        background: rgba(7, 18, 29, 0.88);
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: start;
+        gap: 12px;
+      }
+
+      .model-info h4 {
+        margin: 0;
+        color: var(--cyan-soft);
+        font-size: var(--fs-sm);
+      }
+
+      .model-info p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: var(--fs-xs);
+      }
+
+      .model-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .model-actions button {
+        padding: 6px 12px;
+        font-size: var(--fs-xs);
+      }
+
+      .section-tabs {
+        display: flex;
+        gap: 8px;
+        border-bottom: 1px solid rgba(22, 210, 255, 0.15);
+        margin-bottom: 16px;
+      }
+
+      .tab-btn {
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        padding: 10px 14px;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        font-family: inherit;
+        font-size: var(--fs-sm);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .tab-btn.active {
+        color: var(--cyan);
+        border-bottom-color: var(--cyan);
+      }
+
+      .tab-content {
+        display: none;
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+
+      .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+      }
+
+      .status-online {
+        background: #7ef7c8;
+      }
+
+      .status-offline {
+        background: #ffa6b8;
+      }
+
+      .status-loading {
+        background: var(--warn);
+      }
+
+      .loading-dots {
+        display: inline-block;
+      }
+
+      .loading-dots::after {
+        content: ".";
+        animation: dots 1.5s steps(3, end) infinite;
+      }
+
+      @keyframes dots {
+        0%, 20% {
+          content: ".";
+        }
+        40% {
+          content: "..";
+        }
+        60%, 100% {
+          content: "...";
+        }
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 30px 20px;
+        color: var(--muted);
+      }
+
+      .empty-state p {
+        margin: 0;
+        font-size: var(--fs-base);
+      }
+
+      .code-block {
+        background: #050b12;
+        border: 1px solid rgba(22, 210, 255, 0.2);
+        border-radius: 12px;
+        padding: 14px;
+        font-family: var(--font-mono);
+        font-size: var(--fs-xs);
+        color: #bde6ff;
+        overflow-x: auto;
+        line-height: 1.5;
+      }
+
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .modal-overlay.active {
+        display: flex;
+      }
+
+      .modal-content {
+        background: linear-gradient(180deg, rgba(9, 19, 33, 0.95), rgba(4, 8, 14, 0.97));
+        border: 1px solid rgba(22, 210, 255, 0.35);
+        border-radius: 18px;
+        padding: 28px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 0 30px rgba(22, 210, 255, 0.15);
+      }
+
+      .modal-header {
+        margin-bottom: 16px;
+      }
+
+      .modal-header h3 {
+        margin: 0;
+        color: var(--cyan-soft);
+        font-size: var(--fs-md);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .modal-body {
+        margin-bottom: 20px;
+        font-size: var(--fs-base);
+        color: var(--muted);
+        line-height: var(--lh);
+      }
+
+      .modal-footer {
+        display: flex;
+        gap: 10px;
+      }
+
+      .modal-footer button {
+        flex: 1;
+      }
+
+      .modal-footer .btn-danger {
+        background: rgba(159, 18, 48, 0.22);
+        border-color: rgba(255, 110, 139, 0.5);
+        color: #ffaec0;
+      }
+
+      .modal-footer .btn-danger:hover {
+        background: rgba(159, 18, 48, 0.35);
+        border-color: rgba(255, 110, 139, 0.7);
+      }
+
+      .modal-footer .btn-secondary {
+        background: rgba(6, 15, 24, 0.8);
+        border-color: rgba(22, 210, 255, 0.35);
+        color: #e7f8ff;
+      }
+
+      .modal-footer .btn-secondary:hover {
+        border-color: rgba(22, 210, 255, 0.6);
+      }
+
+      .notifications-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-width: 350px;
+      }
+
+      .notification {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        border: 1px solid;
+        backdrop-filter: blur(10px);
+        animation: slideInRight 0.3s ease-out;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        font-size: var(--fs-sm);
+        line-height: 1.4;
+      }
+
+      @keyframes slideInRight {
+        from {
+          transform: translateX(400px);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+
+      @keyframes slideOutRight {
+        from {
+          transform: translateX(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateX(400px);
+          opacity: 0;
+        }
+      }
+
+      .notification.removing {
+        animation: slideOutRight 0.3s ease-out forwards;
+      }
+
+      .notification.success {
+        background: rgba(7, 35, 23, 0.9);
+        border-color: rgba(110, 255, 185, 0.4);
+        color: #7ef7c8;
+      }
+
+      .notification.error {
+        background: rgba(35, 7, 15, 0.9);
+        border-color: rgba(255, 110, 139, 0.4);
+        color: #ffaec0;
+      }
+
+      .notification.info {
+        background: rgba(7, 18, 29, 0.9);
+        border-color: rgba(22, 210, 255, 0.4);
+        color: #8fe7ff;
+      }
+
+      .notification.warn {
+        background: rgba(35, 25, 7, 0.9);
+        border-color: rgba(255, 192, 110, 0.4);
+        color: #ffc06e;
+      }
+
+      .notification-icon {
+        font-size: 1.2rem;
+        flex-shrink: 0;
+      }
+
+      .notification-message {
+        flex: 1;
+      }
+
+      .notification-close {
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        color: inherit;
+        cursor: pointer;
+        font-size: 1.2rem;
+        padding: 0;
+        line-height: 1;
+      }
+
+      .notification-close:hover {
+        opacity: 0.7;
+      }
+
+      .modal {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        padding: 20px;
+        opacity: 1;
+        pointer-events: all;
+        transition: opacity 0.3s ease-out;
+      }
+
+      .modal.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .modal-content {
+        border: 1px solid var(--line-soft);
+        border-radius: 18px;
+        background:
+          linear-gradient(180deg, rgba(9, 19, 33, 0.98), rgba(4, 8, 14, 0.98)),
+          var(--panel);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.05),
+          inset 0 -8px 20px rgba(0, 0, 0, 0.5),
+          0 0 40px rgba(22, 210, 255, 0.2);
+        padding: 32px;
+        max-width: 900px;
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 32px;
+        align-items: center;
+      }
+
+      @media (max-width: 768px) {
+        .modal-content {
+          grid-template-columns: 1fr;
+          gap: 24px;
+          padding: 24px;
+        }
+      }
+
+      .auth-page {
+        padding: 48px !important;
+      }
+
+      .auth-form-wrap {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .auth-form-wrap .eyebrow {
+        margin: 0 0 12px;
+        color: var(--cyan-soft);
+        font-size: var(--fs-xs);
+        font-family: var(--font-mono);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .auth-form-wrap h1 {
+        margin: 0 0 16px;
+        color: var(--text);
+        font-size: 2.2rem;
+        font-weight: 700;
+      }
+
+      .auth-form-wrap .sub {
+        margin: 0 0 24px;
+        color: var(--muted);
+        font-size: var(--fs-base);
+      }
+
+      .auth-form {
+        display: grid;
+        gap: 16px;
+      }
+
+      .auth-form label {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--cyan-soft);
+        font-size: var(--fs-xs);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .auth-form input {
+        border: 1px solid rgba(22, 210, 255, 0.25);
+        border-radius: 11px;
+        background: rgba(7, 18, 29, 0.88);
+        color: var(--text);
+        font-family: inherit;
+        font-size: var(--fs-sm);
+        padding: 12px 14px;
+        width: 100%;
+      }
+
+      .auth-form input:focus {
+        border-color: rgba(22, 210, 255, 0.64);
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(22, 210, 255, 0.18);
+      }
+
+      .auth-password-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: stretch;
+      }
+
+      .auth-toggle {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 11px;
+        background: transparent;
+        color: #e7f8ff;
+        font-family: inherit;
+        font-size: var(--fs-xs);
+        padding: 8px 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .auth-toggle:hover {
+        border-color: rgba(22, 210, 255, 0.35);
+        background: rgba(22, 210, 255, 0.08);
+      }
+
+      .auth-switch {
+        margin: 16px 0 0;
+        color: var(--muted);
+        font-size: var(--fs-sm);
+        text-align: center;
+      }
+
+      .auth-switch a,
+      .button-link-inline {
+        color: var(--cyan);
+        text-decoration: underline;
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        font: inherit;
+      }
+
+      .button-link-inline:hover {
+        color: var(--cyan-soft);
+      }
+
+      .auth-inline-meta {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: var(--fs-xs);
+      }
+
+      #strengthBadge {
+        color: var(--warn);
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      #strengthBadge.weak {
+        color: #ff6e8b;
+      }
+
+      #strengthBadge.medium {
+        color: var(--warn);
+      }
+
+      #strengthBadge.strong {
+        color: #6eff71;
+      }
+
+      .aya-companion {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .aya-stage {
+        position: relative;
+        width: 280px;
+        height: 320px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid rgba(22, 210, 255, 0.35);
+        border-radius: 18px;
+        background:
+          linear-gradient(135deg, rgba(22, 210, 255, 0.05), rgba(159, 18, 48, 0.05)),
+          rgba(7, 18, 29, 0.88);
+        overflow: hidden;
+        padding-bottom: 20px;
+      }
+
+      .aya-stage img {
+        max-width: 100%;
+        max-height: 70%;
+        image-rendering: pixelated;
+        animation: ayaIdle 3s ease-in-out infinite;
+      }
+
+      @keyframes ayaIdle {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-4px); }
+      }
+
+      .aya-bubble {
+        position: absolute;
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc(100% - 20px);
+        max-width: 240px;
+        padding: 10px 14px;
+        border: 1px solid rgba(22, 210, 255, 0.4);
+        border-radius: 10px;
+        background:
+          linear-gradient(180deg, rgba(22, 210, 255, 0.12), rgba(22, 210, 255, 0.06)),
+          rgba(7, 18, 29, 0.95);
+        color: var(--text);
+        font-size: var(--fs-xs);
+        text-align: center;
+        line-height: 1.4;
+        backdrop-filter: blur(8px);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.05),
+          0 0 12px rgba(22, 210, 255, 0.15);
+      }
+
+      .aya-bubble::before {
+        content: '';
+        position: absolute;
+        bottom: -7px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-top: 7px solid rgba(7, 18, 29, 0.95);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal active">
+      <div class="modal-content auth-page">
+        <!-- AYA Companion -->
+        <aside class="aya-companion" id="ayaCompanion">
+          <div class="aya-stage">
+            <img id="ayaSprite" src="/assets/aya/neutral.png" alt="Aya companion" />
+            <div class="aya-bubble" id="ayaBubble">
+              Sign in with your HexNest account
+            </div>
+          </div>
+        </aside>
+
+        <div class="auth-form-wrap">
+          <p class="eyebrow" id="formEyebrow">HEXNEST // RETURN TO SWARM</p>
+          <h1 id="formTitle">Sign In</h1>
+          <p class="sub" id="formSubtitle">Use your operator account to manage node status and registration.</p>
+          
+          <!-- SIGN IN FORM -->
+          <form id="loginForm" class="auth-form" style="display: block;">
+            <label for="loginEmail">Email</label>
+            <input 
+              id="loginEmail" 
+              type="email" 
+              placeholder="your@email.com" 
+              required
+              autocomplete="email"
+            />
+
+            <label for="loginPassword" style="margin-top: 14px;">Password</label>
+            <div class="auth-password-row">
+              <input 
+                id="loginPassword" 
+                type="password" 
+                placeholder="••••••••" 
+                required
+                autocomplete="current-password"
+              />
+              <button 
+                type="button" 
+                class="button-ghost auth-toggle"
+                id="togglePassword" 
+                onclick="togglePasswordVisibility(); return false;"
+              >
+                Show
+              </button>
+            </div>
+
+            <div id="loginError" class="meta" style="display: none; color: #ffaec0;">
+            </div>
+
+            <div class="actions">
+              <button type="submit">Sign In</button>
+            </div>
+          </form>
+
+          <!-- SIGN UP FORM -->
+          <form id="signupForm" class="auth-form" style="display: none;">
+            <label for="signupName">Name</label>
+            <input 
+              id="signupName" 
+              type="text" 
+              placeholder="Your name" 
+              maxlength="120"
+              required
+              autocomplete="name"
+            />
+
+            <label for="signupNodeName" style="margin-top: 14px;">Node Name</label>
+            <input 
+              id="signupNodeName" 
+              type="text" 
+              placeholder="e.g., production-node-01" 
+              maxlength="120"
+              required
+              autocomplete="off"
+            />
+
+            <label for="signupEmail" style="margin-top: 14px;">Email</label>
+            <input 
+              id="signupEmail" 
+              type="email" 
+              placeholder="your@email.com" 
+              maxlength="180"
+              required
+              autocomplete="email"
+            />
+
+            <label for="signupPassword" style="margin-top: 14px;">Password</label>
+            <div class="auth-password-row">
+              <input 
+                id="signupPassword" 
+                type="password" 
+                placeholder="••••••••" 
+                maxlength="200"
+                required
+                autocomplete="new-password"
+              />
+              <button 
+                type="button" 
+                class="button-ghost auth-toggle"
+                id="signupPasswordToggleBtn"
+                onclick="toggleSignupPassword(); return false;"
+              >
+                Show
+              </button>
+            </div>
+            <p class="auth-inline-meta">Strength: <span id="strengthBadge">weak</span></p>
+
+            <label for="signupConfirm" style="margin-top: 14px;">Confirm Password</label>
+            <div class="auth-password-row">
+              <input 
+                id="signupConfirm" 
+                type="password" 
+                placeholder="••••••••" 
+                maxlength="200"
+                required
+                autocomplete="new-password"
+              />
+              <button 
+                type="button" 
+                class="button-ghost auth-toggle"
+                id="signupConfirmToggleBtn"
+                onclick="toggleSignupConfirm(); return false;"
+              >
+                Show
+              </button>
+            </div>
+
+            <div id="signupError" class="meta" style="display: none; color: #ffaec0;">
+            </div>
+
+            <div class="actions">
+              <button type="submit" id="signupSubmitBtn">Create Account</button>
+            </div>
+          </form>
+
+          <p class="auth-switch">
+            <span id="switchText">Need an account?</span>
+            <button type="button" id="switchFormBtn" class="button-link-inline" onclick="switchAuthForm(); return false;">
+              <span id="switchTextSpan">Sign Up</span>
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <main class="shell">
+      <section class="layout">
+        <!-- Sidebar -->
+        <aside class="nav-shell panel">
+          <div class="brand-mini">
+            <div style="width: 50px; height: 50px; border-radius: 10px; background: rgba(22, 210, 255, 0.1); border: 1px solid rgba(22, 210, 255, 0.3); display: flex; align-items: center; justify-content: center; font-size: 1.8rem;">⚙️</div>
+            <div>
+              <p class="eyebrow">HEXNEST</p>
+              <p class="nav-sub">NODE MGR</p>
+            </div>
+          </div>
+          <nav class="nav-links">
+            <button class="nav-link active" onclick="switchTab('status')">Status</button>
+            <button class="nav-link" onclick="switchTab('models')">Models</button>
+            <button class="nav-link" onclick="switchTab('config')">Config</button>
+            <button class="nav-link" onclick="switchTab('logs')">Logs</button>
+          </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="content">
+          <!-- Hero / Status Header -->
+          <header class="hero panel">
+            <div class="hero-frame">
+              <div class="node-avatar" id="nodeStatus">⚡</div>
+              <div>
+                <p class="eyebrow">LOCAL NODE</p>
+                <h1 id="nodeName">LocalNode</h1>
+                <p class="sub" id="nodeId">Node ID: —</p>
+                <div class="chips">
+                  <span class="chip" id="runtimeStatus">INITIALIZING</span>
+                  <span class="chip" id="coreStatus">OFFLINE</span>
+                  <span class="chip" id="adapterStatus">0 Adapters</span>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <!-- Status Tab -->
+          <section id="status" class="tab-content active panel prose">
+            <h2>Node Status</h2>
+            <div class="stats-bar">
+              <div class="stat-box">
+                <div class="stat-num" id="uptime">—</div>
+                <div class="stat-label">Uptime</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-num" id="adapters">0</div>
+                <div class="stat-label">Adapters</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-num" id="timestamp">—</div>
+                <div class="stat-label">Last Update</div>
+              </div>
+            </div>
+
+            <h3 style="margin-top: 20px;">Overview</h3>
+            <div class="feature-grid">
+              <div class="feature-card">
+                <p class="feature-head">Node Identity</p>
+                <p class="feature-body" style="margin-bottom: 10px;">Unique identifier for this node. Used for authentication and room discovery.</p>
+                <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Node ID</p>
+                <p style="margin: 4px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); word-break: break-all; font-size: var(--fs-xs);" id="statusIdentityId">—</p>
+                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Operator</p>
+                <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusIdentityOperator">—</p>
+              </div>
+              <div class="feature-card">
+                <p class="feature-head">AI Models</p>
+                <p class="feature-body" style="margin-bottom: 10px;">Registered adapters for Claude, OpenAI, Ollama. Configure below.</p>
+                <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Active model</p>
+                <p style="margin: 4px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); word-break: break-word; font-size: var(--fs-xs);" id="statusActiveModel">—</p>
+                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Summary</p>
+                <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusModelsSummary">No models configured</p>
+              </div>
+              <div class="feature-card">
+                <p class="feature-head">Heartbeat</p>
+                <p class="feature-body" style="margin-bottom: 10px;">Keep-alive signal to core platform. Customizable interval.</p>
+                <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Interval</p>
+                <p style="margin: 4px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); font-size: var(--fs-xs);" id="statusHeartbeatInterval">—</p>
+                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Last pulse</p>
+                <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusHeartbeatLastPulse">—</p>
+                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Active rooms</p>
+                <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusHeartbeatRooms">0</p>
+                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Usage queue</p>
+                <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusHeartbeatQueue">0 pending records</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Models Tab -->
+          <section id="models" class="tab-content panel prose">
+            <h2>AI Models</h2>
+            <p class="sub">Configure and manage AI adapters for this node.</p>
+
+            <!-- STEP 1: Add Provider -->
+            <h3>Add Provider</h3>
+            <form id="providerForm" style="margin-bottom: 20px;">
+              <div class="form-group">
+                <label>Adapter Type</label>
+                <select id="providerAdapter" required>
+                  <option value="">— Select adapter —</option>
+                  <option value="ClaudeAdapter">Claude (Anthropic)</option>
+                  <option value="OpenAIAdapter">OpenAI</option>
+                  <option value="OllamaAdapter">Ollama (Local)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="providerApiKey" placeholder="sk-... (optional for Ollama)" />
+              </div>
+
+              <div class="form-group">
+                <label>Base URL</label>
+                <input type="text" id="providerBaseUrl" placeholder="e.g., http://localhost:11434" />
+              </div>
+
+              <div style="display: flex; gap: 10px;">
+                <button type="button" id="testProviderBtn" onclick="testProvider()" style="flex: 1; background: rgba(6, 15, 24, 0.8); border-color: rgba(22, 210, 255, 0.35);">Test Connection</button>
+                <button type="submit" style="flex: 1;">Add Provider</button>
+              </div>
+
+              <div id="providerTestResult" style="display: none; margin-top: 14px; padding: 12px; border-radius: 12px; border: 1px solid rgba(22, 210, 255, 0.2); background: rgba(7, 18, 29, 0.88);">
+                <p id="providerTestResultText" style="margin: 0; color: var(--cyan-soft); font-size: var(--fs-sm);"></p>
+              </div>
+            </form>
+
+            <!-- STEP 2: Providers List -->
+            <h3>Providers</h3>
+            <div id="providersList" class="model-list">
+              <div class="empty-state">
+                <p>No providers configured yet.</p>
+              </div>
+            </div>
+
+            <!-- STEP 3: Add Model (only if providers exist) -->
+            <h3 style="margin-top: 20px;">Add Model</h3>
+            <form id="modelForm" style="margin-bottom: 20px;">
+              <div class="form-group">
+                <label>Provider</label>
+                <select id="modelAdapter" required onchange="loadAvailableModels()">
+                  <option value="">— Select provider —</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Model Name</label>
+                <select id="modelName" required>
+                  <option value="">— Select provider first —</option>
+                </select>
+              </div>
+
+              <div style="display: flex; gap: 10px; margin-top: 14px;">
+                <button type="submit" style="flex: 1;">Add Model</button>
+              </div>
+            </form>
+
+            <!-- STEP 4: Models List -->
+            <h3>Models</h3>
+            <div id="modelsList" class="model-list">
+              <div class="empty-state">
+                <p>No models configured yet.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Config Tab -->
+          <section id="config" class="tab-content panel prose">
+            <h2>Configuration</h2>
+            <p class="sub">Node settings and heartbeat configuration.</p>
+
+            <h3>Heartbeat</h3>
+            <form id="configForm">
+              <div class="form-group">
+                <label>Interval (seconds)</label>
+                <input type="text" id="heartbeatInterval" placeholder="30" />
+              </div>
+              <div class="form-group">
+                <label>Timeout (seconds)</label>
+                <input type="text" id="heartbeatTimeout" placeholder="10" />
+              </div>
+              <button type="submit">Save Config</button>
+            </form>
+
+            <h3 style="margin-top: 20px;">HexNest Core Connection</h3>
+            <form id="coreForm" style="margin-bottom: 14px;">
+              <div class="form-group">
+                <label>Core URL</label>
+                <input type="url" id="coreUrl" placeholder="https://hex-nest.com" required />
+                <p class="sub" style="margin-top: 8px; font-size: var(--fs-xs);">This endpoint is stored in node settings and used by the running node.</p>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <button type="submit" style="background: rgba(110, 255, 185, 0.15); border: 1px solid rgba(110, 255, 185, 0.35); color: #7ef7c8; cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: var(--fs-sm);">Save & Connect</button>
+                <button type="button" onclick="testCoreConnection()" style="background: rgba(61, 176, 255, 0.15); border: 1px solid rgba(61, 176, 255, 0.35); color: #8fe7ff; cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: var(--fs-sm);">Test Connection</button>
+              </div>
+            </form>
+
+            <div style="background: rgba(7, 18, 29, 0.88); border: 1px solid rgba(22, 210, 255, 0.2); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+              <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Current Status</p>
+              <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
+                <span id="coreStatusIcon" style="font-size: 1.5rem;">⏳</span>
+                <span id="coreStatusText" style="color: var(--warn);">Checking...</span>
+              </div>
+              <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Connection details</p>
+              <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="coreStatusReason">Waiting for core status...</p>
+              <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Connected URL</p>
+              <p style="margin: 4px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); word-break: break-all;" id="coreUrlDisplay">—</p>
+            </div>
+
+            <h3 style="margin-top: 20px;">Node Identity</h3>
+            <div style="background: rgba(7, 18, 29, 0.88); border: 1px solid rgba(22, 210, 255, 0.2); border-radius: 12px; padding: 14px;">
+              <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Node ID</p>
+              <p style="margin: 4px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); word-break: break-all;" id="identityId">—</p>
+              <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Operator</p>
+              <p style="margin: 4px 0 0; color: var(--cyan-soft);" id="identityOperator">—</p>
+            </div>
+          </section>
+
+          <!-- Logs Tab -->
+          <section id="logs" class="tab-content panel prose">
+            <h2>Activity Log</h2>
+            <p class="sub">Recent events and heartbeat history.</p>
+
+            <div id="logsList" style="display: grid; gap: 8px; margin-top: 14px; max-height: 400px; overflow-y: auto;">
+              <div class="empty-state">
+                <p>No recent activity.</p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Confirm Delete</h3>
+        </div>
+        <div class="modal-body">
+          <p id="confirmMessage">Are you sure?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="closeConfirmModal()">Cancel</button>
+          <button class="btn-danger" onclick="confirmDelete()">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notifications Container -->
+    <div id="notificationsContainer" class="notifications-container"></div>
+
+    <script>
+      let updateInterval;
+      const logs = [];
+      let pendingDeleteAction = null;
+      let isAuthenticated = false;
+
+      // ========== AYA SPRITE & BUBBLE (needed early for password functions) ==========
+      const ayaSprites = ["neutral", "calm", "smile", "thinking", "happy", "laughing"];
+      let currentAyaSprite = "neutral";
+      
+      function setAyaSprite(sprite) {
+        currentAyaSprite = sprite;
+        document.getElementById('ayaSprite').src = `/assets/aya/${sprite}.png`;
+      }
+      
+      function setAyaBubble(text) {
+        document.getElementById('ayaBubble').textContent = text;
+      }
+      // ====================================================================
+
+      // ========== PASSWORD VISIBILITY FUNCTIONS (must be early) ==========
+      function togglePasswordVisibility() {
+        const input = document.getElementById('loginPassword');
+        const btn = document.getElementById('togglePassword');
+        if (input.type === 'password') {
+          input.type = 'text';
+          btn.textContent = 'Hide';
+          setAyaSprite('wink_right');
+          setTimeout(() => setAyaSprite('smile'), 1000);
+        } else {
+          input.type = 'password';
+          btn.textContent = 'Show';
+          setAyaSprite('calm');
+        }
+      }
+
+      function toggleSignupPassword() {
+        const input = document.getElementById('signupPassword');
+        const btn = document.getElementById('signupPasswordToggleBtn');
+        if (input.type === 'password') {
+          input.type = 'text';
+          btn.textContent = 'Hide';
+          setAyaSprite('wink_left');
+          setTimeout(() => setAyaSprite('smile'), 1000);
+        } else {
+          input.type = 'password';
+          btn.textContent = 'Show';
+          setAyaSprite('calm');
+        }
+      }
+
+      function toggleSignupConfirm() {
+        const input = document.getElementById('signupConfirm');
+        const btn = document.getElementById('signupConfirmToggleBtn');
+        if (input.type === 'password') {
+          input.type = 'text';
+          btn.textContent = 'Hide';
+          setAyaSprite('wink_left');
+          setTimeout(() => setAyaSprite('smile'), 1000);
+        } else {
+          input.type = 'password';
+          btn.textContent = 'Show';
+          setAyaSprite('calm');
+        }
+      }
+
+      function switchAuthForm() {
+        let isSignUpMode = !document.getElementById('signupForm').style.display || 
+                          document.getElementById('signupForm').style.display === 'none';
+        const loginForm = document.getElementById('loginForm');
+        const signupForm = document.getElementById('signupForm');
+        const title = document.getElementById('formTitle');
+        const subtitle = document.getElementById('formSubtitle');
+        const eyebrow = document.getElementById('formEyebrow');
+        const switchText = document.getElementById('switchText');
+        const switchSpan = document.getElementById('switchTextSpan');
+        
+        if (isSignUpMode) {
+          loginForm.style.display = 'none';
+          signupForm.style.display = 'block';
+          eyebrow.textContent = 'HEXNEST // CYBERBRAIN ACCESS';
+          title.textContent = 'Create Account';
+          subtitle.textContent = 'Register your operator account and attach nodes to your dashboard.';
+          switchText.textContent = 'Already have an account?';
+          switchSpan.textContent = 'Sign In';
+          setAyaSprite('smile');
+          setAyaBubble('Let\'s create your account!');
+        } else {
+          loginForm.style.display = 'block';
+          signupForm.style.display = 'none';
+          eyebrow.textContent = 'HEXNEST // RETURN TO SWARM';
+          title.textContent = 'Sign In';
+          subtitle.textContent = 'Use your operator account to manage node status and registration.';
+          switchText.textContent = 'Need an account?';
+          switchSpan.textContent = 'Sign Up';
+          setAyaSprite('neutral');
+          setAyaBubble('Sign in with your HexNest account');
+        }
+      }
+      // =====================================================================
+
+      function showNotification(message, type = 'info') {
+        const container = document.getElementById('notificationsContainer');
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        
+        const icons = {
+          success: '✓',
+          error: '✕',
+          info: 'ℹ',
+          warn: '⚠'
+        };
+
+        notification.innerHTML = `
+          <span class="notification-icon">${icons[type]}</span>
+          <span class="notification-message">${message}</span>
+          <button class="notification-close" onclick="this.parentElement.classList.add('removing'); setTimeout(() => this.parentElement.remove(), 300)">×</button>
+        `;
+
+        container.appendChild(notification);
+
+        // Auto-remove after 4 seconds
+        setTimeout(() => {
+          if (notification.parentElement) {
+            notification.classList.add('removing');
+            setTimeout(() => notification.remove(), 300);
+          }
+        }, 4000);
+      }
+
+      function switchTab(tabName) {
+        // Hide all tabs
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+
+        // Show selected tab
+        document.getElementById(tabName)?.classList.add('active');
+        event.target?.classList.add('active');
+
+        if (tabName === 'models') {
+          fetchProviders();
+          fetchModels();
+        } else if (tabName === 'config') {
+          fetchCoreInfo();
+        } else if (tabName === 'status') {
+          fetchStatus();
+          fetchCoreInfo();
+        }
+      }
+
+      function showConfirmModal(message, action) {
+        document.getElementById('confirmMessage').textContent = message;
+        pendingDeleteAction = action;
+        document.getElementById('confirmModal').classList.add('active');
+      }
+
+      function closeConfirmModal() {
+        document.getElementById('confirmModal').classList.remove('active');
+        pendingDeleteAction = null;
+      }
+
+      function confirmDelete() {
+        if (pendingDeleteAction) {
+          pendingDeleteAction();
+        }
+        closeConfirmModal();
+      }
+
+      function addLog(message, type = 'info', silent = false) {
+        const timestamp = new Date().toLocaleTimeString();
+        logs.unshift({ message, type, timestamp });
+        if (logs.length > 50) logs.pop();
+        renderLogs();
+        
+        // Показуємо notification тільки якщо це не фоновий запит
+        if (!silent && (type === 'error' || type === 'info' || type === 'warn')) {
+          showNotification(message, type);
+        }
+      }
+
+      function renderLogs() {
+        const logsList = document.getElementById('logsList');
+        if (logs.length === 0) {
+          logsList.innerHTML = '<div class="empty-state"><p>No recent activity.</p></div>';
+          return;
+        }
+        logsList.innerHTML = logs.map(log => {
+          const icons = {
+            success: '✓',
+            error: '✕',
+            info: 'ℹ',
+            warn: '⚠'
+          };
+          const colors = {
+            success: 'var(--cyan)',
+            error: 'var(--blood-soft)',
+            warn: 'var(--warn)',
+            info: 'var(--cyan)'
+          };
+          return `
+            <div style="border-left: 3px solid ${colors[log.type] || colors.info};
+                        padding: 8px 12px; background: rgba(7, 18, 29, 0.88); border-radius: 6px; display: flex; gap: 10px; align-items: flex-start;">
+              <span style="color: ${colors[log.type] || colors.info}; font-weight: bold; margin-top: 2px;">${icons[log.type] || '•'}</span>
+              <div style="flex: 1; min-width: 0;">
+                <p style="margin: 0; color: var(--muted); font-size: var(--fs-xs); font-family: var(--font-mono);">${log.timestamp}</p>
+                <p style="margin: 2px 0 0; color: var(--text); font-size: var(--fs-sm); word-break: break-word;">${log.message}</p>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      function updateCoreConnectButton(coreInfo) {
+        const button = document.querySelector('#coreForm button[type="submit"]');
+        if (!button) return;
+        button.textContent = coreInfo.coreConnected ? 'Reconnect' : 'Connect';
+      }
+
+      async function connectToCore(coreUrl, options = {}) {
+        const { testFirst = true, silent = false, successMessage = 'Core connected', button = null } = options;
+        const trimmedCoreUrl = (coreUrl || '').trim();
+        const userToken = localStorage.getItem('hexnest_user_token') || undefined;
+        const userEmail = localStorage.getItem('hexnest_user_email') || undefined;
+
+        if (!trimmedCoreUrl) {
+          if (!silent) addLog('Configure a core endpoint in node settings first', 'error');
+          return { success: false, error: 'Configure a core endpoint in node settings first' };
+        }
+
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'Connecting...';
+        }
+
+        try {
+          if (testFirst) {
+            const testRes = await fetch('/api/core/test', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ coreUrl: trimmedCoreUrl })
+            });
+            const testJson = await testRes.json();
+            if (!testJson.success) {
+              if (!silent) addLog(`Core test failed: ${testJson.message}`, 'error');
+              await fetchCoreInfo();
+              return { success: false, error: testJson.message };
+            }
+          }
+
+          const res = await fetch('/api/core/reconnect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coreUrl: trimmedCoreUrl, userToken, userEmail })
+          });
+          const json = await res.json();
+          if (!json.success) throw new Error(json.error || 'Reconnect failed');
+
+          document.getElementById('coreUrl').value = json.coreUrl || trimmedCoreUrl;
+          document.getElementById('coreUrlDisplay').textContent = json.coreUrl || trimmedCoreUrl;
+          if (!silent) addLog(`${successMessage}: ${json.message}`, 'info');
+          await fetchCoreInfo();
+          await fetchStatus();
+          return { success: true, data: json };
+        } catch (err) {
+          await fetchCoreInfo();
+          if (!silent) addLog(`Core connection error: ${err.message}`, 'error');
+          return { success: false, error: err.message };
+        } finally {
+          if (button) {
+            button.disabled = false;
+            const coreStatusText = document.getElementById('coreStatusText')?.textContent;
+            button.textContent = coreStatusText === 'CONNECTED' ? 'Reconnect' : 'Connect';
+          }
+        }
+      }
+
+      async function fetchCoreInfo() {
+        try {
+          const res = await fetch('/api/core');
+          const json = await res.json();
+          if (!json.success) throw new Error(json.error);
+
+          const coreInfo = json.data;
+          document.getElementById('coreUrlDisplay').textContent = coreInfo.coreUrl;
+          document.getElementById('coreUrl').value = coreInfo.coreUrl;
+          document.getElementById('coreStatusReason').textContent = coreInfo.coreConnected
+            ? 'Runtime is connected to HexNest Core and heartbeats are active.'
+            : (coreInfo.connectionReason || 'Node is running in local mode. Use Connect to attach it to core.');
+          
+          const statusIcon = document.getElementById('coreStatusIcon');
+          const statusText = document.getElementById('coreStatusText');
+          
+          if (coreInfo.coreConnected) {
+            statusIcon.textContent = '✨';
+            statusText.textContent = 'CONNECTED';
+            statusText.style.color = '#7ef7c8';
+          } else {
+            statusIcon.textContent = '⏸️';
+            statusText.textContent = 'LOCAL MODE';
+            statusText.style.color = 'var(--warn)';
+          }
+
+          updateCoreConnectButton(coreInfo);
+        } catch (err) {
+          console.error('Fetch core info error:', err);
+          addLog(`Core info error: ${err.message}`, 'error');
+        }
+      }
+
+      async function testCoreConnection() {
+        const coreUrl = document.getElementById('coreUrl').value.trim();
+        if (!coreUrl) {
+          addLog('Configure a core endpoint in node settings first', 'error');
+          return;
+        }
+
+        const btn = event?.target;
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = 'Testing...';
+        }
+
+        try {
+          const res = await fetch('/api/core/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coreUrl })
+          });
+
+          const json = await res.json();
+
+          if (json.success) {
+            addLog(`Core connection verified: ${json.message}`, 'info');
+          } else {
+            addLog(`Core test failed: ${json.message}`, 'error');
+          }
+        } catch (err) {
+          console.error('Test core connection error:', err);
+          addLog(`Core test error: ${err.message}`, 'error');
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Test Connection';
+          }
+        }
+      }
+
+      async function reconnectCore() {
+        const coreUrl = document.getElementById('coreUrlDisplay').textContent;
+        if (!coreUrl || coreUrl === '—') {
+          addLog('No core endpoint is configured for this node yet', 'error');
+          return;
+        }
+
+        const btn = event?.target;
+        await connectToCore(coreUrl, { testFirst: false, successMessage: 'Core reconnected', button: btn });
+      }
+
+      async function fetchStatus() {
+        try {
+          const res = await fetch('/api/status');
+          const json = await res.json();
+          if (!json.success) throw new Error(json.error);
+
+          const data = json.data;
+          document.getElementById('nodeName').textContent = data.name || 'LocalNode';
+          document.getElementById('nodeId').textContent = `Node ID: ${data.id?.slice(0, 12) || '—'}...`;
+          document.getElementById('adapters').textContent = data.adaptersCount || 0;
+          document.getElementById('adapterStatus').textContent = `${data.adaptersCount || 0} Adapters`;
+          document.getElementById('identityId').textContent = data.id || '—';
+          document.getElementById('identityOperator').textContent = data.operatorName || '—';
+          document.getElementById('statusIdentityId').textContent = data.id || '—';
+          document.getElementById('statusIdentityOperator').textContent = data.operatorName || '—';
+          document.getElementById('statusHeartbeatInterval').textContent = `${Math.max(1, Math.round((data.heartbeatIntervalMs || 0) / 1000))}s`;
+          document.getElementById('statusHeartbeatLastPulse').textContent = data.lastHeartbeatAt
+            ? `${new Date(data.lastHeartbeatAt).toLocaleTimeString()} · ${data.runtimeStatus}`
+            : (data.coreConnected ? 'Waiting for first pulse' : 'Local mode');
+          document.getElementById('statusHeartbeatRooms').textContent = `${data.activeRoomsCount || 0}`;
+          document.getElementById('statusHeartbeatQueue').textContent = `${data.pendingUsageRecords || 0} pending records`;
+
+          // Update uptime
+          const uptime = data.uptime || 0;
+          const mins = Math.floor(uptime / 1000 / 60);
+          const secs = Math.floor((uptime / 1000) % 60);
+          document.getElementById('uptime').textContent = `${mins}m ${secs}s`;
+
+          // Update timestamp
+          document.getElementById('timestamp').textContent = new Date().toLocaleTimeString();
+
+          // Update status indicators
+          const statusEl = document.getElementById('nodeStatus');
+          const runtimeStatusEl = document.getElementById('runtimeStatus');
+          const coreStatusEl = document.getElementById('coreStatus');
+          
+          if (data.isRunning) {
+            statusEl.textContent = '✨';
+            runtimeStatusEl.textContent = 'RUNNING';
+            runtimeStatusEl.style.borderColor = 'rgba(110, 255, 185, 0.35)';
+            runtimeStatusEl.style.color = '#7ef7c8';
+          } else {
+            statusEl.textContent = '⏸️';
+            runtimeStatusEl.textContent = 'STOPPED';
+            runtimeStatusEl.style.borderColor = 'rgba(255, 110, 139, 0.35)';
+            runtimeStatusEl.style.color = '#ffa6b8';
+          }
+
+          // Update core connection status
+          if (data.coreConnected) {
+            coreStatusEl.textContent = 'CONNECTED';
+            coreStatusEl.style.borderColor = 'rgba(110, 255, 185, 0.35)';
+            coreStatusEl.style.color = '#7ef7c8';
+          } else {
+            coreStatusEl.textContent = 'LOCAL MODE';
+            coreStatusEl.style.borderColor = 'rgba(255, 192, 110, 0.4)';
+            coreStatusEl.style.color = '#ffc06e';
+          }
+
+          addLog(`Status: ${data.isRunning ? 'Running' : 'Stopped'} | Core: ${data.coreConnected ? 'Connected' : 'Local Mode'}`, 'info', true);
+        } catch (err) {
+          console.error('Status fetch error:', err);
+          addLog(`Status error: ${err.message}`, 'error');
+        }
+      }
+
+      async function fetchModels() {
+        try {
+          const res = await fetch('/api/models');
+          console.log('fetch status:', res.status);
+          const json = await res.json();
+          console.log('fetchModels response:', json);
+          if (!json.success) throw new Error(json.error);
+
+          const models = json.data || [];
+          console.log('models array:', models, 'length:', models.length);
+          const modelsList = document.getElementById('modelsList');
+          const activeModel = models.find(model => model.active);
+          const enabledCount = models.filter(model => model.enabled).length;
+
+          document.getElementById('statusActiveModel').textContent = activeModel
+            ? `${activeModel.name} · ${activeModel.type || 'Unknown'}`
+            : '—';
+          document.getElementById('statusModelsSummary').textContent = models.length > 0
+            ? `${enabledCount}/${models.length} enabled`
+            : 'No models configured';
+
+          if (models.length === 0) {
+            console.log('No models, showing empty state');
+            modelsList.innerHTML = '<div class="empty-state"><p>No models configured yet.</p></div>';
+            return;
+          }
+
+          modelsList.innerHTML = models.map(model => `
+            <div class="model-item">
+              <div class="model-info">
+                <h4>${model.name}${model.active ? ' <span style="color: var(--warn); font-size: var(--fs-sm);">⭐ Active</span>' : ''}</h4>
+                <p>${model.type || 'Unknown'} · ${model.enabled ? '✓ Enabled' : '○ Disabled'}</p>
+              </div>
+              <div class="model-actions">
+                ${!model.active ? `<button onclick="activateModel('${model.name}')" style="background: rgba(61, 176, 255, 0.15); border-color: rgba(61, 176, 255, 0.35); color: #8fe7ff;">Set Active</button>` : ''}
+                <button onclick="deleteModel('${model.name}')" style="background: rgba(159, 18, 48, 0.22); border-color: rgba(255, 110, 139, 0.5); color: #ffaec0;">Delete</button>
+              </div>
+            </div>
+          `).join('');
+
+          addLog(`Loaded ${models.length} models`, 'info', true);
+        } catch (err) {
+          console.error('Models fetch error:', err);
+          addLog(`Models error: ${err.message}`, 'error');
+        }
+      }
+
+      async function activateModel(name) {
+        try {
+          const res = await fetch(`/api/models/${name}/activate`, { method: 'PUT' });
+          const json = await res.json();
+          if (!json.success) throw new Error(json.error);
+          addLog(`Activated model: ${name}`, 'info');
+          await fetchModels();
+        } catch (err) {
+          console.error('Activate model error:', err);
+          addLog(`Error activating model: ${err.message}`, 'error');
+        }
+      }
+
+      async function deleteModel(name) {
+        showConfirmModal(`Delete model "${name}"?`, async () => {
+          try {
+            const res = await fetch(`/api/models/${name}`, { method: 'DELETE' });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error);
+            addLog(`Deleted model: ${name}`, 'info');
+            await fetchModels();
+          } catch (err) {
+            console.error('Delete error:', err);
+            addLog(`Delete error: ${err.message}`, 'error');
+          }
+        });
+      }
+
+      async function testProvider() {
+        const adapter = document.getElementById('providerAdapter').value;
+        const apiKey = document.getElementById('providerApiKey').value;
+        const baseUrl = document.getElementById('providerBaseUrl').value;
+        const resultDiv = document.getElementById('providerTestResult');
+        const resultText = document.getElementById('providerTestResultText');
+
+        if (!adapter) {
+          resultText.textContent = '❌ Please select an adapter type';
+          resultText.style.color = 'var(--blood-soft)';
+          resultDiv.style.backgroundColor = 'rgba(35, 7, 15, 0.88)';
+          resultDiv.style.borderColor = 'rgba(255, 110, 139, 0.35)';
+          resultDiv.style.display = 'block';
+          return;
+        }
+
+        const testBtn = document.getElementById('testProviderBtn');
+        testBtn.disabled = true;
+        testBtn.textContent = 'Testing...';
+
+        try {
+          const res = await fetch('/api/models/test-list', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adapter, baseUrl: baseUrl || undefined, apiKey: apiKey || undefined })
+          });
+
+          const json = await res.json();
+
+          if (json.success) {
+            resultText.textContent = `✅ Connection successful!`;
+            resultText.style.color = '#7ef7c8';
+            resultDiv.style.backgroundColor = 'rgba(7, 35, 23, 0.88)';
+            resultDiv.style.borderColor = 'rgba(110, 255, 185, 0.35)';
+            addLog(`Provider connection verified: ${adapter}`, 'info');
+          } else {
+            resultText.textContent = `❌ ${json.error || 'Connection failed'}`;
+            resultText.style.color = 'var(--blood-soft)';
+            resultDiv.style.backgroundColor = 'rgba(35, 7, 15, 0.88)';
+            resultDiv.style.borderColor = 'rgba(255, 110, 139, 0.35)';
+            addLog(`Provider test failed: ${json.error}`, 'error');
+          }
+
+          resultDiv.style.display = 'block';
+        } catch (err) {
+          resultText.textContent = `❌ ${err.message}`;
+          resultText.style.color = 'var(--blood-soft)';
+          resultDiv.style.backgroundColor = 'rgba(35, 7, 15, 0.88)';
+          resultDiv.style.borderColor = 'rgba(255, 110, 139, 0.35)';
+          resultDiv.style.display = 'block';
+          console.error('Test provider error:', err);
+        } finally {
+          testBtn.disabled = false;
+          testBtn.textContent = 'Test Connection';
+        }
+      }
+
+      async function fetchProviders() {
+        try {
+          const adapters = ['ClaudeAdapter', 'OpenAIAdapter', 'OllamaAdapter'];
+          const providers = [];
+
+          for (const adapter of adapters) {
+            try {
+              const res = await fetch(`/api/adapters/${adapter}`);
+              const json = await res.json();
+              if (json.success && json.data) {
+                providers.push(json.data);
+              }
+            } catch (err) {
+              // Provider not configured yet
+            }
+          }
+
+          const list = document.getElementById('providersList');
+          if (providers.length === 0) {
+            list.innerHTML = '<div class="empty-state"><p>No providers configured yet.</p></div>';
+          } else {
+            list.innerHTML = providers.map(p => `
+              <div class="model-item">
+                <div class="model-info">
+                  <h4>${p.type === 'ClaudeAdapter' ? '🔮 Claude' : p.type === 'OpenAIAdapter' ? '🚀 OpenAI' : '🦙 Ollama'}</h4>
+                  <p>${p.type}</p>
+                  ${p.baseUrl ? `<p>Base: ${p.baseUrl}</p>` : ''}
+                </div>
+                <div class="model-actions">
+                  <button onclick="deleteProvider('${p.type}')" style="background: rgba(159, 18, 48, 0.22); border-color: rgba(255, 110, 139, 0.5); color: #ffaec0;">Delete</button>
+                </div>
+              </div>
+            `).join('');
+          }
+
+          // Update model form with available providers
+          updateProviderSelect();
+          addLog(`Loaded ${providers.length} providers`, 'info', true);
+        } catch (err) {
+          console.error('Providers fetch error:', err);
+          addLog(`Providers error: ${err.message}`, 'error');
+        }
+      }
+
+      async function deleteProvider(type) {
+        showConfirmModal(`Delete provider "${type}"?`, async () => {
+          try {
+            const res = await fetch(`/api/adapters/${type}`, { method: 'DELETE' });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error);
+            addLog(`Deleted provider: ${type}`, 'info');
+            await fetchProviders();
+          } catch (err) {
+            console.error('Delete provider error:', err);
+            addLog(`Delete error: ${err.message}`, 'error');
+          }
+        });
+      }
+
+      function updateProviderSelect() {
+        const select = document.getElementById('modelAdapter');
+        const adapters = ['ClaudeAdapter', 'OpenAIAdapter', 'OllamaAdapter'];
+        const currentValue = select.value; // Зберігаємо поточне значення
+        
+        Promise.all(adapters.map(async (adapter) => {
+          try {
+            const res = await fetch(`/api/adapters/${adapter}`);
+            const json = await res.json();
+            return json.success ? adapter : null;
+          } catch {
+            return null;
+          }
+        })).then(configured => {
+          const available = adapters.filter(a => configured.includes(a));
+          
+          // Не переписуємо, якщо список не змінився
+          const currentOptions = Array.from(select.options).map(o => o.value).filter(v => v !== '');
+          if (JSON.stringify(available.sort()) === JSON.stringify(currentOptions.sort()) && currentValue) {
+            return; // Нічого не змінилось, залишаємо як є
+          }
+          
+          select.innerHTML = '<option value="">— Select provider —</option>';
+          available.forEach(adapter => {
+            const label = adapter === 'ClaudeAdapter' ? '🔮 Claude' : 
+                         adapter === 'OpenAIAdapter' ? '🚀 OpenAI' : '🦙 Ollama';
+            const option = document.createElement('option');
+            option.value = adapter;
+            option.textContent = label;
+            select.appendChild(option);
+          });
+          
+          // Відновлюємо попереднє значення якщо воно ще існує
+          if (currentValue && available.includes(currentValue)) {
+            select.value = currentValue;
+          }
+        });
+      }
+
+      async function loadAvailableModels() {
+        const adapter = document.getElementById('modelAdapter').value;
+        const modelSelect = document.getElementById('modelName');
+        
+        if (!adapter) {
+          modelSelect.innerHTML = '<option value="">— Select provider first —</option>';
+          return;
+        }
+
+        modelSelect.innerHTML = '<option value="">Loading...</option>';
+        modelSelect.disabled = true;
+
+        try {
+          // Отримуємо конфіг провайдера
+          const configRes = await fetch(`/api/adapters/${adapter}`);
+          const configJson = await configRes.json();
+          
+          if (!configJson.success) {
+            modelSelect.innerHTML = '<option value="">Provider not configured</option>';
+            addLog(`Provider ${adapter} not configured`, 'error');
+            return;
+          }
+
+          const config = configJson.data;
+
+          // Викликаємо test-list щоб отримати доступні моделі
+          const testRes = await fetch('/api/models/test-list', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              adapter,
+              baseUrl: config.baseUrl,
+              apiKey: config.apiKey
+            })
+          });
+
+          const testJson = await testRes.json();
+
+          if (testJson.success && testJson.models && testJson.models.length > 0) {
+            modelSelect.innerHTML = '<option value="">— Select model —</option>';
+            testJson.models.forEach(model => {
+              const option = document.createElement('option');
+              option.value = model;
+              option.textContent = model;
+              modelSelect.appendChild(option);
+            });
+            addLog(`Loaded ${testJson.models.length} available models for ${adapter}`, 'info');
+          } else {
+            modelSelect.innerHTML = '<option value="">No models found</option>';
+            addLog(`No models available for ${adapter}`, 'warn');
+          }
+        } catch (err) {
+          modelSelect.innerHTML = '<option value="">Error loading models</option>';
+          console.error('Load models error:', err);
+          addLog(`Error loading models: ${err.message}`, 'error');
+        } finally {
+          modelSelect.disabled = false;
+        }
+      }
+
+      function updateModelFormFields() {
+        const adapter = document.getElementById('modelAdapter').value;
+        
+        // Show/hide Base URL and API Key fields (all adapters)
+        const showAdvanced = adapter !== '';
+        document.getElementById('baseUrlField').style.display = showAdvanced ? 'block' : 'none';
+        document.getElementById('apiKeyField').style.display = showAdvanced ? 'block' : 'none';
+        document.getElementById('testConnectionBtn').style.display = showAdvanced ? 'block' : 'none';
+        document.getElementById('modelNameField').style.display = 'none'; // hidden until test passes
+        
+        // Set required for Cloud-based adapters only
+        document.getElementById('baseUrl').required = adapter === 'OpenAIAdapter';
+        document.getElementById('apiKey').required = adapter === 'ClaudeAdapter' || adapter === 'OpenAIAdapter';
+        
+        // Clear previous results
+        document.getElementById('testResult').style.display = 'none';
+        clearModelSelect();
+      }
+
+      async function testConnection() {
+        const adapter = document.getElementById('modelAdapter').value;
+        const baseUrl = document.getElementById('baseUrl').value;
+        const apiKey = document.getElementById('apiKey').value;
+        const resultDiv = document.getElementById('testResult');
+        const resultText = document.getElementById('testResultText');
+
+        if (!adapter) {
+          resultText.textContent = '❌ Please select an adapter type';
+          resultText.style.color = 'var(--blood-soft)';
+          resultDiv.style.backgroundColor = 'rgba(35, 7, 15, 0.88)';
+          resultDiv.style.borderColor = 'rgba(255, 110, 139, 0.35)';
+          resultDiv.style.display = 'block';
+          return;
+        }
+
+        // For Cloud adapters, check if API key is provided
+        if ((adapter === 'ClaudeAdapter' || adapter === 'OpenAIAdapter') && !apiKey) {
+          resultText.textContent = '❌ Please provide API Key';
+          resultText.style.color = 'var(--blood-soft)';
+          resultDiv.style.backgroundColor = 'rgba(35, 7, 15, 0.88)';
+          resultDiv.style.borderColor = 'rgba(255, 110, 139, 0.35)';
+          resultDiv.style.display = 'block';
+          return;
+        }
+
+        const testBtn = document.getElementById('testConnectionBtn');
+        testBtn.disabled = true;
+        testBtn.textContent = 'Testing...';
+
+        try {
+          const res = await fetch('/api/models/test-list', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adapter, baseUrl, apiKey })
+          });
+
+          const json = await res.json();
+
+          if (json.success && json.models && json.models.length > 0) {
+            resultText.textContent = `✅ Connection successful! Found ${json.models.length} model(s)`;
+            resultText.style.color = '#7ef7c8';
+            resultDiv.style.backgroundColor = 'rgba(7, 35, 23, 0.88)';
+            resultDiv.style.borderColor = 'rgba(110, 255, 185, 0.35)';
+            
+            // Populate model select
+            const modelSelect = document.getElementById('modelName');
+            modelSelect.innerHTML = '<option value="">— Select model —</option>';
+            json.models.forEach(model => {
+              const option = document.createElement('option');
+              option.value = model;
+              option.textContent = model;
+              modelSelect.appendChild(option);
+            });
+            
+            // Show model selection field
+            document.getElementById('modelNameField').style.display = 'block';
+            modelSelect.required = true;
+            
+            addLog(`Found ${json.models.length} available models`, 'info');
+          } else if (json.success && (!json.models || json.models.length === 0)) {
+            resultText.textContent = `⚠️ Connection successful but no models found`;
+            resultText.style.color = 'var(--warn)';
+            resultDiv.style.backgroundColor = 'rgba(35, 25, 7, 0.88)';
+            resultDiv.style.borderColor = 'rgba(255, 192, 110, 0.35)';
+            document.getElementById('modelNameField').style.display = 'none';
+            addLog(`No models available for ${adapter}`, 'warn');
+          } else {
+            resultText.textContent = `❌ ${json.error || 'Connection failed'}`;
+            resultText.style.color = 'var(--blood-soft)';
+            resultDiv.style.backgroundColor = 'rgba(35, 7, 15, 0.88)';
+            resultDiv.style.borderColor = 'rgba(255, 110, 139, 0.35)';
+            document.getElementById('modelNameField').style.display = 'none';
+            addLog(`Connection test failed: ${json.error}`, 'error');
+          }
+
+          resultDiv.style.display = 'block';
+        } catch (err) {
+          resultText.textContent = `❌ ${err.message}`;
+          resultText.style.color = 'var(--blood-soft)';
+          resultDiv.style.backgroundColor = 'rgba(35, 7, 15, 0.88)';
+          resultDiv.style.borderColor = 'rgba(255, 110, 139, 0.35)';
+          resultDiv.style.display = 'block';
+          document.getElementById('modelNameField').style.display = 'none';
+          console.error('Test connection error:', err);
+        } finally {
+          testBtn.disabled = false;
+          testBtn.textContent = 'Test Connection';
+        }
+      }
+
+      function clearModelSelect() {
+        const modelSelect = document.getElementById('modelName');
+        modelSelect.innerHTML = '<option value="">— Select model —</option>';
+        document.getElementById('modelNameField').style.display = 'none';
+      }
+
+      document.getElementById('providerForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const adapter = document.getElementById('providerAdapter').value;
+        const apiKey = document.getElementById('providerApiKey').value;
+        const baseUrl = document.getElementById('providerBaseUrl').value;
+
+        if (!adapter) {
+          addLog('Please select an adapter type', 'error');
+          return;
+        }
+
+        try {
+          const res = await fetch(`/api/adapters/${adapter}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              apiKey: apiKey || undefined,
+              baseUrl: baseUrl || undefined
+            })
+          });
+          const json = await res.json();
+          if (!json.success) throw new Error(json.error);
+
+          document.getElementById('providerForm').reset();
+          document.getElementById('providerTestResult').style.display = 'none';
+          addLog(`Added provider: ${adapter}`, 'info');
+          await fetchProviders();
+        } catch (err) {
+          console.error('Add provider error:', err);
+          addLog(`Add error: ${err.message}`, 'error');
+        }
+      });
+
+      document.getElementById('modelForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const adapter = document.getElementById('modelAdapter').value;
+        const modelName = document.getElementById('modelName').value;
+
+        if (!adapter || !modelName) {
+          addLog('Please select provider and model', 'error');
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/models', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              name: modelName, 
+              adapter, 
+              config: {
+                model: modelName
+              }
+            })
+          });
+          const json = await res.json();
+          
+          if (!json.success) {
+            // Показуємо помилку користувачу
+            addLog(`Error: ${json.error}`, 'error');
+            return;
+          }
+
+          // Очищуємо dropdown моделей
+          document.getElementById('modelName').value = '';
+          
+          // Перезавантажуємо список доступних моделей для цього провайдера
+          await loadAvailableModels();
+          
+          addLog(`Added model: ${modelName}`, 'info');
+          await fetchModels();
+        } catch (err) {
+          console.error('Add model error:', err);
+          addLog(`Add error: ${err.message}`, 'error');
+        }
+      });
+
+      document.getElementById('configForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const interval = document.getElementById('heartbeatInterval').value;
+
+        try {
+          const res = await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ heartbeatInterval: parseInt(interval) })
+          });
+          const json = await res.json();
+          if (!json.success) throw new Error(json.error);
+          addLog('Config updated', 'info');
+        } catch (err) {
+          console.error('Config error:', err);
+          addLog(`Config error: ${err.message}`, 'error');
+        }
+      });
+
+      document.getElementById('coreForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const coreUrl = document.getElementById('coreUrl').value.trim();
+
+        if (!coreUrl) {
+          addLog('Configure a core endpoint in node settings first', 'error');
+          return;
+        }
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = 'Testing...';
+        }
+
+        try {
+          await connectToCore(coreUrl, { successMessage: 'Core connected', button: btn });
+        } catch (err) {
+          console.error('Core URL save error:', err);
+          addLog(`Core URL error: ${err.message}`, 'error');
+        } finally {
+          // handled by connectToCore
+        }
+      });
+
+      // Initial data load after login without periodic polling
+      function startPolling() {
+        if (updateInterval) return; // Already running
+        
+        fetchStatus();
+        fetchCoreInfo();
+        fetchProviders();
+        fetchModels();
+
+        updateInterval = true;
+      }
+
+      // Stop on-demand refresh state (on logout)
+      function stopPolling() {
+        if (updateInterval) {
+          updateInterval = null;
+        }
+      }
+
+      function refreshActiveView() {
+        if (!isAuthenticated) return;
+
+        const activeTab = document.querySelector('.tab-content.active')?.id;
+        if (activeTab === 'models') {
+          fetchProviders();
+          fetchModels();
+          return;
+        }
+
+        if (activeTab === 'config') {
+          fetchCoreInfo();
+          return;
+        }
+
+        fetchStatus();
+        fetchCoreInfo();
+        fetchModels();
+      }
+
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          refreshActiveView();
+        }
+      });
+
+      window.addEventListener('focus', () => {
+        if (!document.hidden) {
+          refreshActiveView();
+        }
+      });
+
+      // REMOVED: Auto-fetch/polling on initial page load
+      // These will ONLY start after successful login
+      // (see "Window management after successful login" below)
+
+      addLog('Node Manager loaded', 'info');
+
+      // ======================
+      // AUTH HANDLING
+      // ======================
+      
+      function isValidEmail(value) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+      }
+
+      function passwordStrength(password) {
+        if (password.length < 6) return "weak";
+        const hasUpper = /[A-Z]/.test(password);
+        const hasLower = /[a-z]/.test(password);
+        const hasDigit = /[0-9]/.test(password);
+        const hasSpecial = /[^A-Za-z0-9]/.test(password);
+        const score = [hasUpper, hasLower, hasDigit, hasSpecial].filter(Boolean).length;
+        if (password.length >= 10 && score >= 3) return "strong";
+        if (password.length >= 8 && score >= 2) return "medium";
+        return "weak";
+      }
+
+      // Password strength indicator
+      document.getElementById('signupPassword').addEventListener('input', (e) => {
+        const strength = passwordStrength(e.target.value);
+        const badge = document.getElementById('strengthBadge');
+        badge.textContent = strength;
+        badge.className = strength;
+      });
+
+      // Confirm password match visual feedback
+      document.getElementById('signupConfirm').addEventListener('input', () => {
+        const pwd = document.getElementById('signupPassword').value;
+        const confirm = document.getElementById('signupConfirm').value;
+        if (confirm.length > 0) {
+          setAyaBubble(pwd === confirm ? 'Passwords match! 🎯' : 'Passwords don\'t match...');
+        }
+      });
+      
+      // Check if user is authenticated on page load
+      async function checkAuthStatus() {
+        const token = localStorage.getItem('hexnest_user_token');
+        const authModal = document.getElementById('authModal');
+        
+        if (!token) {
+          authModal.classList.remove('hidden');
+          document.querySelector('.layout').style.display = 'none';
+        } else {
+          authModal.classList.add('hidden');
+          document.querySelector('.layout').style.display = 'grid';
+          isAuthenticated = true;
+          startPolling();
+          void connectToCore(document.getElementById('coreUrl').value.trim(), {
+            testFirst: false,
+            silent: true,
+            successMessage: 'Core connected from saved session'
+          });
+        }
+      }
+
+      // Handle login form submission
+      document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+        const password = document.getElementById('loginPassword').value;
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        
+        if (!email || !password) {
+          setAyaSprite('frustrated');
+          setAyaBubble('Hmm, you need to fill in all fields...');
+          return;
+        }
+        
+        try {
+          document.getElementById('loginError').style.display = 'none';
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Signing in...';
+          
+          setAyaSprite('thinking');
+          setAyaBubble('Checking your credentials...');
+          
+          const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+          
+          console.log('[login] Response status:', response.status);
+          console.log('[login] Response statusText:', response.statusText);
+          console.log('[login] Response headers:', {
+            contentType: response.headers.get('content-type'),
+            location: response.headers.get('location'),
+            server: response.headers.get('server')
+          });
+          
+          const contentType = response.headers.get('content-type');
+          let data;
+          
+          if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+          } else {
+            const text = await response.text();
+            console.error('[login] Got non-JSON response (first 1000 chars):', text.slice(0, 1000));
+            throw new Error(`Server returned ${response.status} ${contentType || 'unknown'} instead of JSON`);
+          }
+          
+          if (!response.ok) {
+            throw new Error(data.error || 'Login failed');
+          }
+          
+          localStorage.setItem('hexnest_user_token', data.token);
+          localStorage.setItem('hexnest_user_email', data.email);
+          
+          setAyaSprite('happy');
+          setAyaBubble('Welcome back! Loading your node...');
+          
+          setTimeout(() => {
+            const authModal = document.getElementById('authModal');
+            authModal.classList.add('hidden');
+            document.querySelector('.layout').style.display = 'grid';
+            isAuthenticated = true;
+            addLog(`✓ Authenticated as ${data.email}`, 'success');
+            
+            // START POLLING: Only fetch adapters/models after login
+            startPolling();
+            void connectToCore(document.getElementById('coreUrl').value.trim(), {
+              testFirst: false,
+              silent: true,
+              successMessage: 'Core connected after sign in'
+            });
+          }, 800);
+          
+        } catch (error) {
+          setAyaSprite('angry');
+          setAyaBubble('Login failed. Try again?');
+          document.getElementById('loginError').textContent = '';
+          document.getElementById('loginError').style.display = 'none';
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Sign In';
+        }
+      });
+
+      // Handle signup form submission
+      document.getElementById('signupForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const name = document.getElementById('signupName').value.trim();
+        const nodeName = document.getElementById('signupNodeName').value.trim();
+        const email = document.getElementById('signupEmail').value.trim().toLowerCase();
+        const password = document.getElementById('signupPassword').value;
+        const confirmPassword = document.getElementById('signupConfirm').value;
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        
+        // Validation
+        const emailValid = isValidEmail(email);
+        const strength = passwordStrength(password);
+        const confirmMatches = password && password === confirmPassword;
+        const nodeNameValid = nodeName.length >= 2;
+        const allValid = name.length >= 2 && nodeNameValid && emailValid && strength !== "weak" && confirmMatches;
+        
+        if (!allValid) {
+          setAyaSprite('frustrated');
+          setAyaBubble('Something\'s not right...');
+          return;
+        }
+        
+        try {
+          document.getElementById('signupError').style.display = 'none';
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Creating...';
+          
+          setAyaSprite('thinking');
+          setAyaBubble('Creating your account...');
+          
+          const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, nodeName, email, password })
+          });
+          
+          const contentType = response.headers.get('content-type');
+          let data;
+          
+          if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+          } else {
+            const text = await response.text();
+            console.error('[signup] Got non-JSON response:', text.slice(0, 500));
+            throw new Error(`Server returned ${contentType || 'unknown'} instead of JSON`);
+          }
+          
+          if (!response.ok) {
+            throw new Error(data.error || 'Registration failed');
+          }
+          
+          localStorage.setItem('hexnest_user_token', data.token);
+          localStorage.setItem('hexnest_user_email', data.email);
+          
+          setAyaSprite('happy');
+          setAyaBubble('Account created! Loading your node...');
+          
+          setTimeout(() => {
+            const authModal = document.getElementById('authModal');
+            authModal.classList.add('hidden');
+            document.querySelector('.layout').style.display = 'grid';
+            isAuthenticated = true;
+            addLog(`✓ Created account as ${data.email}`, 'success');
+            
+            // START POLLING: Only fetch adapters/models after signup
+            startPolling();
+            void connectToCore(document.getElementById('coreUrl').value.trim(), {
+              testFirst: false,
+              silent: true,
+              successMessage: 'Core connected after registration'
+            });
+          }, 800);
+          
+        } catch (error) {
+          setAyaSprite('angry');
+          setAyaBubble('Registration failed. Try again?');
+          document.getElementById('signupError').textContent = '';
+          document.getElementById('signupError').style.display = 'none';
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Create Account';
+        }
+      });
+      
+      // Aya reactions Sign In
+      document.getElementById('loginEmail').addEventListener('focus', () => {
+        setAyaSprite('smile');
+        setAyaBubble('Your email address?');
+      });
+      
+      document.getElementById('loginPassword').addEventListener('focus', () => {
+        setAyaSprite('thinking');
+        setAyaBubble('And your password...');
+      });
+      
+      // Aya reactions Sign Up
+      document.getElementById('signupName').addEventListener('input', (e) => {
+        if (e.target.value.length >= 2) {
+          setAyaSprite('smile');
+          setAyaBubble(`Nice to meet you, ${e.target.value}!`);
+        }
+      });
+      
+      document.getElementById('signupEmail').addEventListener('focus', () => {
+        setAyaSprite('smile');
+        setAyaBubble('And your email?');
+      });
+      
+      document.getElementById('signupPassword').addEventListener('focus', () => {
+        setAyaSprite('thinking');
+        setAyaBubble('Make it strong!');
+      });
+      
+      // Check auth on page load
+      checkAuthStatus();
+    </script>
+  </body>
+</html>

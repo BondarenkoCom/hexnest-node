@@ -5,3 +5,4 @@ dist/
 .hexnest-identity.json
 *.log
 coverage/
+.hexnest.db
