@@ -10,8 +10,9 @@ async function main(): Promise<void> {
   const webApp = createWebServer({
     db: database,
     nodeConfig: config,
-    reconnectToCore: (coreUrl?: string, auth?: { userToken?: string; userEmail?: string }) =>
-      runtime.reconnectToCore(coreUrl, auth),
+    reconnectToCore: (auth?: { userToken?: string; userEmail?: string }) =>
+      runtime.reconnectToCore(auth),
+    removeNodeFromCore: () => runtime.removeCurrentNodeFromCore(),
     getNodeStatus: () => runtime.getNodeStatus()
   });
 

@@ -2,6 +2,28 @@ import { Router, Request, Response } from "express";
 import { HexNestClient } from "../../protocol/HexNestClient.js";
 import { WebServerContext } from "../server.js";
 import { mapUpstreamError } from "./upstream-errors.js";
+import {
+  clearNodeWebSession,
+  hasValidNodeWebSession,
+  setNodeWebSession
+} from "../auth-session.js";
+
+async function reconnectNodeAfterAuth(
+  context: WebServerContext,
+  userToken: string,
+  userEmail: string
+): Promise<{ coreUrl: string; coreConnected: boolean; nodeId: string | null; coreConnectionError?: string }> {
+  try {
+    return await context.reconnectToCore({ userToken, userEmail });
+  } catch (error) {
+    return {
+      coreUrl: context.nodeConfig.coreUrl,
+      coreConnected: false,
+      nodeId: null,
+      coreConnectionError: error instanceof Error ? error.message : "Failed to connect node to core"
+    };
+  }
+}
 
 export function authRouter(context: WebServerContext): Router {
   const router = Router();
@@ -29,13 +51,18 @@ export function authRouter(context: WebServerContext): Router {
       // Save token to database instead of .env
       context.db.setNodeConfig("user_email", email);
       context.db.setNodeConfig("user_token", authResponse.token);
+      setNodeWebSession(res, authResponse.token);
+      const connection = await reconnectNodeAfterAuth(context, authResponse.token, email);
 
       res.json({
         success: true,
         message: "Logged in successfully",
         userId: authResponse.userId,
-        token: authResponse.token,
-        email
+        email,
+        coreUrl: connection.coreUrl,
+        coreConnected: connection.coreConnected,
+        nodeId: connection.nodeId,
+        coreConnectionError: connection.coreConnectionError
       });
     } catch (error) {
       const mapped = mapUpstreamError(error, "login", context.nodeConfig.coreUrl);
@@ -70,14 +97,19 @@ export function authRouter(context: WebServerContext): Router {
       context.db.setNodeConfig("node_name", nodeName);
       context.db.setNodeConfig("user_email", email);
       context.db.setNodeConfig("user_token", authResponse.token);
+      setNodeWebSession(res, authResponse.token);
+      const connection = await reconnectNodeAfterAuth(context, authResponse.token, email);
 
       res.json({
         success: true,
         message: "Account created successfully",
         userId: authResponse.userId,
-        token: authResponse.token,
         email,
-        nodeName
+        nodeName,
+        coreUrl: connection.coreUrl,
+        coreConnected: connection.coreConnected,
+        nodeId: connection.nodeId,
+        coreConnectionError: connection.coreConnectionError
       });
     } catch (error) {
       const mapped = mapUpstreamError(error, "registration", context.nodeConfig.coreUrl);
@@ -87,6 +119,23 @@ export function authRouter(context: WebServerContext): Router {
         error: mapped.message
       });
     }
+  });
+
+  router.get("/session", (req: Request, res: Response) => {
+    const authenticated = hasValidNodeWebSession(req, context.db);
+    res.json({
+      success: true,
+      authenticated,
+      email: authenticated ? context.db.getNodeConfig("user_email") : null
+    });
+  });
+
+  router.post("/logout", (_req: Request, res: Response) => {
+    clearNodeWebSession(res);
+    res.json({
+      success: true,
+      message: "Logged out successfully"
+    });
   });
 
   return router;

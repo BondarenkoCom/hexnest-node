@@ -9,6 +9,7 @@ import { configRouter } from "./api/config.js";
 import { statusRouter } from "./api/status.js";
 import { coreRouter } from "./api/core.js";
 import { authRouter } from "./api/auth.js";
+import { createNodeWebAuthMiddleware } from "./auth-session.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,9 +17,9 @@ export interface WebServerContext {
   db: DatabaseService;
   nodeConfig: NodeConfig;
   reconnectToCore: (
-    coreUrl?: string,
     auth?: { userToken?: string; userEmail?: string }
   ) => Promise<{ coreUrl: string; coreConnected: boolean; nodeId: string | null }>;
+  removeNodeFromCore: () => Promise<{ removed: boolean; nodeId: string | null }>;
   getNodeStatus: () => {
     id: string | null;
     isRunning: boolean;
@@ -55,18 +56,21 @@ export function createWebServer(context: WebServerContext): Express {
   const publicDir = path.resolve(process.cwd(), "public");
   app.use(express.static(publicDir));
 
-  // API routes
-  app.use("/api/models", modelsRouter(context));
-  app.use("/api/adapters", adaptersRouter(context));
-  app.use("/api/config", configRouter(context));
-  app.use("/api/status", statusRouter(context));
-  app.use("/api/core", coreRouter(context));
+  // Public API routes
   app.use("/api/auth", authRouter(context));
 
   // Health check
   app.get("/api/health", (req: Request, res: Response) => {
     res.json({ ok: true, timestamp: Date.now() });
   });
+
+  // Protected management API routes
+  app.use("/api", createNodeWebAuthMiddleware(context.db));
+  app.use("/api/models", modelsRouter(context));
+  app.use("/api/adapters", adaptersRouter(context));
+  app.use("/api/config", configRouter(context));
+  app.use("/api/status", statusRouter(context));
+  app.use("/api/core", coreRouter(context));
 
   // Serve index.html for all other routes (SPA)
   app.get("*", (req: Request, res: Response) => {

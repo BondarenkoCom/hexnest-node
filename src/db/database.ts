@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
 
+type SqlRow = unknown[];
+
 export interface NodeIdentity {
   id: string;
   token: string;
@@ -68,7 +70,7 @@ export class DatabaseService {
       // Check if tables exist
       const tables = this.db
         .exec("SELECT name FROM sqlite_master WHERE type='table'")
-        .map((r) => r.values.flat())[0] || [];
+        .map((result) => result.values.flat())[0] || [];
 
       if (!tables.includes("node_identity")) {
         this.db.run(`
@@ -143,6 +145,10 @@ export class DatabaseService {
     await this.ready;
   }
 
+  isReady(): boolean {
+    return this.db !== null;
+  }
+
   // Node Identity operations
   getNodeIdentity(): NodeIdentity | null {
     if (!this.db) return null;
@@ -206,7 +212,7 @@ export class DatabaseService {
 
       console.log('[MODELS] Found', rows.length, 'model configs');
       
-      return rows.map((row) => {
+      return rows.map((row: SqlRow) => {
         const [id, type, name, model, baseUrl, apiKey, apiKeyEnv, roles, capabilities, enabled, active, createdAt, updatedAt] = row;
         return {
           id: String(id),
@@ -474,8 +480,8 @@ export class DatabaseService {
       if (results.length === 0 || results[0].values.length === 0) return {};
       return Object.fromEntries(
         results[0].values
-          .filter((row) => row[0] != null)
-          .map((row) => [String(row[0]), String(row[1] ?? "")]) as [string, string][]
+          .filter((row: SqlRow) => row[0] != null)
+          .map((row: SqlRow) => [String(row[0]), String(row[1] ?? "")]) as [string, string][]
       );
     } catch {
       return {};

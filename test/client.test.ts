@@ -45,6 +45,17 @@ describe("HexNestClient", () => {
     expect(url).toBe("https://hex-nest.com/api/nodes/register");
   });
 
+  it("sends user auth header for delete node", async () => {
+    const client = new HexNestClient("https://hex-nest.com/", { userToken: "user-token-123" });
+    await client.deleteNode("node-1");
+
+    expect(global.fetch).toHaveBeenCalledOnce();
+    const [url, options] = (global.fetch as any).mock.calls[0];
+    expect(url).toBe("https://hex-nest.com/api/nodes/node-1");
+    expect(options.method).toBe("DELETE");
+    expect(options.headers.Authorization).toBe("Bearer user-token-123");
+  });
+
   it("surfaces json upstream errors without dumping raw payloads", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,

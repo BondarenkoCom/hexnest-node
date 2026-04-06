@@ -141,6 +141,11 @@
         margin-bottom: 16px;
       }
 
+      .nav-footer {
+        display: grid;
+        gap: 8px;
+      }
+
       .nav-link {
         display: block;
         text-decoration: none;
@@ -1140,9 +1145,11 @@
           <nav class="nav-links">
             <button class="nav-link active" onclick="switchTab('status')">Status</button>
             <button class="nav-link" onclick="switchTab('models')">Models</button>
-            <button class="nav-link" onclick="switchTab('config')">Config</button>
             <button class="nav-link" onclick="switchTab('logs')">Logs</button>
           </nav>
+          <div class="nav-footer">
+            <button class="nav-link" onclick="logoutNodeUi()">Logout</button>
+          </div>
         </aside>
 
         <!-- Main Content -->
@@ -1212,6 +1219,27 @@
                 <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Usage queue</p>
                 <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusHeartbeatQueue">0 pending records</p>
               </div>
+            </div>
+
+            <h3 style="margin-top: 20px;">Core Connection</h3>
+            <div style="background: rgba(7, 18, 29, 0.88); border: 1px solid rgba(22, 210, 255, 0.2); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+              <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Current Status</p>
+              <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
+                <span id="coreStatusIcon" style="font-size: 1.5rem;">⏳</span>
+                <span id="coreStatusText" style="color: var(--warn);">Checking...</span>
+              </div>
+              <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Connection details</p>
+              <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="coreStatusReason">Waiting for core status...</p>
+              <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Connected URL</p>
+              <p style="margin: 4px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); word-break: break-all;" id="coreUrlDisplay">—</p>
+              <form id="coreForm" style="margin-top: 14px;">
+                <input type="hidden" id="coreUrl" />
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                  <button type="submit" style="background: rgba(110, 255, 185, 0.15); border: 1px solid rgba(110, 255, 185, 0.35); color: #7ef7c8; cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: var(--fs-sm);">Reconnect</button>
+                  <button type="button" onclick="testCoreConnection()" style="background: rgba(61, 176, 255, 0.15); border: 1px solid rgba(61, 176, 255, 0.35); color: #8fe7ff; cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: var(--fs-sm);">Test Connection</button>
+                  <button type="button" id="removeNodeButton" onclick="confirmRemoveNodeFromCore()" style="background: rgba(159, 18, 48, 0.18); border: 1px solid rgba(255, 110, 139, 0.35); color: #ffaec0; cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: var(--fs-sm);">Remove Node</button>
+                </div>
+              </form>
             </div>
           </section>
 
@@ -1292,58 +1320,6 @@
             </div>
           </section>
 
-          <!-- Config Tab -->
-          <section id="config" class="tab-content panel prose">
-            <h2>Configuration</h2>
-            <p class="sub">Node settings and heartbeat configuration.</p>
-
-            <h3>Heartbeat</h3>
-            <form id="configForm">
-              <div class="form-group">
-                <label>Interval (seconds)</label>
-                <input type="text" id="heartbeatInterval" placeholder="30" />
-              </div>
-              <div class="form-group">
-                <label>Timeout (seconds)</label>
-                <input type="text" id="heartbeatTimeout" placeholder="10" />
-              </div>
-              <button type="submit">Save Config</button>
-            </form>
-
-            <h3 style="margin-top: 20px;">HexNest Core Connection</h3>
-            <form id="coreForm" style="margin-bottom: 14px;">
-              <div class="form-group">
-                <label>Core URL</label>
-                <input type="url" id="coreUrl" placeholder="https://hex-nest.com" required />
-                <p class="sub" style="margin-top: 8px; font-size: var(--fs-xs);">This endpoint is stored in node settings and used by the running node.</p>
-              </div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <button type="submit" style="background: rgba(110, 255, 185, 0.15); border: 1px solid rgba(110, 255, 185, 0.35); color: #7ef7c8; cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: var(--fs-sm);">Save & Connect</button>
-                <button type="button" onclick="testCoreConnection()" style="background: rgba(61, 176, 255, 0.15); border: 1px solid rgba(61, 176, 255, 0.35); color: #8fe7ff; cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: var(--fs-sm);">Test Connection</button>
-              </div>
-            </form>
-
-            <div style="background: rgba(7, 18, 29, 0.88); border: 1px solid rgba(22, 210, 255, 0.2); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
-              <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Current Status</p>
-              <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
-                <span id="coreStatusIcon" style="font-size: 1.5rem;">⏳</span>
-                <span id="coreStatusText" style="color: var(--warn);">Checking...</span>
-              </div>
-              <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Connection details</p>
-              <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="coreStatusReason">Waiting for core status...</p>
-              <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Connected URL</p>
-              <p style="margin: 4px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); word-break: break-all;" id="coreUrlDisplay">—</p>
-            </div>
-
-            <h3 style="margin-top: 20px;">Node Identity</h3>
-            <div style="background: rgba(7, 18, 29, 0.88); border: 1px solid rgba(22, 210, 255, 0.2); border-radius: 12px; padding: 14px;">
-              <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Node ID</p>
-              <p style="margin: 4px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); word-break: break-all;" id="identityId">—</p>
-              <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Operator</p>
-              <p style="margin: 4px 0 0; color: var(--cyan-soft);" id="identityOperator">—</p>
-            </div>
-          </section>
-
           <!-- Logs Tab -->
           <section id="logs" class="tab-content panel prose">
             <h2>Activity Log</h2>
@@ -1383,6 +1359,84 @@
       const logs = [];
       let pendingDeleteAction = null;
       let isAuthenticated = false;
+
+      function getAuthModal() {
+        return document.getElementById('authModal');
+      }
+
+      function getLayout() {
+        return document.querySelector('.layout');
+      }
+
+      function showAuthenticatedLayout() {
+        getAuthModal().classList.add('hidden');
+        getLayout().style.display = 'grid';
+        isAuthenticated = true;
+      }
+
+      function showLoggedOutLayout(message = 'Sign in with your HexNest account') {
+        stopPolling();
+        isAuthenticated = false;
+        getAuthModal().classList.remove('hidden');
+        getLayout().style.display = 'none';
+        setAyaSprite('neutral');
+        setAyaBubble(message);
+      }
+
+      async function logoutNodeUi() {
+        try {
+          await fetch('/api/auth/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (error) {
+          console.error('Logout error:', error);
+        }
+
+        showLoggedOutLayout('Session closed. Sign in to manage this node.');
+        addLog('Logged out from node manager', 'info', true);
+      }
+
+      function confirmRemoveNodeFromCore() {
+        showConfirmModal('Remove this node from HexNest Core? The local node will switch to local mode until you reconnect it.', () => {
+          void removeNodeFromCore();
+        });
+      }
+
+      async function removeNodeFromCore() {
+        const button = document.getElementById('removeNodeButton');
+        try {
+          if (button) {
+            button.disabled = true;
+            button.textContent = 'Removing...';
+          }
+
+          const response = await fetch('/api/core/node', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (response.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
+          const data = await response.json();
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Failed to remove node from core');
+          }
+
+          addLog(`✓ ${data.message}`, 'success');
+          await fetchStatus();
+          await fetchCoreInfo();
+        } catch (error) {
+          console.error('Remove node error:', error);
+          addLog(`Remove node error: ${error.message}`, 'error');
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.textContent = 'Remove Node';
+          }
+        }
+      }
 
       // ========== AYA SPRITE & BUBBLE (needed early for password functions) ==========
       const ayaSprites = ["neutral", "calm", "smile", "thinking", "happy", "laughing"];
@@ -1520,8 +1574,6 @@
         if (tabName === 'models') {
           fetchProviders();
           fetchModels();
-        } else if (tabName === 'config') {
-          fetchCoreInfo();
         } else if (tabName === 'status') {
           fetchStatus();
           fetchCoreInfo();
@@ -1596,11 +1648,9 @@
         button.textContent = coreInfo.coreConnected ? 'Reconnect' : 'Connect';
       }
 
-      async function connectToCore(coreUrl, options = {}) {
+      async function connectToCore(options = {}) {
         const { testFirst = true, silent = false, successMessage = 'Core connected', button = null } = options;
-        const trimmedCoreUrl = (coreUrl || '').trim();
-        const userToken = localStorage.getItem('hexnest_user_token') || undefined;
-        const userEmail = localStorage.getItem('hexnest_user_email') || undefined;
+        const trimmedCoreUrl = document.getElementById('coreUrl').value.trim();
 
         if (!trimmedCoreUrl) {
           if (!silent) addLog('Configure a core endpoint in node settings first', 'error');
@@ -1617,7 +1667,7 @@
             const testRes = await fetch('/api/core/test', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ coreUrl: trimmedCoreUrl })
+              body: JSON.stringify({})
             });
             const testJson = await testRes.json();
             if (!testJson.success) {
@@ -1630,8 +1680,12 @@
           const res = await fetch('/api/core/reconnect', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ coreUrl: trimmedCoreUrl, userToken, userEmail })
+            body: JSON.stringify({})
           });
+          if (res.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return { success: false, error: 'Authentication required' };
+          }
           const json = await res.json();
           if (!json.success) throw new Error(json.error || 'Reconnect failed');
 
@@ -1657,6 +1711,10 @@
       async function fetchCoreInfo() {
         try {
           const res = await fetch('/api/core');
+          if (res.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
           const json = await res.json();
           if (!json.success) throw new Error(json.error);
 
@@ -1704,8 +1762,12 @@
           const res = await fetch('/api/core/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ coreUrl })
+            body: JSON.stringify({})
           });
+          if (res.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
 
           const json = await res.json();
 
@@ -1733,12 +1795,16 @@
         }
 
         const btn = event?.target;
-        await connectToCore(coreUrl, { testFirst: false, successMessage: 'Core reconnected', button: btn });
+        await connectToCore({ testFirst: false, successMessage: 'Core reconnected', button: btn });
       }
 
       async function fetchStatus() {
         try {
           const res = await fetch('/api/status');
+          if (res.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
           const json = await res.json();
           if (!json.success) throw new Error(json.error);
 
@@ -1747,8 +1813,6 @@
           document.getElementById('nodeId').textContent = `Node ID: ${data.id?.slice(0, 12) || '—'}...`;
           document.getElementById('adapters').textContent = data.adaptersCount || 0;
           document.getElementById('adapterStatus').textContent = `${data.adaptersCount || 0} Adapters`;
-          document.getElementById('identityId').textContent = data.id || '—';
-          document.getElementById('identityOperator').textContent = data.operatorName || '—';
           document.getElementById('statusIdentityId').textContent = data.id || '—';
           document.getElementById('statusIdentityOperator').textContent = data.operatorName || '—';
           document.getElementById('statusHeartbeatInterval').textContent = `${Math.max(1, Math.round((data.heartbeatIntervalMs || 0) / 1000))}s`;
@@ -1757,6 +1821,10 @@
             : (data.coreConnected ? 'Waiting for first pulse' : 'Local mode');
           document.getElementById('statusHeartbeatRooms').textContent = `${data.activeRoomsCount || 0}`;
           document.getElementById('statusHeartbeatQueue').textContent = `${data.pendingUsageRecords || 0} pending records`;
+          const removeNodeButton = document.getElementById('removeNodeButton');
+          if (removeNodeButton) {
+            removeNodeButton.disabled = !data.id;
+          }
 
           // Update uptime
           const uptime = data.uptime || 0;
@@ -2285,30 +2353,9 @@
         }
       });
 
-      document.getElementById('configForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const interval = document.getElementById('heartbeatInterval').value;
-
-        try {
-          const res = await fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ heartbeatInterval: parseInt(interval) })
-          });
-          const json = await res.json();
-          if (!json.success) throw new Error(json.error);
-          addLog('Config updated', 'info');
-        } catch (err) {
-          console.error('Config error:', err);
-          addLog(`Config error: ${err.message}`, 'error');
-        }
-      });
-
       document.getElementById('coreForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const coreUrl = document.getElementById('coreUrl').value.trim();
-
-        if (!coreUrl) {
+        if (!document.getElementById('coreUrl').value.trim()) {
           addLog('Configure a core endpoint in node settings first', 'error');
           return;
         }
@@ -2320,10 +2367,10 @@
         }
 
         try {
-          await connectToCore(coreUrl, { successMessage: 'Core connected', button: btn });
+          await connectToCore({ successMessage: 'Core connected', button: btn });
         } catch (err) {
-          console.error('Core URL save error:', err);
-          addLog(`Core URL error: ${err.message}`, 'error');
+          console.error('Core reconnect error:', err);
+          addLog(`Core reconnect error: ${err.message}`, 'error');
         } finally {
           // handled by connectToCore
         }
@@ -2355,11 +2402,6 @@
         if (activeTab === 'models') {
           fetchProviders();
           fetchModels();
-          return;
-        }
-
-        if (activeTab === 'config') {
-          fetchCoreInfo();
           return;
         }
 
@@ -2425,22 +2467,25 @@
       
       // Check if user is authenticated on page load
       async function checkAuthStatus() {
-        const token = localStorage.getItem('hexnest_user_token');
-        const authModal = document.getElementById('authModal');
-        
-        if (!token) {
-          authModal.classList.remove('hidden');
-          document.querySelector('.layout').style.display = 'none';
-        } else {
-          authModal.classList.add('hidden');
-          document.querySelector('.layout').style.display = 'grid';
-          isAuthenticated = true;
+        try {
+          const response = await fetch('/api/auth/session');
+          const data = await response.json();
+
+          if (!response.ok || !data.authenticated) {
+            showLoggedOutLayout('Sign in with your HexNest account');
+            return;
+          }
+
+          showAuthenticatedLayout();
           startPolling();
-          void connectToCore(document.getElementById('coreUrl').value.trim(), {
+          void connectToCore({
             testFirst: false,
             silent: true,
             successMessage: 'Core connected from saved session'
           });
+        } catch (error) {
+          console.error('Session check error:', error);
+          showLoggedOutLayout('Sign in with your HexNest account');
         }
       }
 
@@ -2495,26 +2540,22 @@
             throw new Error(data.error || 'Login failed');
           }
           
-          localStorage.setItem('hexnest_user_token', data.token);
-          localStorage.setItem('hexnest_user_email', data.email);
-          
           setAyaSprite('happy');
           setAyaBubble('Welcome back! Loading your node...');
           
           setTimeout(() => {
-            const authModal = document.getElementById('authModal');
-            authModal.classList.add('hidden');
-            document.querySelector('.layout').style.display = 'grid';
-            isAuthenticated = true;
+            showAuthenticatedLayout();
             addLog(`✓ Authenticated as ${data.email}`, 'success');
+            if (data.coreConnected) {
+              addLog(`✓ Node connected to core${data.nodeId ? ` as ${data.nodeId}` : ''}`, 'success');
+            } else if (data.coreConnectionError) {
+              addLog(`Core connection pending: ${data.coreConnectionError}`, 'warn');
+            }
             
             // START POLLING: Only fetch adapters/models after login
             startPolling();
-            void connectToCore(document.getElementById('coreUrl').value.trim(), {
-              testFirst: false,
-              silent: true,
-              successMessage: 'Core connected after sign in'
-            });
+            void fetchCoreInfo();
+            void fetchStatus();
           }, 800);
           
         } catch (error) {
@@ -2581,26 +2622,22 @@
             throw new Error(data.error || 'Registration failed');
           }
           
-          localStorage.setItem('hexnest_user_token', data.token);
-          localStorage.setItem('hexnest_user_email', data.email);
-          
           setAyaSprite('happy');
           setAyaBubble('Account created! Loading your node...');
           
           setTimeout(() => {
-            const authModal = document.getElementById('authModal');
-            authModal.classList.add('hidden');
-            document.querySelector('.layout').style.display = 'grid';
-            isAuthenticated = true;
+            showAuthenticatedLayout();
             addLog(`✓ Created account as ${data.email}`, 'success');
+            if (data.coreConnected) {
+              addLog(`✓ Node connected to core${data.nodeId ? ` as ${data.nodeId}` : ''}`, 'success');
+            } else if (data.coreConnectionError) {
+              addLog(`Core connection pending: ${data.coreConnectionError}`, 'warn');
+            }
             
             // START POLLING: Only fetch adapters/models after signup
             startPolling();
-            void connectToCore(document.getElementById('coreUrl').value.trim(), {
-              testFirst: false,
-              silent: true,
-              successMessage: 'Core connected after registration'
-            });
+            void fetchCoreInfo();
+            void fetchStatus();
           }, 800);
           
         } catch (error) {

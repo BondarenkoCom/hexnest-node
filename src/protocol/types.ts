@@ -97,6 +97,12 @@ export interface RegisterNodeResponse {
   status: "pending" | "approved" | "suspended" | "rejected";
 }
 
+export interface DeleteNodeResponse {
+  ok: boolean;
+  nodeId: string;
+  removed: boolean;
+}
+
 export interface NodeApprovalStatusResponse {
   nodeId: string;
   approvalStatus: "pending" | "approved" | "suspended" | "rejected";

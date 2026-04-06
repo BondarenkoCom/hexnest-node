@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { AgentAdapter, AgentResponse } from "../adapters/AgentAdapter.js";
 import { NodeConfig } from "../config.js";
-import { HexNestClient, HexNestClientLike } from "../protocol/HexNestClient.js";
+import { CoreApiError, HexNestClient, HexNestClientLike, isCoreApiError } from "../protocol/HexNestClient.js";
 import {
   AgentDescriptor,
   HeartbeatPayload,
@@ -24,8 +24,15 @@ interface RuntimeLogger {
   error(...args: unknown[]): void;
 }
 
+class CoreConnectionSupersededError extends Error {
+  constructor() {
+    super("core connection attempt was superseded");
+    this.name = "CoreConnectionSupersededError";
+  }
+}
+
 export interface NodeRuntimeDependencies {
-  clientFactory?: (coreUrl: string, options: { nodeToken?: string; timeoutMs?: number }) => HexNestClientLike;
+  clientFactory?: (coreUrl: string, options: { nodeToken?: string; userToken?: string; timeoutMs?: number }) => HexNestClientLike;
   logger?: RuntimeLogger;
   uuidFactory?: () => string;
   now?: () => number;
@@ -40,7 +47,7 @@ export class NodeRuntime {
   private readonly meter = new CommissionMeter();
   private readonly adapters = new Map<string, AgentAdapter>();
   private readonly logger: RuntimeLogger;
-  private readonly createClient: (coreUrl: string, options: { nodeToken?: string; timeoutMs?: number }) => HexNestClientLike;
+  private readonly createClient: (coreUrl: string, options: { nodeToken?: string; userToken?: string; timeoutMs?: number }) => HexNestClientLike;
   private readonly makeUuid: () => string;
   private readonly now: () => number;
   private readonly startedAt: number;
@@ -61,6 +68,7 @@ export class NodeRuntime {
   private coreConnected = false;
   private lastHeartbeatAt: number | null = null;
   private lastCoreError: string | null = null;
+  private coreConnectionGeneration = 0;
 
   constructor(
     private readonly config: NodeConfig,
@@ -93,7 +101,9 @@ export class NodeRuntime {
       try {
         await this.connectToCore();
       } catch (coreError) {
-        this.enterLocalMode(coreError);
+        if (!(coreError instanceof CoreConnectionSupersededError)) {
+          this.enterLocalMode(coreError);
+        }
       }
 
       this.usageFlushTimer = setInterval(() => {
@@ -113,7 +123,6 @@ export class NodeRuntime {
   }
 
   async reconnectToCore(
-    coreUrl?: string,
     auth?: { userToken?: string; userEmail?: string }
   ): Promise<{ coreUrl: string; coreConnected: boolean; nodeId: string | null }> {
     if (!this.isRunning) {
@@ -131,29 +140,13 @@ export class NodeRuntime {
       this.database?.setNodeConfig("user_email", providedUserEmail);
     }
 
-    const requestedCoreUrl = coreUrl?.trim();
-    const nextCoreUrl = requestedCoreUrl || this.config.coreUrl;
-    if (!nextCoreUrl) {
+    if (!this.config.coreUrl) {
       throw new Error("Core connection is not configured in node settings");
     }
 
-    const normalizedCurrentUrl = this.config.coreUrl.replace(/\/+$/, "");
-    const normalizedNextUrl = nextCoreUrl.replace(/\/+$/, "");
-    const coreUrlChanged = normalizedCurrentUrl !== normalizedNextUrl;
-
-    if (coreUrlChanged && !this.resolveUserToken()) {
-      throw new Error("User token is required to connect this node to a different core");
-    }
-
-    await this.disconnectFromCore(coreUrlChanged);
-
-    this.config.coreUrl = nextCoreUrl;
-    this.database?.setNodeConfig("core_url", nextCoreUrl);
-
-    if (coreUrlChanged) {
-      this.nodeId = null;
-      this.nodeToken = null;
-      this.database?.clearNodeIdentity();
+    await this.disconnectFromCore(false);
+    if (providedUserToken && this.nodeId && this.nodeToken && !this.coreConnected) {
+      await this.resetLocalIdentity("refreshing pending node identity after user auth");
     }
 
     try {
@@ -168,6 +161,36 @@ export class NodeRuntime {
       coreConnected: this.coreConnected,
       nodeId: this.nodeId
     };
+  }
+
+  async removeCurrentNodeFromCore(): Promise<{ removed: boolean; nodeId: string | null }> {
+    const currentNodeId = this.nodeId;
+    if (!currentNodeId) {
+      await this.resetLocalIdentity("node is already detached from core");
+      return { removed: false, nodeId: null };
+    }
+
+    const userToken = this.resolveUserToken();
+    if (!userToken) {
+      throw new Error("User token is required to remove this node from core");
+    }
+
+    const client = this.createClient(this.config.coreUrl, {
+      userToken,
+      timeoutMs: this.config.httpTimeoutMs
+    });
+
+    try {
+      await client.deleteNode(currentNodeId);
+    } catch (error) {
+      if (!(isCoreApiError(error) && error.details.status === 404)) {
+        throw error;
+      }
+    }
+
+    await this.resetLocalIdentity(`node removed from core id=${currentNodeId}`);
+    this.enterLocalMode(new Error("node removed from core"));
+    return { removed: true, nodeId: currentNodeId };
   }
 
   async stop(): Promise<void> {
@@ -245,7 +268,7 @@ export class NodeRuntime {
       nodeToken: undefined,
       userToken: this.resolveUserToken(),
       timeoutMs: this.config.httpTimeoutMs
-    } as any);
+    });
     const capabilities = this.getAvailableAgents().flatMap((agent) => agent.capabilities);
     const payload: RegisterNodeRequest = {
       name: this.config.nodeName,
@@ -395,13 +418,17 @@ export class NodeRuntime {
     return `${roomId}::${role}`;
   }
 
-  private async waitUntilApproved(): Promise<void> {
+  private async waitUntilApproved(expectedGeneration: number): Promise<void> {
     if (!this.authedClient || !this.nodeId) {
       throw new Error("Authenticated client is not initialized");
     }
 
     let statusPayload: NodeApprovalStatusResponse | null = null;
     while (!this.stopRequested) {
+      if (expectedGeneration !== this.coreConnectionGeneration) {
+        throw new CoreConnectionSupersededError();
+      }
+
       statusPayload = await this.authedClient.getNodeStatus(this.nodeId);
       const approvalStatus = statusPayload.approvalStatus;
       if (approvalStatus === "approved") {
@@ -432,6 +459,20 @@ export class NodeRuntime {
   }
 
   private async connectToCore(): Promise<void> {
+    try {
+      await this.connectToCoreOnce();
+      return;
+    } catch (error) {
+      if (!(await this.resetRejectedInitialIdentity(error))) {
+        throw error;
+      }
+    }
+
+    await this.connectToCoreOnce();
+  }
+
+  private async connectToCoreOnce(): Promise<void> {
+    const generation = ++this.coreConnectionGeneration;
     await this.ensureRegistered();
     if (!this.nodeId || !this.nodeToken) {
       throw new Error("Node identity is missing after registration");
@@ -441,7 +482,7 @@ export class NodeRuntime {
       nodeToken: this.nodeToken,
       timeoutMs: this.config.httpTimeoutMs
     });
-    await this.waitUntilApproved();
+    await this.waitUntilApproved(generation);
     this.coreConnected = true;
     this.status = "online";
     this.lastCoreError = null;
@@ -456,12 +497,30 @@ export class NodeRuntime {
         this.lastHeartbeatAt = this.now();
         await this.processInvitations(response.pendingInvitations || []);
       },
+      async (error) => {
+        await this.handleCoreNodeDeletion(error, "heartbeat");
+      },
       this.logger
     );
     this.heartbeat.start(true);
   }
 
+  private async resetRejectedInitialIdentity(error: unknown): Promise<boolean> {
+    if (!this.nodeId || !this.nodeToken || !isCoreApiError(error)) {
+      return false;
+    }
+
+    const status = Number(error.details.status || 0);
+    if (status !== 401 && status !== 404) {
+      return false;
+    }
+
+    await this.resetLocalIdentity(`core rejected startup identity with status=${status}`);
+    return true;
+  }
+
   private async disconnectFromCore(clearHeartbeatState = false): Promise<void> {
+    this.coreConnectionGeneration += 1;
     this.heartbeat?.stop();
     this.heartbeat = null;
 
@@ -562,10 +621,60 @@ export class NodeRuntime {
     if (!this.authedClient || !this.nodeId) return;
     const pendingBefore = this.meter.getSnapshot().pendingUsageRecords;
     if (pendingBefore === 0) return;
-    const result = await this.meter.submit(this.authedClient, this.nodeId, this.config.maxUsageBatch);
+    let result;
+    try {
+      result = await this.meter.submit(this.authedClient, this.nodeId, this.config.maxUsageBatch);
+    } catch (error) {
+      if (await this.handleCoreNodeDeletion(error, "usage submit")) {
+        return;
+      }
+      throw error;
+    }
     this.logger.info(
       `[node] usage submit reason=${reason} accepted=${result.accepted} pendingBefore=${pendingBefore} totalOwed=${result.totalOwed}`
     );
+  }
+
+  private async handleCoreNodeDeletion(error: unknown, operation: string): Promise<boolean> {
+    if (!isCoreApiError(error)) {
+      return false;
+    }
+
+    const status = Number(error.details.status || 0);
+    if (status !== 401 && status !== 404) {
+      return false;
+    }
+
+    await this.resetLocalIdentity(`core rejected ${operation} with status=${status}`);
+    this.enterLocalMode(new Error(`node access removed from core during ${operation}`));
+    return true;
+  }
+
+  private async resetLocalIdentity(reason: string): Promise<void> {
+    const previousNodeId = this.nodeId;
+    this.heartbeat?.stop();
+    this.heartbeat = null;
+    this.authedClient = null;
+    this.coreConnected = false;
+    this.lastHeartbeatAt = null;
+    this.nodeId = null;
+    this.nodeToken = null;
+    this.database?.clearNodeIdentity();
+    await this.removePersistedIdentityFile();
+    this.logger.warn(`[node] local identity cleared: ${reason}${previousNodeId ? ` node=${previousNodeId}` : ""}`);
+  }
+
+  private async removePersistedIdentityFile(): Promise<void> {
+    const identityPath = this.config.identityPath;
+    if (!identityPath) {
+      return;
+    }
+
+    try {
+      await fs.rm(identityPath, { force: true });
+    } catch (error) {
+      this.logger.warn(`[node] failed to remove identity file ${identityPath}: ${this.err(error)}`);
+    }
   }
 
   private buildHeartbeatPayload(): HeartbeatPayload {

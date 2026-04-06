@@ -15,6 +15,7 @@ export class Heartbeat {
     private readonly intervalMs: number,
     private readonly payloadFactory: () => HeartbeatPayload,
     private readonly onResponse?: (response: HeartbeatResponse) => Promise<void> | void,
+    private readonly onError?: (error: unknown) => Promise<void> | void,
     private readonly logger: HeartbeatLogger = console
   ) {}
 
@@ -32,11 +33,13 @@ export class Heartbeat {
     if (this.timer) return;
     if (runImmediate) {
       void this.pulse().catch((error) => {
+        void this.onError?.(error);
         this.logger.error("[heartbeat] initial pulse failed:", error instanceof Error ? error.message : String(error));
       });
     }
     this.timer = setInterval(() => {
       void this.pulse().catch((error) => {
+        void this.onError?.(error);
         this.logger.error("[heartbeat] pulse failed:", error instanceof Error ? error.message : String(error));
       });
     }, this.intervalMs);

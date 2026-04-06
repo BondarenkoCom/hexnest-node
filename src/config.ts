@@ -153,6 +153,9 @@ function loadIdentity(pathname: string | null): { nodeId?: string; nodeToken?: s
 }
 
 function migrateIdentityToDatabase(db: DatabaseService, identityPath: string | null): void {
+  if (!db.isReady()) {
+    return;
+  }
   const identity = loadIdentity(identityPath);
   if (identity.nodeId && identity.nodeToken) {
     const existing = db.getNodeIdentity();
@@ -279,11 +282,10 @@ export function loadConfig(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = pro
   const nodeIdDb = dbIdentity?.id;
   const nodeTokenDb = dbIdentity?.token;
 
-  const coreUrlDb = db.getNodeConfig("core_url");
   const userEmailDb = db.getNodeConfig("user_email");
   const userTokenDb = db.getNodeConfig("user_token");
 
-  const coreUrl = coreUrlDb || str(env.HEXNEST_CORE_URL) || str(yaml.core?.url);
+  const coreUrl = str(env.HEXNEST_CORE_URL) || str(yaml.core?.url);
   if (!coreUrl) throw new Error("Core URL is required via settings, environment, or yaml config");
 
   // Try to load node name and operator name from database first
@@ -338,35 +340,42 @@ export function buildAdapters(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = 
   const env = loadEnvMap(baseEnv);
   const yaml = loadYamlConfig(env);
   const adaptersByName = new Map<string, AgentAdapter>();
+  const dbReady = db.isReady();
 
   // First, migrate YAML adapters to database if not already there
-  for (const source of yaml.adapters || []) {
-    const name = str(source.name);
-    if (name && !db.getModelConfig(name)) {
-      const id = randomUUID();
-      const type = str(source.type)?.toLowerCase() || "ollama";
-      db.addModelConfig({
-        id,
-        type,
-        name,
-        model: str(source.model) || "",
-        baseUrl: str(source.baseUrl),
-        apiKey: str(source.apiKey),
-        apiKeyEnv: str(source.apiKeyEnv),
-        roles: source.roles,
-        capabilities: source.capabilities,
-        enabled: true,
-        active: true
-      });
+  if (dbReady) {
+    for (const source of yaml.adapters || []) {
+      const name = str(source.name);
+      if (name && !db.getModelConfig(name)) {
+        const id = randomUUID();
+        const type = str(source.type)?.toLowerCase() || "ollama";
+        db.addModelConfig({
+          id,
+          type,
+          name,
+          model: str(source.model) || "",
+          baseUrl: str(source.baseUrl),
+          apiKey: str(source.apiKey),
+          apiKeyEnv: str(source.apiKeyEnv),
+          roles: source.roles,
+          capabilities: source.capabilities,
+          enabled: true,
+          active: true
+        });
+      }
     }
-  }
 
-  // Load all adapters from database
-  const dbAdapters = db.getModelConfigs();
-  for (const dbAdapter of dbAdapters) {
-    const adapter = adapterFromModelConfig(dbAdapter, env);
-    if (adapter) {
-      adaptersByName.set(adapter.name, adapter);
+    // Load all adapters from database
+    const dbAdapters = db.getModelConfigs();
+    for (const dbAdapter of dbAdapters) {
+      const adapter = adapterFromModelConfig(dbAdapter, env);
+      if (adapter) {
+        adaptersByName.set(adapter.name, adapter);
+      }
+    }
+  } else {
+    for (const source of yaml.adapters || []) {
+      registerAdapter(adaptersByName, adapterFromSource(source, env));
     }
   }
 

@@ -3,6 +3,7 @@ import {
   AuthLoginRequest,
   AuthRegisterRequest,
   AuthResponse,
+  DeleteNodeResponse,
   HeartbeatPayload,
   NodeApprovalStatusResponse,
   HeartbeatResponse,
@@ -25,6 +26,7 @@ export interface HexNestClientLike {
   registerUser(payload: AuthRegisterRequest): Promise<AuthResponse>;
   loginUser(payload: AuthLoginRequest): Promise<AuthResponse>;
   registerNode(payload: RegisterNodeRequest): Promise<RegisterNodeResponse>;
+  deleteNode(nodeId: string): Promise<DeleteNodeResponse>;
   getNodeStatus(nodeId: string): Promise<NodeApprovalStatusResponse>;
   heartbeat(nodeId: string, payload: HeartbeatPayload): Promise<HeartbeatResponse>;
   submitUsage(nodeId: string, records: UsageRecord[]): Promise<SubmitUsageResponse>;
@@ -132,6 +134,13 @@ export class HexNestClient implements HexNestClientLike {
     return this.request<RegisterNodeResponse>("/api/nodes/register", {
       method: "POST",
       body: payload,
+      authRequired: "user"
+    });
+  }
+
+  async deleteNode(nodeId: string): Promise<DeleteNodeResponse> {
+    return this.request<DeleteNodeResponse>(`/api/nodes/${encodeURIComponent(nodeId)}`, {
+      method: "DELETE",
       authRequired: "user"
     });
   }

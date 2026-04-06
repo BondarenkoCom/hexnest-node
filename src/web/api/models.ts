@@ -465,7 +465,8 @@ export function modelsRouter(context: WebServerContext) {
           baseUrl: updated.baseUrl,
           roles: updated.roles,
           capabilities: updated.capabilities,
-          enabled: updated.enabled
+          enabled: updated.enabled,
+          active: updated.active
         }
       };
       res.json(response);
