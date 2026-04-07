@@ -187,6 +187,39 @@ describe("NodeRuntime", () => {
     expect(runtime.getState().hasToken).toBe(false);
   });
 
+  it("surfaces explicit setup guidance when registration requires JWT", async () => {
+    const client = {
+      registerNode: async () => {
+        throw new Error("401 authentication required");
+      }
+    };
+
+    const config: NodeConfig = {
+      coreUrl: "https://hex-nest.com",
+      nodeName: "node-test",
+      operatorName: "operator",
+      heartbeatIntervalMs: 60_000,
+      approvalPollIntervalMs: 1_000,
+      usageFlushIntervalMs: 60_000,
+      maxUsageBatch: 1,
+      shutdownGraceMs: 3_000,
+      autoAcceptInvites: true,
+      httpTimeoutMs: 5_000
+    };
+
+    const runtime = new NodeRuntime(config, [new FakeAdapter()], {
+      clientFactory: () => client as any
+    });
+
+    await runtime.start();
+
+    expect(runtime.getState().status).toBe("offline");
+    expect(runtime.getState().nodeId).toBe(null);
+    expect(runtime.getNodeStatus().coreConnectionReason).toBe(
+      "Node registration requires account JWT. Run `npx hexnest-node setup` first."
+    );
+  });
+
   it("switches to local mode without losing identity and can reset identity on operator action", async () => {
     const calls = {
       markOffline: 0,
