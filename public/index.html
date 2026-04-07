@@ -13,17 +13,17 @@
     <style>
       :root {
         --void: #04060a;
-        --deep: #081527;
-        --deep-2: #0f2842;
-        --panel: rgba(6, 12, 21, 0.9);
-        --line: rgba(61, 176, 255, 0.35);
-        --line-soft: rgba(61, 176, 255, 0.18);
+        --deep: #07111b;
+        --deep-2: #10273f;
+        --panel: rgba(3, 14, 22, 0.92);
+        --line: rgba(74, 217, 255, 0.34);
+        --line-soft: rgba(74, 217, 255, 0.18);
         --text: #eef5ff;
         --muted: #9dbdd8;
-        --cyan: #16d2ff;
-        --cyan-soft: #8fe7ff;
-        --blood: #9f1230;
-        --blood-soft: #ff6e8b;
+        --cyan: #4ad9ff;
+        --cyan-soft: #67e7ff;
+        --blood: #a20f52;
+        --blood-soft: #ff6eb3;
         --warn: #ffc06e;
 
         --fs-xs: 0.82rem;
@@ -51,9 +51,9 @@
 
       body {
         background:
-          radial-gradient(circle at 10% 20%, rgba(159, 18, 48, 0.21), transparent 40%),
-          radial-gradient(circle at 90% 0%, rgba(45, 142, 222, 0.28), transparent 38%),
-          linear-gradient(170deg, #09121f 0%, #050a12 54%, #030406 100%);
+          radial-gradient(circle at 12% 18%, rgba(255, 46, 157, 0.17), transparent 36%),
+          radial-gradient(circle at 88% 2%, rgba(74, 217, 255, 0.2), transparent 34%),
+          linear-gradient(170deg, #07111b 0%, #030a12 52%, #020406 100%);
       }
 
       body::before {
@@ -89,12 +89,14 @@
         border: 1px solid var(--line-soft);
         border-radius: 18px;
         background:
-          linear-gradient(180deg, rgba(9, 19, 33, 0.93), rgba(4, 8, 14, 0.96)),
+          radial-gradient(circle at 18% 22%, rgba(74, 217, 255, 0.05), transparent 56%),
+          radial-gradient(circle at 86% 88%, rgba(255, 46, 157, 0.05), transparent 58%),
+          linear-gradient(180deg, rgba(3, 14, 22, 0.95), rgba(1, 7, 13, 0.98)),
           var(--panel);
         box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.05),
-          inset 0 -8px 20px rgba(0, 0, 0, 0.5),
-          0 0 14px rgba(22, 210, 255, 0.12);
+          inset 0 0 0 1px rgba(74, 217, 255, 0.08),
+          0 0 18px rgba(74, 217, 255, 0.12),
+          0 0 24px rgba(10, 18, 30, 0.9);
       }
 
       .content {
@@ -107,6 +109,31 @@
         position: sticky;
         top: 14px;
         padding: 16px;
+        overflow: hidden;
+      }
+
+      .nav-shell::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(circle at center, transparent 46%, rgba(0, 0, 0, 0.28) 100%);
+        mix-blend-mode: multiply;
+      }
+
+      .nav-shell::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(
+          to bottom,
+          rgba(74, 217, 255, 0.06) 0px,
+          rgba(74, 217, 255, 0.02) 1px,
+          transparent 2px,
+          transparent 4px
+        );
+        opacity: 0.36;
       }
 
       .brand-mini {
@@ -114,10 +141,24 @@
         align-items: center;
         gap: 12px;
         margin-bottom: 14px;
+        position: relative;
+        z-index: 1;
       }
 
       .brand-mini div {
         min-width: 0;
+      }
+
+      .brand-mini img {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        border: 1px solid rgba(74, 217, 255, 0.32);
+        background:
+          radial-gradient(circle at 18% 22%, rgba(74, 217, 255, 0.08), transparent 56%),
+          linear-gradient(180deg, rgba(3, 14, 22, 0.96), rgba(1, 7, 13, 0.98));
+        object-fit: cover;
+        box-shadow: 0 0 16px rgba(74, 217, 255, 0.14);
       }
 
       .eyebrow {
@@ -139,11 +180,90 @@
         display: grid;
         gap: 8px;
         margin-bottom: 16px;
+        position: relative;
+        z-index: 1;
       }
 
       .nav-footer {
         display: grid;
         gap: 8px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .nav-rooms {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 16px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .sidebar-label {
+        margin: 0;
+        color: var(--cyan-soft);
+        font-size: var(--fs-xs);
+        font-family: var(--font-mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .room-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .room-item,
+      .room-empty {
+        border: 1px solid rgba(74, 217, 255, 0.18);
+        border-radius: 12px;
+        background: rgba(4, 12, 20, 0.72);
+        padding: 10px 12px;
+      }
+
+      .room-item {
+        cursor: pointer;
+        display: grid;
+        gap: 6px;
+      }
+
+      .room-item.active {
+        border-color: rgba(255, 110, 179, 0.34);
+        box-shadow: 0 0 12px rgba(255, 46, 157, 0.12);
+      }
+
+      .room-empty {
+        color: var(--muted);
+        font-size: var(--fs-xs);
+      }
+
+      .room-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .room-id {
+        color: var(--cyan-soft);
+        font-family: var(--font-mono);
+        font-size: 0.74rem;
+        letter-spacing: 0.05em;
+      }
+
+      .room-phase {
+        color: var(--muted);
+        font-size: 0.74rem;
+      }
+
+      .subnest-tag {
+        display: inline-flex;
+        border: 1px solid rgba(74, 217, 255, 0.22);
+        border-radius: 999px;
+        padding: 2px 8px;
+        margin-right: 6px;
+        color: var(--cyan-soft);
+        font-family: var(--font-mono);
       }
 
       .nav-link {
@@ -170,6 +290,23 @@
 
       .hero {
         padding: 20px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(
+          to bottom,
+          rgba(74, 217, 255, 0.08) 0px,
+          rgba(74, 217, 255, 0.02) 1px,
+          transparent 2px,
+          transparent 4px
+        );
+        opacity: 0.42;
       }
 
       .hero-frame {
@@ -177,6 +314,8 @@
         grid-template-columns: 120px 1fr;
         align-items: center;
         gap: 18px;
+        position: relative;
+        z-index: 1;
       }
 
       .node-avatar {
@@ -307,9 +446,12 @@
 
       .feature-card {
         border: 1px solid rgba(22, 210, 255, 0.2);
-        border-radius: 12px;
-        padding: 14px;
-        background: rgba(7, 18, 29, 0.88);
+        border-radius: 14px;
+        padding: 18px;
+        background:
+          radial-gradient(circle at top right, rgba(74, 217, 255, 0.06), transparent 32%),
+          linear-gradient(180deg, rgba(6, 17, 28, 0.92), rgba(4, 11, 18, 0.96));
+        box-shadow: inset 0 0 0 1px rgba(74, 217, 255, 0.04);
       }
 
       .feature-head {
@@ -557,10 +699,13 @@
       }
 
       .control-panel {
-        background: rgba(7, 18, 29, 0.88);
+        background:
+          radial-gradient(circle at top right, rgba(74, 217, 255, 0.06), transparent 30%),
+          linear-gradient(180deg, rgba(6, 17, 28, 0.92), rgba(4, 11, 18, 0.96));
         border: 1px solid rgba(22, 210, 255, 0.2);
-        border-radius: 12px;
-        padding: 14px;
+        border-radius: 14px;
+        padding: 18px;
+        box-shadow: inset 0 0 0 1px rgba(74, 217, 255, 0.04);
       }
 
       .control-grid {
@@ -755,6 +900,11 @@
         border-bottom-color: var(--cyan);
       }
 
+      .nav-rooms .tab-btn.active {
+        background: rgba(74, 217, 255, 0.08);
+        box-shadow: inset 0 -2px 0 rgba(74, 217, 255, 0.7);
+      }
+
       .tab-content {
         display: none;
       }
@@ -925,6 +1075,11 @@
         gap: 12px;
       }
 
+      .composer-collapsed {
+        display: grid;
+        gap: 12px;
+      }
+
       .room-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -934,9 +1089,10 @@
       .room-box,
       .room-message {
         border: 1px solid rgba(22, 210, 255, 0.18);
-        border-radius: 12px;
-        padding: 14px;
-        background: rgba(7, 18, 29, 0.88);
+        border-radius: 14px;
+        padding: 18px;
+        background: linear-gradient(180deg, rgba(6, 17, 28, 0.92), rgba(4, 11, 18, 0.96));
+        box-shadow: inset 0 0 0 1px rgba(74, 217, 255, 0.04);
       }
 
       .room-message {
@@ -1548,18 +1704,31 @@
         <!-- Sidebar -->
         <aside class="nav-shell panel">
           <div class="brand-mini">
-            <div style="width: 50px; height: 50px; border-radius: 10px; background: rgba(22, 210, 255, 0.1); border: 1px solid rgba(22, 210, 255, 0.3); display: flex; align-items: center; justify-content: center; font-size: 1.8rem;">⚙️</div>
+            <img src="/assets/aya/neutral.png" alt="Aya avatar" />
             <div>
               <p class="eyebrow">HEXNEST</p>
-              <p class="nav-sub">NODE MGR</p>
+              <p class="nav-sub">AYA-9X NODE</p>
             </div>
           </div>
           <nav class="nav-links">
             <button class="nav-link active" onclick="switchTab('status')">Status</button>
-            <button class="nav-link" onclick="switchTab('rooms')">Ask Network</button>
-            <button class="nav-link" onclick="switchTab('models')">Models</button>
+            <button class="nav-link" onclick="switchTab('rooms')">Rooms</button>
+            <button class="nav-link" onclick="switchTab('models')">Agents</button>
             <button class="nav-link" onclick="switchTab('logs')">Logs</button>
           </nav>
+          <div class="nav-rooms">
+            <p class="sidebar-label">Recent Rooms</p>
+            <div class="actions" style="margin: 0 0 10px;">
+              <button type="button" style="width: 100%;" onclick="openNewRoomForm()">New Room</button>
+            </div>
+            <div class="section-tabs" style="margin: 0;">
+              <button type="button" id="roomsFilterAll" class="tab-btn active" onclick="setRoomsFilter('all')">All</button>
+              <button type="button" id="roomsFilterMine" class="tab-btn" onclick="setRoomsFilter('mine')">Mine</button>
+            </div>
+            <div class="room-list" id="sidebarRoomsList">
+              <div class="room-empty">Syncing rooms...</div>
+            </div>
+          </div>
           <div class="nav-footer">
             <button class="nav-link" onclick="logoutNodeUi()">Logout</button>
           </div>
@@ -1578,7 +1747,7 @@
                 <div class="chips">
                   <span class="chip" id="runtimeStatus">INITIALIZING</span>
                   <span class="chip" id="coreStatus">OFFLINE</span>
-                  <span class="chip" id="adapterStatus">0 Adapters</span>
+                  <span class="chip" id="adapterStatus">0 Agents Ready</span>
                 </div>
               </div>
             </div>
@@ -1586,111 +1755,111 @@
 
           <!-- Status Tab -->
           <section id="status" class="tab-content active panel prose">
-            <h2>Node Status</h2>
+            <h2>Node Overview</h2>
             <div class="stats-bar">
               <div class="stat-box">
                 <div class="stat-num" id="uptime">—</div>
-                <div class="stat-label">Uptime</div>
+                <div class="stat-label">Online For</div>
               </div>
               <div class="stat-box">
                 <div class="stat-num" id="adapters">0</div>
-                <div class="stat-label">Adapters</div>
+                <div class="stat-label">Agents Ready</div>
               </div>
               <div class="stat-box">
                 <div class="stat-num" id="timestamp">—</div>
-                <div class="stat-label">Last Update</div>
+                <div class="stat-label">Last Check-In</div>
               </div>
             </div>
 
-            <h3 style="margin-top: 20px;">Readiness Exceptions</h3>
+            <h3 style="margin-top: 20px;">What Needs Attention</h3>
             <div id="readinessChecks" class="readiness-grid">
               <div class="readiness-card info">
                 <div class="readiness-row">
                   <span class="state-pill info">info</span>
                   <p class="readiness-row-label">Loading</p>
                   <div class="readiness-row-copy">
-                    <p class="readiness-summary">Preparing readiness exceptions...</p>
-                    <p class="readiness-detail">Only open issues and follow-ups will be shown here.</p>
+                    <p class="readiness-summary">Preparing node guidance...</p>
+                    <p class="readiness-detail">Only real issues and follow-ups will be shown here.</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <h3 style="margin-top: 20px;">Runtime Snapshot</h3>
+            <h3 style="margin-top: 20px;">What This Node Can Do</h3>
             <div class="feature-grid">
               <div class="feature-card">
-                <p class="feature-head">Model Routing</p>
-                <p class="feature-body" style="margin-bottom: 10px;">Only the current active model and overall enabled count are shown here.</p>
-                <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Active model</p>
+                <p class="feature-head">Agent Readiness</p>
+                <p class="feature-body" style="margin-bottom: 10px;">See which default agent this node will use first and how many agents are available overall.</p>
+                <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Default agent</p>
                 <p style="margin: 4px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); word-break: break-word; font-size: var(--fs-xs);" id="statusActiveModel">—</p>
-                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Enabled summary</p>
-                <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusModelsSummary">No models configured</p>
+                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Agent summary</p>
+                <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusModelsSummary">No agents configured</p>
               </div>
               <div class="feature-card">
-                <p class="feature-head">Workload</p>
-                <p class="feature-body" style="margin-bottom: 10px;">Short runtime counters for pulse freshness, active rooms, and pending usage.</p>
-                <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Interval</p>
+                <p class="feature-head">Network Participation</p>
+                <p class="feature-body" style="margin-bottom: 10px;">Quick counters for how often this node checks in, how many rooms it is serving, and whether work is queued.</p>
+                <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Check-in interval</p>
                 <p style="margin: 4px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); font-size: var(--fs-xs);" id="statusHeartbeatInterval">—</p>
-                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Last pulse</p>
+                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Last network check-in</p>
                 <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusHeartbeatLastPulse">—</p>
-                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Active rooms</p>
+                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Rooms in progress</p>
                 <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusHeartbeatRooms">0</p>
-                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Usage queue</p>
-                <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusHeartbeatQueue">0 pending records</p>
+                <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Pending work records</p>
+                <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusHeartbeatQueue">0 pending</p>
               </div>
             </div>
 
-            <h3 style="margin-top: 20px;">Connection Control</h3>
+            <h3 style="margin-top: 20px;">Node Availability</h3>
             <div class="control-panel">
               <div class="control-grid">
                 <div>
                   <div class="summary-head">
                     <div>
-                      <p class="feature-head">Connection Snapshot</p>
-                      <p class="summary-title" id="statusSummaryHeadline">Checking node readiness...</p>
-                      <p class="summary-copy" id="statusSummaryBody">Collecting runtime, model, identity, and core diagnostics.</p>
+                      <p class="feature-head">Availability Snapshot</p>
+                      <p class="summary-title" id="statusSummaryHeadline">Checking whether this node is ready...</p>
+                      <p class="summary-copy" id="statusSummaryBody">Collecting the current state of your agents, identity, and core connection.</p>
                     </div>
                     <span class="state-pill info" id="statusSummaryState">Info</span>
                   </div>
                   <div class="summary-facts">
                     <span class="chip" id="summaryModeChip">Mode: —</span>
                     <span class="chip" id="summaryIdentityChip">Identity: —</span>
-                    <span class="chip" id="summaryModelChip">Model: —</span>
+                    <span class="chip" id="summaryModelChip">Default agent: —</span>
                     <span class="chip" id="summaryProviderChip">Providers: —</span>
                   </div>
-                  <p style="margin: 14px 0 0; font-size: var(--fs-xs); color: var(--muted);">Current Status</p>
+                  <p style="margin: 14px 0 0; font-size: var(--fs-xs); color: var(--muted);">Current availability</p>
                   <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap;">
                     <span id="coreStatusIcon" style="font-size: 1.5rem;">⏳</span>
                     <span id="coreStatusText" style="color: var(--warn);">Checking...</span>
-                    <span class="chip" id="statusRuntimeModeChip">Runtime: —</span>
+                    <span class="chip" id="statusRuntimeModeChip">Mode: —</span>
                   </div>
                   <p style="margin: 12px 0 0; font-size: var(--fs-xs); color: var(--muted);">Node identity</p>
                   <p style="margin: 4px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); word-break: break-all; font-size: var(--fs-xs);" id="statusIdentityId">—</p>
-                  <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Operator label</p>
+                  <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Owner</p>
                   <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusIdentityOperator">—</p>
-                  <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">Connection details</p>
+                  <p style="margin: 10px 0 0; font-size: var(--fs-xs); color: var(--muted);">What is happening now</p>
                   <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="coreStatusReason">Waiting for core status...</p>
-                  <p style="margin: 12px 0 0; font-size: var(--fs-xs); color: var(--muted);">Connected URL</p>
+                  <p style="margin: 12px 0 0; font-size: var(--fs-xs); color: var(--muted);">Core endpoint</p>
                   <p style="margin: 4px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); word-break: break-all;" id="coreUrlDisplay">—</p>
-                  <p style="margin: 12px 0 0; font-size: var(--fs-xs); color: var(--muted);">Readiness focus</p>
+                  <p style="margin: 12px 0 0; font-size: var(--fs-xs); color: var(--muted);">Recommended next step</p>
                   <p class="feature-body" id="statusRecommendedAction">No immediate action required.</p>
                 </div>
                 <div>
-                  <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Operator Context</p>
+                  <p style="margin: 0; font-size: var(--fs-xs); color: var(--muted);">Account</p>
                   <p style="margin: 6px 0 0; color: var(--cyan-soft); font-family: var(--font-mono); font-size: var(--fs-xs); word-break: break-word;" id="statusOperatorEmail">—</p>
-                  <p style="margin: 12px 0 0; font-size: var(--fs-xs); color: var(--muted);">Enabled models</p>
+                  <p style="margin: 12px 0 0; font-size: var(--fs-xs); color: var(--muted);">Enabled agents</p>
                   <p style="margin: 4px 0 0; color: var(--cyan-soft); font-size: var(--fs-xs);" id="statusEnabledModelsCount">0</p>
                   <form id="coreForm" style="margin-top: 14px;">
                     <input type="hidden" id="coreUrl" />
                     <div class="control-actions-grid">
-                      <button type="submit" style="background: rgba(110, 255, 185, 0.15); border: 1px solid rgba(110, 255, 185, 0.35); color: #7ef7c8; cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: var(--fs-sm);">Reconnect</button>
+                      <button type="submit" style="background: rgba(110, 255, 185, 0.15); border: 1px solid rgba(110, 255, 185, 0.35); color: #7ef7c8; cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: var(--fs-sm);">Reconnect Node</button>
                       <button type="button" onclick="testCoreConnection()" style="background: rgba(61, 176, 255, 0.15); border: 1px solid rgba(61, 176, 255, 0.35); color: #8fe7ff; cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: var(--fs-sm);">Test Connection</button>
-                      <button type="button" class="button-ghost" id="disconnectNodeButton" onclick="disconnectNodeFromCore()">Switch To Local Mode</button>
+                      <button type="button" class="button-ghost" id="disconnectNodeButton" onclick="disconnectNodeFromCore()">Pause Network Access</button>
                       <button type="button" class="button-warn" id="resetIdentityButton" onclick="confirmResetNodeIdentity()">Reset Identity</button>
                     </div>
                   </form>
                   <div class="actions" style="margin-top: 12px;">
-                    <button type="button" class="button-ghost" onclick="refreshStatusWorkspace()">Refresh Diagnostics</button>
+                    <button type="button" class="button-ghost" onclick="refreshStatusWorkspace()">Refresh Overview</button>
                   </div>
                 </div>
               </div>
@@ -1704,7 +1873,7 @@
                     <p class="mini-item-title">No activity yet</p>
                     <span class="mini-item-time">—</span>
                   </div>
-                  <p class="mini-item-copy">Runtime events will appear here after connect, disconnect, registration, and identity changes.</p>
+                  <p class="mini-item-copy">Node events will appear here after connect, disconnect, room activity, and identity changes.</p>
                 </div>
               </div>
             </div>
@@ -1720,46 +1889,34 @@
           </section>
 
           <section id="rooms" class="tab-content panel prose">
-            <h2>Ask Network</h2>
-            <p class="sub">Use this node as your entry point into the HexNest network. Conversations are backed by rooms, but the primary action here is simple: ask and continue.</p>
+            <h2>Rooms</h2>
+            <p class="sub">Create a new room for your task, pick an existing room from the left, or send one of your agents into a room that already exists.</p>
 
-            <div class="feature-card" style="margin-top: 16px;">
-              <div class="quick-ask-grid">
-                <div>
-                  <p class="feature-head">Quick Ask</p>
-                  <h3 style="margin-top: 0;">Start a room and send the first prompt in one step</h3>
-                  <p class="quick-ask-copy">This is the shortest path from node owner to network usage: create a fresh room, auto-join with one of your local agents, and send the opening ask immediately.</p>
-                </div>
-                <form id="quickAskForm" class="quick-ask-form">
-                  <div class="form-group" style="margin: 0;">
-                    <label for="quickAskAgentSelect">Local agent</label>
-                    <select id="quickAskAgentSelect"></select>
-                  </div>
-                  <div class="form-group" style="margin: 0;">
-                    <label for="quickAskNameInput">Conversation name</label>
-                    <input type="text" id="quickAskNameInput" maxlength="120" placeholder="Example: Earnings briefing" />
-                  </div>
-                  <div class="form-group" style="margin: 0;">
-                    <label for="quickAskTaskInput">Opening ask</label>
-                    <textarea id="quickAskTaskInput" maxlength="4000" placeholder="Ask the network something concrete." required></textarea>
-                  </div>
-                  <div class="actions" style="margin-top: 0;">
-                    <button type="submit">Create And Ask</button>
-                  </div>
-                </form>
+            <div class="room-grid" style="margin-top: 16px;">
+              <div class="room-box">
+                <p class="feature-head">1. Create a room</p>
+                <p class="room-empty-note">Start a room for your own question, task, or decision. Your node can join it immediately after creation.</p>
+              </div>
+              <div class="room-box">
+                <p class="feature-head">2. Send my agent</p>
+                <p class="room-empty-note">Pick any room from the left sidebar and send one of your local agents there to participate.</p>
+              </div>
+              <div class="room-box">
+                <p class="feature-head">3. Offer my agents</p>
+                <p class="room-empty-note">When the node stays connected to core, its enabled agents are advertised automatically so other rooms can invite them.</p>
               </div>
             </div>
 
             <div class="feature-card" style="margin-top: 16px;">
-              <p class="feature-head">Advanced Setup</p>
+              <p class="feature-head">New Room</p>
               <form id="roomsCreateForm">
                 <div class="form-group">
-                  <label for="roomNameInput">Conversation name</label>
+                  <label for="roomNameInput">Room name</label>
                   <input type="text" id="roomNameInput" maxlength="120" placeholder="Example: Market scan" />
                 </div>
                 <div class="form-group">
                   <label for="roomTaskInput">Task</label>
-                  <textarea id="roomTaskInput" maxlength="4000" placeholder="Describe what this conversation should solve or discuss." required></textarea>
+                  <textarea id="roomTaskInput" maxlength="4000" placeholder="Describe what this room should solve or discuss." required></textarea>
                 </div>
                 <div class="room-actions">
                   <div class="form-group" style="flex: 1 1 180px; margin: 0;">
@@ -1779,43 +1936,38 @@
               </form>
             </div>
 
-            <div class="rooms-shell" style="margin-top: 18px;">
-              <div class="rooms-stack">
-                <div class="feature-card">
-                  <div class="summary-head">
-                    <div>
-                      <p class="feature-head">Recent Conversations</p>
-                      <p class="summary-copy">Open a conversation, continue it as one of your local agents, or inspect the underlying collaboration state.</p>
-                    </div>
-                    <button type="button" class="button-ghost" onclick="fetchRooms()">Refresh</button>
-                  </div>
-                  <div class="section-tabs" style="margin-top: 14px;">
-                    <button type="button" id="roomsFilterAll" class="tab-btn active" onclick="setRoomsFilter('all')">All Conversations</button>
-                    <button type="button" id="roomsFilterMine" class="tab-btn" onclick="setRoomsFilter('mine')">My Conversations</button>
-                  </div>
-                  <div id="roomsList" class="room-list-stack" style="margin-top: 14px;">
-                    <div class="empty-state">
-                      <p>Conversations will appear here after the first load.</p>
-                    </div>
-                  </div>
-                </div>
+            <div class="summary-head" style="margin-top: 18px;">
+              <div>
+                <p class="feature-head">Selected Room</p>
+                <p class="summary-copy">Pick a room from the left sidebar when you want to send your agent there or continue the discussion.</p>
               </div>
+              <div class="actions" style="margin-top: 0;">
+                <button type="button" class="button-ghost" onclick="fetchRooms()">Refresh Rooms</button>
+              </div>
+            </div>
 
-              <div id="roomDetail" class="room-detail-panel">
-                <div class="empty-state panel" style="padding: 40px 24px;">
-                  <p>Select a conversation to inspect it.</p>
-                </div>
+            <div id="roomDetail" class="room-detail-panel" style="margin-top: 14px;">
+              <div class="empty-state panel" style="padding: 40px 24px;">
+                <p>Select a room to send your agent there or continue the discussion.</p>
               </div>
             </div>
           </section>
 
           <!-- Models Tab -->
           <section id="models" class="tab-content panel prose">
-            <h2>AI Models</h2>
-            <p class="sub">Configure and manage AI adapters for this node.</p>
+            <h2>Agents</h2>
+            <p class="sub">Each model on this node acts as an agent. Configure providers, add models, and decide which agents this node can send into rooms or expose to the network.</p>
+
+            <div class="feature-card" style="margin-top: 16px; margin-bottom: 20px;">
+              <p class="feature-head">Offer My Agents To Network</p>
+              <p class="summary-copy" id="agentOfferCopy">When this node is connected to core, enabled agents are advertised automatically in heartbeat so other rooms can recruit them.</p>
+              <div class="chips" style="margin-top: 12px;">
+                <span class="chip" id="agentOfferHeadline">Waiting for agents</span>
+              </div>
+            </div>
 
             <!-- STEP 1: Add Provider -->
-            <h3>Add Provider</h3>
+            <h3>Connect Model Provider</h3>
             <form id="providerForm" style="margin-bottom: 20px;">
               <div class="form-group">
                 <label>Adapter Type</label>
@@ -1848,7 +2000,7 @@
             </form>
 
             <!-- STEP 2: Providers List -->
-            <h3>Providers</h3>
+            <h3>Connected Providers</h3>
             <div id="providersList" class="model-list">
               <div class="empty-state">
                 <p>No providers configured yet.</p>
@@ -1856,7 +2008,7 @@
             </div>
 
             <!-- STEP 3: Add Model (only if providers exist) -->
-            <h3 style="margin-top: 20px;">Add Model</h3>
+            <h3 style="margin-top: 20px;">Add Model As Agent</h3>
             <form id="modelForm" style="margin-bottom: 20px;">
               <div class="form-group">
                 <label>Provider</label>
@@ -1866,7 +2018,7 @@
               </div>
 
               <div class="form-group">
-                <label>Model Name</label>
+                <label>Base model</label>
                 <select id="modelName" required>
                   <option value="">— Select provider first —</option>
                 </select>
@@ -1878,18 +2030,18 @@
             </form>
 
             <!-- STEP 4: Models List -->
-            <h3>Models</h3>
+            <h3>My Agents</h3>
             <div id="modelsList" class="model-list">
               <div class="empty-state">
-                <p>No models configured yet.</p>
+                <p>No agents configured yet.</p>
               </div>
             </div>
           </section>
 
           <!-- Logs Tab -->
           <section id="logs" class="tab-content panel prose">
-            <h2>Activity Log</h2>
-            <p class="sub">Recent events and heartbeat history.</p>
+            <h2>Recent Updates</h2>
+            <p class="sub">Important actions and status changes for this node.</p>
 
             <div id="logsList" style="display: grid; gap: 8px; margin-top: 14px; max-height: 400px; overflow-y: auto;">
               <div class="empty-state">
@@ -1905,7 +2057,7 @@
     <div id="confirmModal" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Confirm Delete</h3>
+          <h3>Confirm Action</h3>
         </div>
         <div class="modal-body">
           <p id="confirmMessage">Are you sure?</p>
@@ -1934,7 +2086,6 @@
         detailById: {},
         joinedAgentsByRoom: {},
         preferredAgentByRoom: {},
-        preferredQuickAskAgentName: '',
         filterMode: 'all'
       };
 
@@ -1952,9 +2103,6 @@
             roomsState.preferredAgentByRoom = parsed.preferredAgentByRoom && typeof parsed.preferredAgentByRoom === 'object'
               ? parsed.preferredAgentByRoom
               : {};
-            roomsState.preferredQuickAskAgentName = typeof parsed.preferredQuickAskAgentName === 'string'
-              ? parsed.preferredQuickAskAgentName
-              : '';
           }
         } catch (error) {
           console.error('Failed to restore rooms UI state:', error);
@@ -1967,8 +2115,7 @@
             activeRoomId: roomsState.activeRoomId,
             filterMode: roomsState.filterMode,
             joinedAgentsByRoom: roomsState.joinedAgentsByRoom,
-            preferredAgentByRoom: roomsState.preferredAgentByRoom,
-            preferredQuickAskAgentName: roomsState.preferredQuickAskAgentName
+            preferredAgentByRoom: roomsState.preferredAgentByRoom
           }));
         } catch (error) {
           console.error('Failed to persist rooms UI state:', error);
@@ -1999,9 +2146,9 @@
         roomsState.detailById = {};
         roomsState.activeRoomId = null;
         roomsState.joinedAgentsByRoom = {};
-        roomsState.preferredQuickAskAgentName = '';
         getAuthModal().classList.remove('hidden');
         getLayout().style.display = 'none';
+        renderSidebarConversations();
         setAyaSprite('neutral');
         setAyaBubble(message);
       }
@@ -2021,13 +2168,13 @@
       }
 
       function confirmRemoveNodeFromCore() {
-        showConfirmModal('Remove this node from HexNest Core? The local node will switch to local mode until you reconnect it.', () => {
+        showConfirmModal('Remove this node from the network? It will stay on this machine, but other rooms will stop seeing it until you reconnect.', () => {
           void removeNodeFromCore();
         });
       }
 
       function confirmResetNodeIdentity() {
-        showConfirmModal('Reset the local node identity? The next reconnect will register a new node in HexNest Core.', () => {
+        showConfirmModal('Reset this node identity? The next reconnect will create a fresh network identity for this node.', () => {
           void resetNodeIdentity();
         });
       }
@@ -2053,7 +2200,7 @@
             throw new Error(data.error || 'Failed to remove node from core');
           }
 
-          addLog(`✓ ${data.message}`, 'success');
+          addLog('Node removed from the network', 'success');
           await fetchStatus();
           await fetchCoreInfo();
         } catch (error) {
@@ -2088,7 +2235,7 @@
             throw new Error(data.error || 'Failed to switch node to local mode');
           }
 
-          addLog(`✓ ${data.message}`, 'warn');
+          addLog('Network access paused for this node', 'warn');
           await refreshStatusWorkspace();
         } catch (error) {
           console.error('Disconnect node error:', error);
@@ -2122,7 +2269,7 @@
             throw new Error(data.error || 'Failed to reset node identity');
           }
 
-          addLog(`✓ ${data.message}`, 'warn');
+          addLog('Node identity reset. The next reconnect will create a fresh network identity.', 'warn');
           await refreshStatusWorkspace();
         } catch (error) {
           console.error('Reset identity error:', error);
@@ -2280,6 +2427,14 @@
         }
       }
 
+      function openNewRoomForm() {
+        switchTab('rooms');
+        const form = document.getElementById('roomsCreateForm');
+        const firstField = document.getElementById('roomNameInput');
+        form?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.setTimeout(() => firstField?.focus(), 120);
+      }
+
       function showConfirmModal(message, action) {
         document.getElementById('confirmMessage').textContent = message;
         pendingDeleteAction = action;
@@ -2298,15 +2453,85 @@
         closeConfirmModal();
       }
 
+      function humanizeUiMessage(message, type = 'info') {
+        const text = String(message || '').replace(/^✓\s*/, '').trim();
+        const rules = [
+          [/^Authenticated as (.+)$/i, 'Signed in as $1'],
+          [/^Created account as (.+)$/i, 'Account created for $1'],
+          [/^Node connected to core.*$/i, 'Node is now available to the network'],
+          [/^Core connection pending:.*$/i, 'Node is still trying to reconnect to the network'],
+          [/^Core connected from saved session:.*$/i, 'Reconnected to the network'],
+          [/^Core reconnected:.*$/i, 'Reconnected to the network'],
+          [/^Core connected:.*$/i, 'Connected to the network'],
+          [/^Core connection verified:.*$/i, 'Network connection looks good'],
+          [/^Core test failed:.*$/i, 'Could not reach the network right now'],
+          [/^Core test error:.*$/i, 'Could not check the network right now'],
+          [/^Core connection error:.*$/i, 'Could not connect this node to the network'],
+          [/^Core info error:.*$/i, 'Could not refresh network status'],
+          [/^Rooms error:.*$/i, 'Could not load rooms right now'],
+          [/^Room detail error:.*$/i, 'Could not open that room right now'],
+          [/^Join room error:.*$/i, 'Could not send your agent to that room'],
+          [/^Ask error:.*$/i, 'Could not send your message to the room'],
+          [/^Create room error:.*$/i, 'Could not create the room'],
+          [/^Created room (.+)$/i, 'Created room $1'],
+          [/^Joined room as (.+)$/i, 'Your agent joined as $1'],
+          [/^Asked network as (.+)$/i, 'Sent your message as $1'],
+          [/^Loaded room .+$/i, 'Opened the selected room'],
+          [/^Loaded \d+ agents$/i, 'Updated your agent list'],
+          [/^Loaded \d+ providers$/i, 'Updated connected providers'],
+          [/^Set default agent: (.+)$/i, 'Default agent set to $1'],
+          [/^Removed agent: (.+)$/i, 'Removed agent $1'],
+          [/^Provider connection verified:.*$/i, 'Provider connection looks good'],
+          [/^Provider test failed:.*$/i, 'Could not reach that provider'],
+          [/^Added provider: (.+)$/i, 'Connected provider $1'],
+          [/^Deleted provider: (.+)$/i, 'Removed provider $1'],
+          [/^Added agent model: (.+)$/i, 'Added agent $1'],
+          [/^Error activating model:.*$/i, 'Could not change the default agent'],
+          [/^Models error:.*$/i, 'Could not load your agents right now'],
+          [/^Providers error:.*$/i, 'Could not load connected providers'],
+          [/^Error loading models:.*$/i, 'Could not load available models from that provider'],
+          [/^Found \d+ available models$/i, 'Found available models'],
+          [/^Loaded \d+ available models for .+$/i, 'Loaded available models for that provider'],
+          [/^No models available for .+$/i, 'No models are available from that provider right now'],
+          [/^Please select an adapter type$/i, 'Choose a provider type first'],
+          [/^Please select provider and model$/i, 'Choose a provider and a model first'],
+          [/^Connection test failed:.*$/i, 'Could not connect to that provider'],
+          [/^Configure a core endpoint in node settings first$/i, 'No network endpoint is configured for this node yet'],
+          [/^No core endpoint is configured for this node yet$/i, 'No network endpoint is configured for this node yet'],
+          [/^Status: .*$/i, 'Node status updated'],
+          [/^Status error:.*$/i, 'Could not refresh node overview'],
+          [/^Readiness error:.*$/i, 'Could not refresh node guidance'],
+          [/^Logged out from node manager$/i, 'Signed out'],
+          [/^Node Manager loaded$/i, 'Node interface ready'],
+          [/^Remove node error:.*$/i, 'Could not remove this node from the network'],
+          [/^Disconnect node error:.*$/i, 'Could not pause network access right now'],
+          [/^Reset identity error:.*$/i, 'Could not reset this node identity'],
+          [/^Delete error:.*$/i, 'Could not remove that item'],
+          [/^Add error:.*$/i, type === 'error' ? 'Could not save your changes' : 'Could not complete that action']
+        ];
+
+        for (const [pattern, replacement] of rules) {
+          if (pattern.test(text)) {
+            return text.replace(pattern, replacement);
+          }
+        }
+
+        return text;
+      }
+
       function addLog(message, type = 'info', silent = false) {
+        if (silent) {
+          return;
+        }
+
         const timestamp = new Date().toLocaleTimeString();
-        logs.unshift({ message, type, timestamp });
+        const uiMessage = humanizeUiMessage(message, type);
+        logs.unshift({ message: uiMessage, type, timestamp });
         if (logs.length > 50) logs.pop();
         renderLogs();
         
-        // Показуємо notification тільки якщо це не фоновий запит
-        if (!silent && (type === 'error' || type === 'info' || type === 'warn')) {
-          showNotification(message, type);
+        if (type === 'error' || type === 'info' || type === 'warn' || type === 'success') {
+          showNotification(uiMessage, type);
         }
       }
 
@@ -2393,35 +2618,6 @@
         return roomsState.preferredAgentByRoom[roomId] || '';
       }
 
-      function getPreferredQuickAskAgentName() {
-        if (roomsState.preferredQuickAskAgentName) {
-          return roomsState.preferredQuickAskAgentName;
-        }
-        return roomsState.availableAgents[0]?.name || '';
-      }
-
-      function rememberPreferredQuickAskAgent(agentName) {
-        roomsState.preferredQuickAskAgentName = String(agentName || '').trim();
-        persistRoomsUiState();
-      }
-
-      function renderQuickAskAgentSelect() {
-        const select = document.getElementById('quickAskAgentSelect');
-        if (!select) return;
-
-        if (!(roomsState.availableAgents || []).length) {
-          select.innerHTML = '<option value="">No local agents available</option>';
-          select.disabled = true;
-          return;
-        }
-
-        const preferred = getPreferredQuickAskAgentName();
-        select.innerHTML = roomsState.availableAgents.map((agent) => `
-          <option value="${escapeHtml(agent.name)}" ${preferred === agent.name ? 'selected' : ''}>${escapeHtml(agent.name)} · ${escapeHtml((agent.supportedRoles || []).join(', ') || 'general')}</option>
-        `).join('');
-        select.disabled = false;
-      }
-
       function rememberPreferredAgent(roomId, agentName) {
         if (!roomId) return;
         const normalized = String(agentName || '').trim();
@@ -2445,6 +2641,7 @@
         }
         persistRoomsUiState();
         renderRoomsList();
+        renderSidebarConversations();
         if (roomsState.activeRoomId) {
           void fetchRoomDetail(roomsState.activeRoomId, true);
         } else {
@@ -2456,21 +2653,58 @@
         return roomsState.activeRoomId ? roomsState.detailById[roomsState.activeRoomId] || null : null;
       }
 
+      function renderSidebarConversations() {
+        const container = document.getElementById('sidebarRoomsList');
+        if (!container) return;
+
+        const rooms = getFilteredRooms().slice(0, 6);
+        if (!rooms.length) {
+          container.innerHTML = '<div class="room-empty">No rooms yet.</div>';
+          return;
+        }
+
+        container.innerHTML = rooms.map((room) => {
+          const isActive = roomsState.activeRoomId === room.id;
+          const phase = room.latestMessageAt
+            ? `Updated ${formatRelativeTime(room.latestMessageAt)}`
+            : `Updated ${formatRelativeTime(room.updatedAt)}`;
+          const joined = roomsState.joinedAgentsByRoom[room.id] || inferJoinedLocalAgent(room);
+          const phaseLabel = room.phase ? `${room.phase} · ${phase}` : phase;
+
+          return `
+            <div class="room-item ${isActive ? 'active' : ''}" onclick="selectRoom('${escapeHtml(room.id)}'); switchTab('rooms')">
+              <div class="room-head">
+                <span class="room-id">${escapeHtml(room.id.slice(0, 8))}</span>
+                <span class="state-pill ${room.status === 'open' ? 'ready' : 'info'}">${escapeHtml(room.status || 'open')}</span>
+              </div>
+              <span class="room-task">${escapeHtml(truncateText(room.name || room.task || 'Untitled room', 54))}</span>
+              <span class="room-phase"><span class="subnest-tag">n/${escapeHtml(room.subnest || 'general')}</span>${escapeHtml(phaseLabel)}</span>
+              ${joined ? `<span class="room-phase">Joined as ${escapeHtml(joined.name)}</span>` : ''}
+            </div>
+          `;
+        }).join('');
+      }
+
       function renderRoomsList() {
         const container = document.getElementById('roomsList');
         const allButton = document.getElementById('roomsFilterAll');
         const mineButton = document.getElementById('roomsFilterMine');
-        if (!container) return;
 
         if (allButton) allButton.classList.toggle('active', roomsState.filterMode === 'all');
         if (mineButton) mineButton.classList.toggle('active', roomsState.filterMode === 'mine');
+
+        if (!container) {
+          renderSidebarConversations();
+          return;
+        }
 
         const filteredRooms = getFilteredRooms();
 
         if (!filteredRooms.length) {
           container.innerHTML = roomsState.rooms.length
-            ? '<div class="empty-state"><p>No conversations with your local agent yet. Join one thread first or switch back to All Conversations.</p></div>'
-            : '<div class="empty-state"><p>No conversations yet. Start with Quick Ask or create one manually below.</p></div>';
+            ? '<div class="empty-state"><p>No rooms with your local agent yet. Join one room first or switch back to All Rooms.</p></div>'
+            : '<div class="empty-state"><p>No rooms yet. Create one above.</p></div>';
+          renderSidebarConversations();
           return;
         }
 
@@ -2500,6 +2734,7 @@
             </div>
           `;
         }).join('');
+        renderSidebarConversations();
       }
 
       function renderRoomDetail() {
@@ -2508,7 +2743,7 @@
 
         const detail = getActiveRoomDetail();
         if (!detail) {
-          container.innerHTML = '<div class="empty-state panel" style="padding: 40px 24px;"><p>Select a conversation to inspect it.</p></div>';
+          container.innerHTML = '<div class="empty-state panel" style="padding: 40px 24px;"><p>Select a room to inspect it.</p></div>';
           return;
         }
 
@@ -2525,7 +2760,7 @@
           <div class="feature-card">
             <div class="room-detail-head">
               <div>
-                <p class="feature-head">Conversation Detail</p>
+                <p class="feature-head">Selected Room</p>
                 <h3>${escapeHtml(room.name || 'Untitled room')}</h3>
                 <p class="summary-copy">${escapeHtml(room.task || 'No task provided')}</p>
               </div>
@@ -2533,6 +2768,7 @@
             </div>
             <div class="room-chip-row">
               <span class="chip">Subnest: ${escapeHtml(room.subnest || 'general')}</span>
+              <span class="chip">Phase: ${escapeHtml(room.phase || 'open')}</span>
               <span class="chip">Agents: ${escapeHtml(String((room.connectedAgents || []).length))}</span>
               <span class="chip">Viewers: ${escapeHtml(String(room.viewers || 0))}</span>
               <span class="chip">Updated: ${escapeHtml(formatRelativeTime(room.updatedAt))}</span>
@@ -2541,10 +2777,10 @@
 
           <div class="room-grid">
             <div class="room-box">
-              <p class="feature-head">Reply As</p>
-              <p class="room-empty-note">Pick the local agent this node should use when continuing this conversation.</p>
+              <p class="feature-head">Send My Agent To This Room</p>
+              <p class="room-empty-note">Each model on this node acts as an agent. Pick which one should join this room for you.</p>
               <div class="form-group">
-                <label for="roomAgentSelect">Local agent</label>
+                <label for="roomAgentSelect">My agent</label>
                 <select id="roomAgentSelect" onchange="rememberPreferredAgentForActiveRoom(this.value)" ${availableAgents.length ? '' : 'disabled'}>${agentOptions}</select>
               </div>
               <div class="form-group">
@@ -2552,13 +2788,13 @@
                 <input type="text" id="roomRoleInput" maxlength="80" placeholder="Leave empty unless the room template defines roles" />
               </div>
               <div class="actions">
-                <button type="button" onclick="joinSelfToRoom()" ${availableAgents.length ? '' : 'disabled'}>Join As My Agent</button>
+                <button type="button" onclick="joinSelfToRoom()" ${availableAgents.length ? '' : 'disabled'}>${joined ? 'Update My Agent In Room' : 'Send My Agent'}</button>
               </div>
-              <p class="room-meta">${joined ? `Joined as ${escapeHtml(joined.name)} (${escapeHtml(joined.id)})` : 'This node has not joined this room yet.'}</p>
+              <p class="room-meta">${joined ? `Your node is already in this room as ${escapeHtml(joined.name)}.` : 'Your node has not joined this room yet.'}</p>
             </div>
 
             <div class="room-box">
-              <p class="feature-head">Participants</p>
+              <p class="feature-head">Who Is Already Here</p>
               <div class="model-list">
                 ${(room.connectedAgents || []).length ? room.connectedAgents.map((agent) => `
                   <div class="model-item">
@@ -2573,15 +2809,15 @@
           </div>
 
           <div class="room-box">
-            <p class="feature-head">Continue Conversation</p>
+            <p class="feature-head">Talk Through My Agent</p>
             <div class="form-group">
               <label for="roomMessageText">Question or instruction</label>
-              <textarea id="roomMessageText" placeholder="Ask the network, delegate a task, or continue the conversation."></textarea>
+              <textarea id="roomMessageText" placeholder="Ask the network, delegate a task, or post the next room message."></textarea>
             </div>
             <div class="actions">
-              <button type="button" onclick="sendRoomMessage()" ${availableAgents.length ? '' : 'disabled'}>${joined ? 'Ask Network' : 'Join And Ask'}</button>
+              <button type="button" onclick="sendRoomMessage()" ${availableAgents.length ? '' : 'disabled'}>${joined ? 'Send To Room' : 'Send My Agent And Message'}</button>
             </div>
-            <p class="room-meta">${joined ? `Messages will be sent as ${escapeHtml(joined.name)}.` : 'If needed, the node will first join this room with the selected local agent and then send your ask.'}</p>
+            <p class="room-meta">${joined ? `Messages will be sent as ${escapeHtml(joined.name)}.` : 'If needed, the node will first send your selected agent into the room and then post the message.'}</p>
             <div class="room-messages" style="margin-top: 14px;">
               ${messages.length ? messages.map((message) => `
                 <div class="room-message">
@@ -2611,7 +2847,7 @@
           roomsState.rooms = json.data?.rooms || [];
           roomsState.availableAgents = json.data?.availableAgents || [];
           syncJoinedAgentsFromRooms();
-          renderQuickAskAgentSelect();
+          renderSidebarConversations();
 
           const filteredRooms = getFilteredRooms();
           if (!roomsState.activeRoomId || !filteredRooms.some((room) => room.id === roomsState.activeRoomId)) {
@@ -2799,64 +3035,6 @@
         }
       }
 
-      async function createAndAskFromNode(event) {
-        event.preventDefault();
-        const name = document.getElementById('quickAskNameInput')?.value?.trim() || '';
-        const openingAsk = document.getElementById('quickAskTaskInput')?.value?.trim() || '';
-        const agentName = document.getElementById('quickAskAgentSelect')?.value?.trim() || '';
-
-        if (!openingAsk) {
-          addLog('Opening ask is required', 'error');
-          return;
-        }
-
-        if (!agentName) {
-          addLog('Pick a local agent for Quick Ask first', 'error');
-          return;
-        }
-
-        try {
-          rememberPreferredQuickAskAgent(agentName);
-          const createResponse = await fetch('/api/rooms', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name,
-              task: openingAsk,
-              subnest: 'general',
-              webSearchEnabled: true,
-              pythonShellEnabled: false
-            })
-          });
-          if (createResponse.status === 401) {
-            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
-            return;
-          }
-
-          const createJson = await createResponse.json();
-          if (!createJson.success) throw new Error(createJson.error || 'Failed to create room');
-
-          roomsState.activeRoomId = createJson.data.id;
-          document.getElementById('quickAskForm')?.reset();
-          await fetchRooms();
-
-          const roomAgentSelect = document.getElementById('roomAgentSelect');
-          if (roomAgentSelect) {
-            roomAgentSelect.value = agentName;
-            rememberPreferredAgentForActiveRoom(agentName);
-          }
-
-          const messageBox = document.getElementById('roomMessageText');
-          if (messageBox) {
-            messageBox.value = openingAsk;
-          }
-          await sendRoomMessage();
-        } catch (error) {
-          console.error('Quick ask error:', error);
-          addLog(`Quick ask error: ${error.message}`, 'error');
-        }
-      }
-
       function renderRecentActivity(items = []) {
         const container = document.getElementById('statusActivityList');
         if (!container) return;
@@ -2868,7 +3046,7 @@
                 <p class="mini-item-title">No activity yet</p>
                 <span class="mini-item-time">—</span>
               </div>
-              <p class="mini-item-copy">Runtime events will appear here after connect, disconnect, registration, and identity changes.</p>
+              <p class="mini-item-copy">Node events will appear here after connect, disconnect, room activity, and identity changes.</p>
             </div>
           `;
           return;
@@ -2895,9 +3073,9 @@
 
         document.getElementById('statusSummaryHeadline').textContent = readiness.summary;
         document.getElementById('statusSummaryBody').textContent = readiness.recommendedAction;
-        document.getElementById('summaryModeChip').textContent = `Mode: ${readiness.mode === 'connected' ? 'Core connected' : 'Local only'}`;
+        document.getElementById('summaryModeChip').textContent = `Mode: ${readiness.mode === 'connected' ? 'Network connected' : 'Local only'}`;
         document.getElementById('summaryIdentityChip').textContent = `Identity: ${readiness.nodeId ? 'Registered' : 'Missing'}`;
-        document.getElementById('summaryModelChip').textContent = `Model: ${readiness.activeModelName || 'Not active'}`;
+        document.getElementById('summaryModelChip').textContent = `Default agent: ${readiness.activeModelName || 'Not set'}`;
         document.getElementById('summaryProviderChip').textContent = `Providers: ${readiness.configuredProvidersCount}`;
         document.getElementById('statusRecommendedAction').textContent = readiness.recommendedAction;
         document.getElementById('statusOperatorEmail').textContent = readiness.operatorEmail || '—';
@@ -2915,10 +3093,10 @@
               <div class="readiness-card ready">
                 <div class="readiness-row">
                   <span class="state-pill ready">ready</span>
-                  <p class="readiness-row-label">No Open Issues</p>
+                  <p class="readiness-row-label">No Immediate Issues</p>
                   <div class="readiness-row-copy">
-                    <p class="readiness-summary">The node has no outstanding readiness gaps right now.</p>
-                    <p class="readiness-detail">Healthy checks are summarized above in Connection Control.</p>
+                    <p class="readiness-summary">The node is ready for normal use right now.</p>
+                    <p class="readiness-detail">Healthy signals are summarized above in Node Availability.</p>
                   </div>
                 </div>
               </div>
@@ -2998,7 +3176,7 @@
       function updateCoreConnectButton(coreInfo) {
         const button = document.querySelector('#coreForm button[type="submit"]');
         if (!button) return;
-        button.textContent = coreInfo.coreConnected ? 'Reconnect' : 'Connect To Core';
+        button.textContent = coreInfo.coreConnected ? 'Reconnect Node' : 'Connect To Core';
       }
 
       async function connectToCore(options = {}) {
@@ -3056,7 +3234,7 @@
           if (button) {
             button.disabled = false;
             const coreStatusText = document.getElementById('coreStatusText')?.textContent;
-            button.textContent = coreStatusText === 'CONNECTED' ? 'Reconnect' : 'Connect';
+            button.textContent = coreStatusText === 'NETWORK READY' ? 'Reconnect Node' : 'Connect To Core';
           }
         }
       }
@@ -3075,19 +3253,19 @@
           document.getElementById('coreUrlDisplay').textContent = coreInfo.coreUrl;
           document.getElementById('coreUrl').value = coreInfo.coreUrl;
           document.getElementById('coreStatusReason').textContent = coreInfo.coreConnected
-            ? 'Runtime is connected to HexNest Core and heartbeats are active.'
-            : (coreInfo.connectionReason || 'Node is running in local mode. Use Connect to attach it to core.');
+            ? 'This node is connected to HexNest Core and its agents can be discovered by the network.'
+            : (coreInfo.connectionReason || 'This node is local only right now. Reconnect it to core when you want your agents available to the network.');
           
           const statusIcon = document.getElementById('coreStatusIcon');
           const statusText = document.getElementById('coreStatusText');
           
           if (coreInfo.coreConnected) {
             statusIcon.textContent = '✨';
-            statusText.textContent = 'CONNECTED';
+            statusText.textContent = 'NETWORK READY';
             statusText.style.color = '#7ef7c8';
           } else {
             statusIcon.textContent = '⏸️';
-            statusText.textContent = 'LOCAL MODE';
+            statusText.textContent = 'LOCAL ONLY';
             statusText.style.color = 'var(--warn)';
           }
 
@@ -3165,17 +3343,17 @@
           document.getElementById('nodeName').textContent = data.name || 'LocalNode';
           document.getElementById('nodeId').textContent = `Node ID: ${data.id?.slice(0, 12) || '—'}...`;
           document.getElementById('adapters').textContent = data.adaptersCount || 0;
-          document.getElementById('adapterStatus').textContent = `${data.adaptersCount || 0} Adapters`;
+          document.getElementById('adapterStatus').textContent = `${data.adaptersCount || 0} Agents Ready`;
           document.getElementById('statusIdentityId').textContent = data.id || '—';
           document.getElementById('statusIdentityOperator').textContent = data.operatorName || '—';
           document.getElementById('statusOperatorEmail').textContent = data.operatorEmail || '—';
-          document.getElementById('statusRuntimeModeChip').textContent = `Runtime: ${data.coreConnected ? 'Core attached' : 'Local only'}`;
+          document.getElementById('statusRuntimeModeChip').textContent = `Mode: ${data.coreConnected ? 'Network attached' : 'Local only'}`;
           document.getElementById('statusHeartbeatInterval').textContent = `${Math.max(1, Math.round((data.heartbeatIntervalMs || 0) / 1000))}s`;
           document.getElementById('statusHeartbeatLastPulse').textContent = data.lastHeartbeatAt
             ? `${new Date(data.lastHeartbeatAt).toLocaleTimeString()} · ${data.runtimeStatus}`
-            : (data.coreConnected ? 'Waiting for first pulse' : 'Local mode');
+            : (data.coreConnected ? 'Waiting for first network check-in' : 'Local only');
           document.getElementById('statusHeartbeatRooms').textContent = `${data.activeRoomsCount || 0}`;
-          document.getElementById('statusHeartbeatQueue').textContent = `${data.pendingUsageRecords || 0} pending records`;
+          document.getElementById('statusHeartbeatQueue').textContent = `${data.pendingUsageRecords || 0} pending`;
           const removeNodeButton = document.getElementById('removeNodeButton');
           if (removeNodeButton) {
             removeNodeButton.disabled = !data.id;
@@ -3184,7 +3362,7 @@
           const disconnectNodeButton = document.getElementById('disconnectNodeButton');
           if (disconnectNodeButton) {
             disconnectNodeButton.disabled = !data.coreConnected;
-            disconnectNodeButton.textContent = data.coreConnected ? 'Switch To Local Mode' : 'Already In Local Mode';
+            disconnectNodeButton.textContent = data.coreConnected ? 'Pause Network Access' : 'Already Local Only';
           }
           const resetIdentityButton = document.getElementById('resetIdentityButton');
           if (resetIdentityButton) {
@@ -3220,16 +3398,16 @@
 
           // Update core connection status
           if (data.coreConnected) {
-            coreStatusEl.textContent = 'CONNECTED';
+            coreStatusEl.textContent = 'NETWORK READY';
             coreStatusEl.style.borderColor = 'rgba(110, 255, 185, 0.35)';
             coreStatusEl.style.color = '#7ef7c8';
           } else {
-            coreStatusEl.textContent = 'LOCAL MODE';
+            coreStatusEl.textContent = 'LOCAL ONLY';
             coreStatusEl.style.borderColor = 'rgba(255, 192, 110, 0.4)';
             coreStatusEl.style.color = '#ffc06e';
           }
 
-          addLog(`Status: ${data.isRunning ? 'Running' : 'Stopped'} | Core: ${data.coreConnected ? 'Connected' : 'Local Mode'}`, 'info', true);
+          addLog(`Status: ${data.isRunning ? 'Running' : 'Stopped'} | Network: ${data.coreConnected ? 'Ready' : 'Local only'}`, 'info', true);
         } catch (err) {
           console.error('Status fetch error:', err);
           addLog(`Status error: ${err.message}`, 'error');
@@ -3246,33 +3424,50 @@
           const modelsList = document.getElementById('modelsList');
           const activeModel = models.find(model => model.active);
           const enabledCount = models.filter(model => model.enabled).length;
+          const coreConnected = (document.getElementById('coreStatus')?.textContent || '').includes('NETWORK READY');
+          const offerHeadline = document.getElementById('agentOfferHeadline');
+          const offerCopy = document.getElementById('agentOfferCopy');
 
           document.getElementById('statusActiveModel').textContent = activeModel
             ? `${activeModel.name} · ${activeModel.type || 'Unknown'}`
             : '—';
           document.getElementById('statusModelsSummary').textContent = models.length > 0
-            ? `${enabledCount}/${models.length} enabled`
-            : 'No models configured';
+            ? `${enabledCount}/${models.length} ready`
+            : 'No agents configured';
+
+          if (offerHeadline && offerCopy) {
+            if (enabledCount === 0) {
+              offerHeadline.textContent = 'Waiting for agents';
+              offerCopy.textContent = 'Add at least one model first. Each enabled model becomes an agent that this node can use in rooms.';
+            } else if (coreConnected) {
+              offerHeadline.textContent = `${enabledCount} agent${enabledCount === 1 ? '' : 's'} available to network`;
+              offerCopy.textContent = 'This node is connected to core, so its enabled agents are being advertised automatically and can be invited by other rooms.';
+            } else {
+              offerHeadline.textContent = `${enabledCount} agent${enabledCount === 1 ? '' : 's'} ready locally`;
+              offerCopy.textContent = 'Your agents are configured, but the node is not connected to core right now. Bring the node online to make them available to the wider network.';
+            }
+          }
 
           if (models.length === 0) {
-            modelsList.innerHTML = '<div class="empty-state"><p>No models configured yet.</p></div>';
+            modelsList.innerHTML = '<div class="empty-state"><p>No agents configured yet.</p></div>';
             return;
           }
 
           modelsList.innerHTML = models.map(model => `
             <div class="model-item">
               <div class="model-info">
-                <h4>${model.name}${model.active ? ' <span style="color: var(--warn); font-size: var(--fs-sm);">⭐ Active</span>' : ''}</h4>
-                <p>${model.type || 'Unknown'} · ${model.enabled ? '✓ Enabled' : '○ Disabled'}</p>
+                <h4>${model.name}${model.active ? ' <span style="color: var(--warn); font-size: var(--fs-sm);">⭐ Default agent</span>' : ''}</h4>
+                <p>${model.type || 'Unknown'} model · ${model.enabled ? '✓ Ready as agent' : '○ Disabled'}</p>
+                <p>This agent can join your rooms, and when the node is connected to core it can also be recruited by other rooms.</p>
               </div>
               <div class="model-actions">
-                ${!model.active ? `<button onclick="activateModel('${model.name}')" style="background: rgba(61, 176, 255, 0.15); border-color: rgba(61, 176, 255, 0.35); color: #8fe7ff;">Set Active</button>` : ''}
-                <button onclick="deleteModel('${model.name}')" style="background: rgba(159, 18, 48, 0.22); border-color: rgba(255, 110, 139, 0.5); color: #ffaec0;">Delete</button>
+                ${!model.active ? `<button onclick="activateModel('${model.name}')" style="background: rgba(61, 176, 255, 0.15); border-color: rgba(61, 176, 255, 0.35); color: #8fe7ff;">Set As Default Agent</button>` : ''}
+                <button onclick="deleteModel('${model.name}')" style="background: rgba(159, 18, 48, 0.22); border-color: rgba(255, 110, 139, 0.5); color: #ffaec0;">Remove Agent</button>
               </div>
             </div>
           `).join('');
 
-          addLog(`Loaded ${models.length} models`, 'info', true);
+          addLog(`Loaded ${models.length} agents`, 'info', true);
         } catch (err) {
           console.error('Models fetch error:', err);
           addLog(`Models error: ${err.message}`, 'error');
@@ -3284,7 +3479,7 @@
           const res = await fetch(`/api/models/${name}/activate`, { method: 'PUT' });
           const json = await res.json();
           if (!json.success) throw new Error(json.error);
-          addLog(`Activated model: ${name}`, 'info');
+          addLog(`Set default agent: ${name}`, 'info');
           await fetchModels();
         } catch (err) {
           console.error('Activate model error:', err);
@@ -3293,12 +3488,12 @@
       }
 
       async function deleteModel(name) {
-        showConfirmModal(`Delete model "${name}"?`, async () => {
+        showConfirmModal(`Remove agent "${name}"?`, async () => {
           try {
             const res = await fetch(`/api/models/${name}`, { method: 'DELETE' });
             const json = await res.json();
             if (!json.success) throw new Error(json.error);
-            addLog(`Deleted model: ${name}`, 'info');
+            addLog(`Removed agent: ${name}`, 'info');
             await fetchModels();
           } catch (err) {
             console.error('Delete error:', err);
@@ -3707,7 +3902,7 @@
           // Перезавантажуємо список доступних моделей для цього провайдера
           await loadAvailableModels();
           
-          addLog(`Added model: ${modelName}`, 'info');
+          addLog(`Added agent model: ${modelName}`, 'info');
           await fetchModels();
         } catch (err) {
           console.error('Add model error:', err);
@@ -3738,12 +3933,7 @@
         }
       });
 
-      document.getElementById('quickAskForm')?.addEventListener('submit', createAndAskFromNode);
       document.getElementById('roomsCreateForm')?.addEventListener('submit', createRoomFromNode);
-      document.getElementById('quickAskAgentSelect')?.addEventListener('change', (event) => {
-        rememberPreferredQuickAskAgent(event.target.value);
-      });
-      renderQuickAskAgentSelect();
 
       // Initial data load after login without periodic polling
       function startPolling() {
@@ -3802,8 +3992,6 @@
       // REMOVED: Auto-fetch/polling on initial page load
       // These will ONLY start after successful login
       // (see "Window management after successful login" below)
-
-      addLog('Node Manager loaded', 'info');
 
       // ======================
       // AUTH HANDLING
