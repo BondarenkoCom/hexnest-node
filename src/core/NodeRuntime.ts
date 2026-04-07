@@ -24,6 +24,12 @@ interface RuntimeLogger {
   error(...args: unknown[]): void;
 }
 
+export interface RuntimeActivityItem {
+  type: "info" | "success" | "warn" | "error";
+  message: string;
+  timestamp: string;
+}
+
 class CoreConnectionSupersededError extends Error {
   constructor() {
     super("core connection attempt was superseded");
@@ -69,6 +75,7 @@ export class NodeRuntime {
   private lastHeartbeatAt: number | null = null;
   private lastCoreError: string | null = null;
   private coreConnectionGeneration = 0;
+  private readonly recentActivity: RuntimeActivityItem[] = [];
 
   constructor(
     private readonly config: NodeConfig,
@@ -114,6 +121,10 @@ export class NodeRuntime {
 
       this.logger.info(
         `[node] ready node=${this.config.nodeName} adapters=${this.adapters.size} status=${this.status}`
+      );
+      this.recordActivity(
+        "success",
+        `Node runtime started with ${this.adapters.size} configured adapter${this.adapters.size === 1 ? "" : "s"}`
       );
     } catch (error) {
       this.isRunning = false;
@@ -190,7 +201,44 @@ export class NodeRuntime {
 
     await this.resetLocalIdentity(`node removed from core id=${currentNodeId}`);
     this.enterLocalMode(new Error("node removed from core"));
+    this.recordActivity("warn", `Removed node ${currentNodeId} from HexNest Core`);
     return { removed: true, nodeId: currentNodeId };
+  }
+
+  async disconnectFromCoreByOperator(): Promise<{ coreUrl: string; coreConnected: boolean; nodeId: string | null }> {
+    if (!this.isRunning) {
+      throw new Error("Node runtime is not running");
+    }
+
+    await this.disconnectFromCore(true);
+    this.lastCoreError = "Disconnected by operator from node manager";
+    this.status = "offline";
+    this.recordActivity("warn", "Disconnected from HexNest Core by operator");
+
+    return {
+      coreUrl: this.config.coreUrl,
+      coreConnected: this.coreConnected,
+      nodeId: this.nodeId
+    };
+  }
+
+  async resetNodeIdentityByOperator(): Promise<{ previousNodeId: string | null }> {
+    if (!this.isRunning) {
+      throw new Error("Node runtime is not running");
+    }
+
+    const previousNodeId = this.nodeId;
+    await this.disconnectFromCore(true);
+    await this.resetLocalIdentity("identity reset by operator from node manager");
+    this.enterLocalMode(new Error("node identity reset by operator"));
+    this.recordActivity(
+      "warn",
+      previousNodeId
+        ? `Reset local node identity for ${previousNodeId}; next reconnect will register a new node`
+        : "Cleared local node identity; next reconnect will register a new node"
+    );
+
+    return { previousNodeId };
   }
 
   async stop(): Promise<void> {
@@ -225,6 +273,7 @@ export class NodeRuntime {
     this.status = "offline";
     this.isRunning = false;
     this.logger.info("[node] stopped");
+    this.recordActivity("info", "Node runtime stopped");
   }
 
   async handleRoomInvitation(roomId: string, role: string, taskHint = ""): Promise<void> {
@@ -282,6 +331,10 @@ export class NodeRuntime {
     this.nodeToken = registration.nodeToken;
     await this.persistIdentity(registration.nodeId, registration.nodeToken);
     this.logger.info(`[node] registered id=${this.nodeId} status=${registration.status}`);
+    this.recordActivity(
+      registration.status === "approved" ? "success" : "info",
+      `Registered node ${registration.nodeId} with core status ${registration.status}`
+    );
   }
 
   private async runRoomInvitation(roomId: string, role: string, taskHint = ""): Promise<void> {
@@ -486,6 +539,7 @@ export class NodeRuntime {
     this.coreConnected = true;
     this.status = "online";
     this.lastCoreError = null;
+    this.recordActivity("success", `Connected to HexNest Core as ${this.nodeId}`);
 
     this.heartbeat?.stop();
     this.heartbeat = new Heartbeat(
@@ -553,6 +607,7 @@ export class NodeRuntime {
     );
     this.logger.warn(`[node] operating in local mode - web UI is available at http://localhost:${process.env.HEXNEST_WEB_PORT || 3000}`);
     this.status = "offline";
+    this.recordActivity("warn", `Node is operating in local mode: ${this.lastCoreError}`);
   }
 
   private async persistIdentity(nodeId: string, nodeToken: string): Promise<void> {
@@ -650,6 +705,17 @@ export class NodeRuntime {
     return true;
   }
 
+  private recordActivity(type: RuntimeActivityItem["type"], message: string): void {
+    this.recentActivity.unshift({
+      type,
+      message,
+      timestamp: new Date(this.now()).toISOString()
+    });
+    if (this.recentActivity.length > 20) {
+      this.recentActivity.length = 20;
+    }
+  }
+
   private async resetLocalIdentity(reason: string): Promise<void> {
     const previousNodeId = this.nodeId;
     this.heartbeat?.stop();
@@ -662,6 +728,12 @@ export class NodeRuntime {
     this.database?.clearNodeIdentity();
     await this.removePersistedIdentityFile();
     this.logger.warn(`[node] local identity cleared: ${reason}${previousNodeId ? ` node=${previousNodeId}` : ""}`);
+    this.recordActivity(
+      "warn",
+      previousNodeId
+        ? `Cleared local node identity ${previousNodeId}: ${reason}`
+        : `Cleared local node identity: ${reason}`
+    );
   }
 
   private async removePersistedIdentityFile(): Promise<void> {
@@ -700,6 +772,7 @@ export class NodeRuntime {
     });
     const response = await registrationClient.registerUser({ email, password, name });
     this.logger.info(`[node] user registered email=${email} userId=${response.userId}`);
+    this.recordActivity("success", `Registered operator account ${email}`);
     return { userId: response.userId, token: response.token };
   }
 
@@ -709,7 +782,12 @@ export class NodeRuntime {
     });
     const response = await loginClient.loginUser({ email, password });
     this.logger.info(`[node] user logged in email=${email} userId=${response.userId}`);
+    this.recordActivity("info", `Authenticated operator ${email}`);
     return { userId: response.userId, token: response.token };
+  }
+
+  getRecentActivity(): RuntimeActivityItem[] {
+    return [...this.recentActivity];
   }
 
   getNodeStatus() {

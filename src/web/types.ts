@@ -8,6 +8,7 @@ export interface NodeStatus {
   id: string | null;
   name: string;
   operatorName: string;
+  operatorEmail?: string | null;
   isRunning: boolean;
   uptime: number;
   adaptersCount: number;
@@ -18,6 +19,36 @@ export interface NodeStatus {
   lastHeartbeatAt: string | null;
   activeRoomsCount: number;
   pendingUsageRecords: number;
+}
+
+export type ReadinessState = "ready" | "warn" | "error" | "info";
+
+export interface ReadinessCheck {
+  id: string;
+  label: string;
+  state: ReadinessState;
+  summary: string;
+  detail?: string;
+}
+
+export interface RuntimeActivityItem {
+  type: "info" | "success" | "warn" | "error";
+  message: string;
+  timestamp: string;
+}
+
+export interface NodeReadiness {
+  state: ReadinessState;
+  summary: string;
+  recommendedAction: string;
+  mode: "connected" | "local";
+  nodeId: string | null;
+  operatorEmail: string | null;
+  activeModelName: string | null;
+  enabledModelsCount: number;
+  configuredProvidersCount: number;
+  checks: ReadinessCheck[];
+  recentActivity: RuntimeActivityItem[];
 }
 
 export interface AdapterInfo {

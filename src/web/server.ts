@@ -10,6 +10,7 @@ import { statusRouter } from "./api/status.js";
 import { coreRouter } from "./api/core.js";
 import { authRouter } from "./api/auth.js";
 import { createNodeWebAuthMiddleware } from "./auth-session.js";
+import type { RuntimeActivityItem } from "../core/NodeRuntime.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,7 +20,10 @@ export interface WebServerContext {
   reconnectToCore: (
     auth?: { userToken?: string; userEmail?: string }
   ) => Promise<{ coreUrl: string; coreConnected: boolean; nodeId: string | null }>;
+  disconnectFromCore: () => Promise<{ coreUrl: string; coreConnected: boolean; nodeId: string | null }>;
+  resetNodeIdentity: () => Promise<{ previousNodeId: string | null }>;
   removeNodeFromCore: () => Promise<{ removed: boolean; nodeId: string | null }>;
+  getRecentActivity: () => RuntimeActivityItem[];
   getNodeStatus: () => {
     id: string | null;
     isRunning: boolean;

@@ -12,7 +12,10 @@ async function main(): Promise<void> {
     nodeConfig: config,
     reconnectToCore: (auth?: { userToken?: string; userEmail?: string }) =>
       runtime.reconnectToCore(auth),
+    disconnectFromCore: () => runtime.disconnectFromCoreByOperator(),
+    resetNodeIdentity: () => runtime.resetNodeIdentityByOperator(),
     removeNodeFromCore: () => runtime.removeCurrentNodeFromCore(),
+    getRecentActivity: () => runtime.getRecentActivity(),
     getNodeStatus: () => runtime.getNodeStatus()
   });
 

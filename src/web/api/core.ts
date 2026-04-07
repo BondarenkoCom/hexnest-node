@@ -148,6 +148,42 @@ export function coreRouter(context: WebServerContext) {
     }
   });
 
+  router.post("/disconnect", async (_req: Request, res: Response) => {
+    try {
+      const result = await context.disconnectFromCore();
+      res.json({
+        success: true,
+        message: "Node switched to local mode",
+        coreUrl: result.coreUrl,
+        coreConnected: result.coreConnected,
+        nodeId: result.nodeId
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.post("/reset-identity", async (_req: Request, res: Response) => {
+    try {
+      const result = await context.resetNodeIdentity();
+      res.json({
+        success: true,
+        message: result.previousNodeId
+          ? `Node identity ${result.previousNodeId} cleared`
+          : "Local node identity cleared",
+        previousNodeId: result.previousNodeId
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   router.delete("/node", async (_req: Request, res: Response) => {
     try {
       const result = await context.removeNodeFromCore();

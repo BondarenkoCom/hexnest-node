@@ -187,6 +187,79 @@ describe("NodeRuntime", () => {
     expect(runtime.getState().hasToken).toBe(false);
   });
 
+  it("switches to local mode without losing identity and can reset identity on operator action", async () => {
+    const calls = {
+      markOffline: 0,
+      registerNode: 0
+    };
+
+    const client = {
+      registerNode: async () => {
+        calls.registerNode += 1;
+        return { nodeId: "node-1", nodeToken: "token-1", status: "approved" as const };
+      },
+      getNodeStatus: async () => ({
+        nodeId: "node-1",
+        approvalStatus: "approved" as const,
+        status: "online" as const,
+        lastHeartbeatAt: null,
+        lastHeartbeatStatus: "online" as const
+      }),
+      heartbeat: async () => ({ ok: true, pendingInvitations: [] }),
+      submitUsage: async () => ({ accepted: 0, totalOwed: 0 }),
+      markOffline: async () => {
+        calls.markOffline += 1;
+      },
+      joinRoom: async () => ({ roomId: "room-1", joinedAgent: { id: "joined-1", name: "fake-agent" } }),
+      postRoomMessage: async () => undefined,
+      getRoomContext: async (_roomId: string, role: string) => ({
+        roomId: "room-1",
+        roomName: "Room 1",
+        task: "Research market dynamics",
+        role,
+        phase: "independent_answers",
+        timeline: [],
+        artifacts: [],
+        rules: "Cite sources."
+      })
+    };
+
+    const config: NodeConfig = {
+      coreUrl: "https://hex-nest.com",
+      nodeName: "node-test",
+      operatorName: "operator",
+      userToken: "user-token",
+      heartbeatIntervalMs: 60_000,
+      approvalPollIntervalMs: 1_000,
+      usageFlushIntervalMs: 60_000,
+      maxUsageBatch: 10,
+      shutdownGraceMs: 3_000,
+      autoAcceptInvites: true,
+      httpTimeoutMs: 5_000
+    };
+
+    const runtime = new NodeRuntime(config, [new FakeAdapter()], {
+      clientFactory: () => client as any,
+      uuidFactory: () => "usage-1"
+    });
+
+    await runtime.start();
+
+    const disconnectResult = await runtime.disconnectFromCoreByOperator();
+    expect(disconnectResult.coreConnected).toBe(false);
+    expect(disconnectResult.nodeId).toBe("node-1");
+    expect(runtime.getState().nodeId).toBe("node-1");
+    expect(runtime.getState().status).toBe("offline");
+
+    const resetResult = await runtime.resetNodeIdentityByOperator();
+    expect(resetResult.previousNodeId).toBe("node-1");
+    expect(runtime.getState().nodeId).toBe(null);
+    expect(runtime.getState().hasToken).toBe(false);
+    expect(calls.markOffline).toBe(1);
+
+    await runtime.stop();
+  });
+
   it("re-registers when stored node identity is rejected during reconnect", async () => {
     const calls = {
       registerNode: 0,
