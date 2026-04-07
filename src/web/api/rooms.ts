@@ -2,8 +2,10 @@ import { Router, Request, Response } from "express";
 import { HexNestClient } from "../../protocol/HexNestClient.js";
 import type {
   AgentDescriptor,
+  CoreRoomConnectBrief,
   CoreRoomDetails,
-  CoreRoomMessage,
+  CoreRoomSnapshot,
+  CoreRoomStats,
   CreateCoreRoomInput,
   JoinRoomResponse
 } from "../../protocol/types.js";
@@ -17,8 +19,9 @@ interface LocalRoomsPayload {
 }
 
 interface LocalRoomDetailPayload {
-  room: CoreRoomDetails;
-  messages: CoreRoomMessage[];
+  room: CoreRoomSnapshot;
+  stats: CoreRoomStats | null;
+  brief: CoreRoomConnectBrief | null;
   availableAgents: AgentDescriptor[];
 }
 
@@ -43,14 +46,16 @@ function createClient(context: WebServerContext): HexNestClient {
 
 async function loadRoomDetail(context: WebServerContext, roomId: string): Promise<LocalRoomDetailPayload> {
   const client = createClient(context);
-  const [room, messageResponse] = await Promise.all([
+  const [room, stats, brief] = await Promise.all([
     client.getRoom(roomId),
-    client.getRoomMessages(roomId, 80)
+    client.getRoomStats(roomId).catch(() => null),
+    client.getRoomConnectBrief(roomId).catch(() => null)
   ]);
 
   return {
     room,
-    messages: messageResponse.messages,
+    stats,
+    brief,
     availableAgents: context.getAvailableAgents()
   };
 }
@@ -146,6 +151,116 @@ export function roomsRouter(context: WebServerContext) {
         data: await loadRoomDetail(context, roomId)
       };
       res.json(response);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.get("/:roomId/stats", async (req: Request, res: Response) => {
+    try {
+      const roomId = normalizeText(req.params.roomId, 120);
+      if (!roomId) {
+        res.status(400).json({ success: false, error: "roomId is required" });
+        return;
+      }
+
+      const client = createClient(context);
+      res.json({ success: true, data: await client.getRoomStats(roomId) });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.get("/:roomId/connect", async (req: Request, res: Response) => {
+    try {
+      const roomId = normalizeText(req.params.roomId, 120);
+      if (!roomId) {
+        res.status(400).json({ success: false, error: "roomId is required" });
+        return;
+      }
+
+      const client = createClient(context);
+      res.json({ success: true, data: await client.getRoomConnectBrief(roomId) });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.post("/:roomId/heartbeat", async (req: Request, res: Response) => {
+    try {
+      const roomId = normalizeText(req.params.roomId, 120);
+      const sessionId = normalizeText(req.body?.sessionId, 120);
+      if (!roomId || !sessionId) {
+        res.status(400).json({ success: false, error: "roomId and sessionId are required" });
+        return;
+      }
+
+      const client = createClient(context);
+      res.json({ success: true, data: await client.heartbeatRoom(roomId, sessionId) });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.post("/:roomId/fork", async (req: Request, res: Response) => {
+    try {
+      const roomId = normalizeText(req.params.roomId, 120);
+      if (!roomId) {
+        res.status(400).json({ success: false, error: "roomId is required" });
+        return;
+      }
+
+      const client = createClient(context);
+      res.json({ success: true, data: await client.forkRoom(roomId) });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.post("/:roomId/summary", async (req: Request, res: Response) => {
+    try {
+      const roomId = normalizeText(req.params.roomId, 120);
+      if (!roomId) {
+        res.status(400).json({ success: false, error: "roomId is required" });
+        return;
+      }
+
+      const client = createClient(context);
+      const markdown = await client.downloadRoomSummary(roomId);
+      res.type("text/markdown").send(markdown);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.get("/:roomId/export", async (req: Request, res: Response) => {
+    try {
+      const roomId = normalizeText(req.params.roomId, 120);
+      if (!roomId) {
+        res.status(400).json({ success: false, error: "roomId is required" });
+        return;
+      }
+
+      const client = createClient(context);
+      res.json({ success: true, data: await client.exportRoom(roomId) });
     } catch (error) {
       res.status(500).json({
         success: false,

@@ -1110,9 +1110,165 @@
         font-size: var(--fs-xs);
       }
 
+      .room-surface {
+        display: grid;
+        gap: 14px;
+      }
+
+      .room-hero-card {
+        border: 1px solid rgba(22, 210, 255, 0.22);
+        border-radius: 16px;
+        padding: 18px;
+        background:
+          radial-gradient(circle at top right, rgba(74, 217, 255, 0.08), transparent 32%),
+          linear-gradient(180deg, rgba(6, 17, 28, 0.96), rgba(4, 11, 18, 0.98));
+      }
+
+      .room-hero-top,
+      .room-hero-actions,
+      .room-inline-actions,
+      .room-brief-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+
+      .room-hero-copy h3,
+      .room-hero-copy h4,
+      .room-box h4 {
+        margin: 0;
+        color: var(--text);
+      }
+
+      .room-hero-copy .summary-copy {
+        max-width: 84ch;
+      }
+
+      .room-stat-badge {
+        margin-top: 10px;
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        color: var(--cyan-soft);
+        font-family: var(--font-mono);
+        font-size: var(--fs-xs);
+      }
+
+      .room-split-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.9fr);
+        gap: 14px;
+        align-items: start;
+      }
+
+      .room-stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      .room-timeline-list,
+      .room-artifact-list,
+      .room-job-list,
+      .room-connected-list,
+      .room-brief-list,
+      .room-system-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .room-timeline-entry,
+      .room-artifact-card,
+      .room-job-card,
+      .room-connected-card,
+      .room-brief-card,
+      .room-system-card {
+        border: 1px solid rgba(22, 210, 255, 0.16);
+        border-radius: 12px;
+        padding: 12px 14px;
+        background: rgba(4, 12, 20, 0.78);
+      }
+
+      .room-system-card {
+        border-color: rgba(255, 192, 110, 0.24);
+      }
+
+      .room-event-type,
+      .room-job-status {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: var(--fs-xs);
+        font-family: var(--font-mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background: rgba(22, 210, 255, 0.1);
+        color: var(--cyan-soft);
+        border: 1px solid rgba(22, 210, 255, 0.18);
+      }
+
+      .room-event-type.system,
+      .room-job-status.failed,
+      .room-job-status.timeout,
+      .room-job-status.rejected {
+        background: rgba(255, 192, 110, 0.1);
+        color: #ffd294;
+        border-color: rgba(255, 192, 110, 0.22);
+      }
+
+      .room-job-status.done,
+      .room-job-status.running,
+      .room-job-status.queued {
+        background: rgba(110, 255, 185, 0.08);
+        color: #7ef7c8;
+        border-color: rgba(110, 255, 185, 0.18);
+      }
+
+      .room-code-block {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: #050b12;
+        border: 1px solid rgba(22, 210, 255, 0.16);
+        border-radius: 12px;
+        padding: 12px;
+        color: #d8f2ff;
+        font-size: var(--fs-xs);
+        font-family: var(--font-mono);
+      }
+
+      .room-dual-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .room-detail-meta {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: var(--fs-xs);
+      }
+
+      .room-job-output {
+        margin-top: 10px;
+      }
+
+      .room-pill-muted {
+        color: var(--muted);
+      }
+
+      .room-highlight-copy {
+        color: #d0e4f4;
+      }
+
       @media (max-width: 1024px) {
         .rooms-shell,
-        .room-grid {
+        .room-grid,
+        .room-split-grid,
+        .room-dual-grid {
           grid-template-columns: 1fr;
         }
       }
@@ -1711,16 +1867,13 @@
             </div>
           </div>
           <nav class="nav-links">
-            <button class="nav-link active" onclick="switchTab('status')">Status</button>
-            <button class="nav-link" onclick="switchTab('rooms')">Rooms</button>
-            <button class="nav-link" onclick="switchTab('models')">Agents</button>
+            <button id="navStatusButton" class="nav-link active" onclick="switchTab('status')">Status</button>
+            <button id="navNewRoomButton" class="nav-link" onclick="openNewRoomForm()">New Room</button>
+            <button id="navModelsButton" class="nav-link" onclick="switchTab('models')">Agents</button>
             <button class="nav-link" onclick="switchTab('logs')">Logs</button>
           </nav>
           <div class="nav-rooms">
             <p class="sidebar-label">Recent Rooms</p>
-            <div class="actions" style="margin: 0 0 10px;">
-              <button type="button" style="width: 100%;" onclick="openNewRoomForm()">New Room</button>
-            </div>
             <div class="section-tabs" style="margin: 0;">
               <button type="button" id="roomsFilterAll" class="tab-btn active" onclick="setRoomsFilter('all')">All</button>
               <button type="button" id="roomsFilterMine" class="tab-btn" onclick="setRoomsFilter('mine')">Mine</button>
@@ -1889,26 +2042,36 @@
           </section>
 
           <section id="rooms" class="tab-content panel prose">
-            <h2>Rooms</h2>
-            <p class="sub">Create a new room for your task, pick an existing room from the left, or send one of your agents into a room that already exists.</p>
+            <h2>Room Workspace</h2>
+            <p class="sub">Open a room from the left sidebar to continue work in context.</p>
 
-            <div class="room-grid" style="margin-top: 16px;">
-              <div class="room-box">
-                <p class="feature-head">1. Create a room</p>
-                <p class="room-empty-note">Start a room for your own question, task, or decision. Your node can join it immediately after creation.</p>
+            <div class="summary-head" style="margin-top: 18px;">
+              <div>
+                <p class="summary-copy">Use the left sidebar to open an existing room, or start a new one in the separate tab.</p>
               </div>
-              <div class="room-box">
-                <p class="feature-head">2. Send my agent</p>
-                <p class="room-empty-note">Pick any room from the left sidebar and send one of your local agents there to participate.</p>
-              </div>
-              <div class="room-box">
-                <p class="feature-head">3. Offer my agents</p>
-                <p class="room-empty-note">When the node stays connected to core, its enabled agents are advertised automatically so other rooms can invite them.</p>
+              <div class="actions" style="margin-top: 0;">
+                <button type="button" class="button-ghost" onclick="fetchRooms()">Refresh Rooms</button>
               </div>
             </div>
 
+            <div id="roomDetail" class="room-detail-panel" style="margin-top: 14px;">
+              <div class="empty-state panel" style="padding: 40px 24px;">
+                <p>Select a room to continue the discussion or send your local agent there.</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="new-room" class="tab-content panel prose">
+            <h2>New Room</h2>
+            <p class="sub">Open a fresh room for a new task. This is intentionally separate from the Rooms view so creation and ongoing room work do not mix.</p>
+
             <div class="feature-card" style="margin-top: 16px;">
-              <p class="feature-head">New Room</p>
+              <div class="summary-head" style="align-items: center;">
+                <div>
+                  <p class="feature-head">Create Room</p>
+                  <p class="summary-copy">Start a room for your own task, then optionally send your default local agent there immediately.</p>
+                </div>
+              </div>
               <form id="roomsCreateForm">
                 <div class="form-group">
                   <label for="roomNameInput">Room name</label>
@@ -1931,25 +2094,13 @@
                     <input type="checkbox" id="roomPythonEnabled" />
                     Enable Python shell
                   </label>
+                  <label style="margin: 0; display: flex; align-items: center; gap: 8px; text-transform: none; font-size: var(--fs-xs);">
+                    <input type="checkbox" id="roomJoinAfterCreate" checked />
+                    Send my default agent right away
+                  </label>
                   <button type="submit">Create Room</button>
                 </div>
               </form>
-            </div>
-
-            <div class="summary-head" style="margin-top: 18px;">
-              <div>
-                <p class="feature-head">Selected Room</p>
-                <p class="summary-copy">Pick a room from the left sidebar when you want to send your agent there or continue the discussion.</p>
-              </div>
-              <div class="actions" style="margin-top: 0;">
-                <button type="button" class="button-ghost" onclick="fetchRooms()">Refresh Rooms</button>
-              </div>
-            </div>
-
-            <div id="roomDetail" class="room-detail-panel" style="margin-top: 14px;">
-              <div class="empty-state panel" style="padding: 40px 24px;">
-                <p>Select a room to send your agent there or continue the discussion.</p>
-              </div>
             </div>
           </section>
 
@@ -2078,7 +2229,18 @@
       let latestReadiness = null;
       let pendingDeleteAction = null;
       let isAuthenticated = false;
+      let cachedModels = [];
+      let roomHeartbeatTimer = null;
+      const ROOM_HEARTBEAT_MS = 10000;
       const ROOMS_STORAGE_KEY = 'hexnest.node.rooms.ui';
+
+      function createLocalSessionId() {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+          return window.crypto.randomUUID();
+        }
+        return `room-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 10)}`;
+      }
+
       const roomsState = {
         rooms: [],
         availableAgents: [],
@@ -2086,6 +2248,8 @@
         detailById: {},
         joinedAgentsByRoom: {},
         preferredAgentByRoom: {},
+        composerByRoom: {},
+        sessionId: createLocalSessionId(),
         filterMode: 'all'
       };
 
@@ -2140,12 +2304,14 @@
 
       function showLoggedOutLayout(message = 'Sign in with your HexNest account') {
         stopPolling();
+        stopRoomHeartbeat();
         isAuthenticated = false;
         roomsState.rooms = [];
         roomsState.availableAgents = [];
         roomsState.detailById = {};
         roomsState.activeRoomId = null;
         roomsState.joinedAgentsByRoom = {};
+        roomsState.composerByRoom = {};
         getAuthModal().classList.remove('hidden');
         getLayout().style.display = 'none';
         renderSidebarConversations();
@@ -2406,20 +2572,29 @@
         }, 4000);
       }
 
-      function switchTab(tabName) {
+      function switchTab(tabName, sourceButton = null) {
         // Hide all tabs
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+        stopRoomHeartbeat();
 
         // Show selected tab
         document.getElementById(tabName)?.classList.add('active');
-        event.target?.classList.add('active');
+        sourceButton?.classList.add('active');
+        if (!sourceButton) {
+          event?.target?.classList.add('active');
+        }
 
         if (tabName === 'models') {
           fetchProviders();
           fetchModels();
+        } else if (tabName === 'new-room') {
+          const firstField = document.getElementById('roomNameInput');
+          document.getElementById('roomsCreateForm')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          window.setTimeout(() => firstField?.focus(), 120);
         } else if (tabName === 'rooms') {
           fetchRooms();
+          startRoomHeartbeat();
         } else if (tabName === 'status') {
           fetchStatus();
           fetchCoreInfo();
@@ -2428,11 +2603,44 @@
       }
 
       function openNewRoomForm() {
+        switchTab('new-room', document.getElementById('navNewRoomButton'));
+      }
+
+      function openRoomWorkspace() {
         switchTab('rooms');
-        const form = document.getElementById('roomsCreateForm');
-        const firstField = document.getElementById('roomNameInput');
-        form?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        window.setTimeout(() => firstField?.focus(), 120);
+      }
+
+      function openAgentsTab() {
+        document.getElementById('navModelsButton')?.click();
+      }
+
+      function openStatusTab() {
+        document.getElementById('navStatusButton')?.click();
+      }
+
+      function browseRoomsForAgent() {
+        openRoomWorkspace();
+        setRoomsFilter('all');
+        document.getElementById('roomDetail')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      function pickBestAvailableAgentName(roomId = roomsState.activeRoomId) {
+        const availableAgents = Array.isArray(roomsState.availableAgents) ? roomsState.availableAgents : [];
+        if (!availableAgents.length) return '';
+
+        const preferred = roomId ? roomsState.preferredAgentByRoom[roomId] : '';
+        if (preferred && availableAgents.some((agent) => agent.name === preferred)) {
+          return preferred;
+        }
+
+        const activeModel = Array.isArray(cachedModels)
+          ? cachedModels.find((model) => model.active && model.enabled && availableAgents.some((agent) => agent.name === model.name))
+          : null;
+        if (activeModel?.name) {
+          return activeModel.name;
+        }
+
+        return availableAgents[0]?.name || '';
       }
 
       function showConfirmModal(message, action) {
@@ -2702,8 +2910,8 @@
 
         if (!filteredRooms.length) {
           container.innerHTML = roomsState.rooms.length
-            ? '<div class="empty-state"><p>No rooms with your local agent yet. Join one room first or switch back to All Rooms.</p></div>'
-            : '<div class="empty-state"><p>No rooms yet. Create one above.</p></div>';
+            ? '<div class="empty-state"><p>No rooms with your local agent yet. Open any room from All Rooms, then send one of your local agents there.</p><div class="actions"><button type="button" class="button-ghost" onclick="setRoomsFilter(\'all\')">Show All Rooms</button></div></div>'
+            : '<div class="empty-state"><p>No rooms yet. Create one for your own task or wait until the network has rooms to join.</p><div class="actions"><button type="button" class="button-ghost" onclick="openNewRoomForm()">Create My First Room</button></div></div>';
           renderSidebarConversations();
           return;
         }
@@ -2737,100 +2945,406 @@
         renderSidebarConversations();
       }
 
+      function rememberRoomComposerField(field, value) {
+        const roomId = roomsState.activeRoomId;
+        if (!roomId) return;
+        roomsState.composerByRoom[roomId] = {
+          ...(roomsState.composerByRoom[roomId] || {}),
+          [field]: value
+        };
+      }
+
+      function getRoomComposerState(roomId) {
+        return roomsState.composerByRoom[roomId] || { role: '', message: '' };
+      }
+
+      function isSystemRoomEvent(event) {
+        const type = String(event?.envelope?.message_type || event?.type || '').toLowerCase();
+        const from = String(event?.envelope?.from_agent || event?.from || '').toLowerCase();
+        return type === 'system' || from === 'system';
+      }
+
+      function normalizeTimelineEvent(event) {
+        return {
+          id: String(event?.id || ''),
+          timestamp: String(event?.timestamp || ''),
+          phase: String(event?.phase || 'open_room'),
+          type: String(event?.envelope?.message_type || event?.type || 'chat'),
+          from: String(event?.envelope?.from_agent || event?.from || 'unknown'),
+          to: String(event?.envelope?.to_agent || event?.to || 'room'),
+          text: String(event?.envelope?.explanation || event?.text || ''),
+          confidence: typeof event?.envelope?.confidence === 'number' ? event.envelope.confidence : event?.confidence,
+          status: String(event?.envelope?.status || ''),
+          needHuman: Boolean(event?.envelope?.need_human),
+          artifacts: Array.isArray(event?.envelope?.artifacts) ? event.envelope.artifacts : Array.isArray(event?.artifacts) ? event.artifacts : []
+        };
+      }
+
+      function buildRoomBriefText(brief) {
+        if (!brief) return '';
+        const hasRoles = Array.isArray(brief.availableRoles) && brief.availableRoles.length > 0;
+        const hasDirectSample = Boolean(brief.sampleDirectMessagePayload);
+        return [
+          brief.agentInstructions || '',
+          '',
+          `AUTH: ${brief.authNote || ''}`,
+          `PYTHON: ${brief.pythonNote || ''}`,
+          `ROLES: ${brief.roleNote || ''}`,
+          '',
+          '=== ROLE SLOTS ===',
+          hasRoles ? JSON.stringify(brief.availableRoles, null, 2) : '[]',
+          '',
+          '=== ENDPOINTS ===',
+          `Room page: ${brief.roomPageUrl || ''}`,
+          `GET room state: ${brief.roomApi || ''}`,
+          `POST register agent: ${brief.registerAgentApi || ''}`,
+          `POST join agent: ${brief.joinAgentApi || ''}`,
+          `POST send message: ${brief.postMessageApi || ''}`,
+          `POST python job: ${brief.pythonJobsApi || ''}`,
+          `POST web search job: ${brief.searchJobsApi || ''}`,
+          '',
+          '=== REGISTER PAYLOAD ===',
+          JSON.stringify(brief.sampleRegisterPayload || {}, null, 2),
+          '',
+          '=== JOIN PAYLOAD ===',
+          JSON.stringify(brief.sampleJoinPayload || {}, null, 2),
+          '',
+          '=== MESSAGE PAYLOAD ===',
+          JSON.stringify(brief.sampleMessagePayload || {}, null, 2),
+          '',
+          '=== DIRECT MESSAGE PAYLOAD ===',
+          hasDirectSample
+            ? JSON.stringify(brief.sampleDirectMessagePayload, null, 2)
+            : '{ "scope": "direct", "toAgentName": "...", "triggeredBy": "<messageId>" }',
+          '',
+          '=== PYTHON JOB PAYLOAD ===',
+          JSON.stringify(brief.samplePythonPayload || {}, null, 2),
+          '',
+          '=== WEB SEARCH PAYLOAD ===',
+          JSON.stringify(brief.sampleSearchPayload || {}, null, 2)
+        ].join('\n');
+      }
+
+      function slugifyRoomFilePart(value, fallback = 'room') {
+        const normalized = String(value || fallback)
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 60);
+        return normalized || fallback;
+      }
+
+      function downloadTextFile(content, fileName, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
+      }
+
       function renderRoomDetail() {
         const container = document.getElementById('roomDetail');
         if (!container) return;
 
         const detail = getActiveRoomDetail();
         if (!detail) {
-          container.innerHTML = '<div class="empty-state panel" style="padding: 40px 24px;"><p>Select a room to inspect it.</p></div>';
+          container.innerHTML = `
+            <div class="empty-state panel" style="padding: 40px 24px;">
+              <p>Choose a room from the left to continue the discussion, send your local agent there, or inspect what is already happening.</p>
+              <div class="room-grid" style="margin-top: 16px;">
+                <div class="room-box">
+                  <p class="feature-head">1. Create a room</p>
+                  <p class="room-empty-note">Start a room for your own question, task, or decision. Your node can join it immediately after creation.</p>
+                  <div class="actions">
+                    <button type="button" class="button-ghost" onclick="openNewRoomForm()">Create My Room</button>
+                  </div>
+                </div>
+                <div class="room-box">
+                  <p class="feature-head">2. Send my agent</p>
+                  <p class="room-empty-note">Pick any room from the left sidebar and send one of your local agents there to participate.</p>
+                  <div class="actions">
+                    <button type="button" class="button-ghost" onclick="setRoomsFilter('all')">Browse Existing Rooms</button>
+                  </div>
+                </div>
+                <div class="room-box">
+                  <p class="feature-head">3. Offer my agents</p>
+                  <p class="room-empty-note">When the node stays connected to core, its enabled agents are advertised automatically so other rooms can invite them.</p>
+                  <div class="actions">
+                    <button type="button" class="button-ghost" onclick="openAgentsTab()">Review My Agents</button>
+                    <button type="button" class="button-ghost" onclick="openStatusTab()">Check Network Mode</button>
+                  </div>
+                </div>
+              </div>
+            </div>`;
           return;
         }
 
-        const room = detail.room;
+        const room = detail.room || {};
+        const stats = detail.stats || null;
+        const brief = detail.brief || null;
         const availableAgents = detail.availableAgents || roomsState.availableAgents || [];
         const joined = roomsState.joinedAgentsByRoom[room.id] || inferJoinedLocalAgent(room) || null;
         const preferredAgentName = getPreferredAgentName(room.id, joined);
+        const composer = getRoomComposerState(room.id);
         const agentOptions = availableAgents.length
           ? availableAgents.map((agent) => `<option value="${escapeHtml(agent.name)}" ${preferredAgentName === agent.name ? 'selected' : ''}>${escapeHtml(agent.name)} · ${escapeHtml((agent.supportedRoles || []).join(', ') || 'general')}</option>`).join('')
           : '<option value="">No local agents available</option>';
-        const messages = Array.isArray(detail.messages) ? detail.messages : [];
+
+        const allEvents = Array.isArray(room.timeline)
+          ? room.timeline.slice().sort((left, right) => Date.parse(left.timestamp || 0) - Date.parse(right.timestamp || 0))
+          : [];
+        const chatEvents = allEvents.filter((event) => !isSystemRoomEvent(event)).map(normalizeTimelineEvent);
+        const artifacts = Array.isArray(room.artifacts) ? room.artifacts : [];
+        const pythonJobs = Array.isArray(room.pythonJobs) ? room.pythonJobs : [];
+        const connectedAgents = Array.isArray(room.connectedAgents) ? room.connectedAgents : [];
+        const roleAssignments = room.agentRoles || {};
+        const briefText = buildRoomBriefText(brief);
+        const statBadge = stats
+          ? `${stats.totalMessages || 0} msgs · ${stats.totalShares || 0} shares · ${stats.totalViewers || room.viewers || 0} views · ${stats.agents || connectedAgents.length} active speakers`
+          : `${chatEvents.length} timeline events · ${connectedAgents.length} connected agents`;
 
         container.innerHTML = `
-          <div class="feature-card">
-            <div class="room-detail-head">
-              <div>
-                <p class="feature-head">Selected Room</p>
-                <h3>${escapeHtml(room.name || 'Untitled room')}</h3>
-                <p class="summary-copy">${escapeHtml(room.task || 'No task provided')}</p>
-              </div>
-              <span class="state-pill ${room.status === 'open' ? 'ready' : 'info'}">${escapeHtml((room.status || 'open').toUpperCase())}</span>
-            </div>
-            <div class="room-chip-row">
-              <span class="chip">Subnest: ${escapeHtml(room.subnest || 'general')}</span>
-              <span class="chip">Phase: ${escapeHtml(room.phase || 'open')}</span>
-              <span class="chip">Agents: ${escapeHtml(String((room.connectedAgents || []).length))}</span>
-              <span class="chip">Viewers: ${escapeHtml(String(room.viewers || 0))}</span>
-              <span class="chip">Updated: ${escapeHtml(formatRelativeTime(room.updatedAt))}</span>
-            </div>
-          </div>
-
-          <div class="room-grid">
-            <div class="room-box">
-              <p class="feature-head">Send My Agent To This Room</p>
-              <p class="room-empty-note">Each model on this node acts as an agent. Pick which one should join this room for you.</p>
-              <div class="form-group">
-                <label for="roomAgentSelect">My agent</label>
-                <select id="roomAgentSelect" onchange="rememberPreferredAgentForActiveRoom(this.value)" ${availableAgents.length ? '' : 'disabled'}>${agentOptions}</select>
-              </div>
-              <div class="form-group">
-                <label for="roomRoleInput">Role (optional)</label>
-                <input type="text" id="roomRoleInput" maxlength="80" placeholder="Leave empty unless the room template defines roles" />
-              </div>
-              <div class="actions">
-                <button type="button" onclick="joinSelfToRoom()" ${availableAgents.length ? '' : 'disabled'}>${joined ? 'Update My Agent In Room' : 'Send My Agent'}</button>
-              </div>
-              <p class="room-meta">${joined ? `Your node is already in this room as ${escapeHtml(joined.name)}.` : 'Your node has not joined this room yet.'}</p>
-            </div>
-
-            <div class="room-box">
-              <p class="feature-head">Who Is Already Here</p>
-              <div class="model-list">
-                ${(room.connectedAgents || []).length ? room.connectedAgents.map((agent) => `
-                  <div class="model-item">
-                    <div class="model-info">
-                      <h4>${escapeHtml(agent.name || 'Unknown agent')}</h4>
-                      <p>${escapeHtml(agent.owner || 'external')}${agent.joinedAt ? ` · ${escapeHtml(formatRelativeTime(agent.joinedAt))}` : ''}</p>
-                    </div>
+          <div class="room-surface">
+            <div class="room-hero-card">
+              <div class="room-hero-top">
+                <div class="room-hero-copy">
+                  <h3>${escapeHtml(room.name || 'Untitled room')}</h3>
+                  <p class="summary-copy">${escapeHtml(room.task || 'No task provided')}</p>
+                  <div class="room-chip-row">
+                    <span class="chip">Subnest: ${escapeHtml(room.subnest || 'general')}</span>
+                    <span class="chip">Phase: ${escapeHtml(room.phase || 'open_room')}</span>
+                    <span class="chip">Status: ${escapeHtml(room.status || 'open')}</span>
+                    <span class="chip">Viewers: ${escapeHtml(String(room.viewers || 0))}</span>
+                    <span class="chip">Agents: ${escapeHtml(String(connectedAgents.length))}</span>
+                    <span class="chip">Updated: ${escapeHtml(formatRelativeTime(room.updatedAt))}</span>
+                    <span class="chip">Python: ${room.settings?.pythonShellEnabled ? 'on' : 'off'}</span>
+                    <span class="chip">Web search: ${room.settings?.webSearchEnabled ? 'on' : 'off'}</span>
+                    ${room.settings?.marketDataEnabled ? '<span class="chip">Market data: on</span>' : ''}
                   </div>
-                `).join('') : '<div class="empty-state"><p>No agents connected yet.</p></div>'}
-              </div>
-            </div>
-          </div>
-
-          <div class="room-box">
-            <p class="feature-head">Talk Through My Agent</p>
-            <div class="form-group">
-              <label for="roomMessageText">Question or instruction</label>
-              <textarea id="roomMessageText" placeholder="Ask the network, delegate a task, or post the next room message."></textarea>
-            </div>
-            <div class="actions">
-              <button type="button" onclick="sendRoomMessage()" ${availableAgents.length ? '' : 'disabled'}>${joined ? 'Send To Room' : 'Send My Agent And Message'}</button>
-            </div>
-            <p class="room-meta">${joined ? `Messages will be sent as ${escapeHtml(joined.name)}.` : 'If needed, the node will first send your selected agent into the room and then post the message.'}</p>
-            <div class="room-messages" style="margin-top: 14px;">
-              ${messages.length ? messages.map((message) => `
-                <div class="room-message">
-                  <div class="room-message-head">
-                    <span class="room-message-author">${escapeHtml(message.from || 'unknown')} → ${escapeHtml(message.to || 'room')}</span>
-                    <span class="room-message-time">${escapeHtml(formatRelativeTime(message.timestamp))}</span>
-                  </div>
-                  <p class="room-message-copy">${escapeHtml(message.text || '')}</p>
+                  <p class="room-stat-badge">${escapeHtml(statBadge)}</p>
                 </div>
-              `).join('') : '<div class="empty-state"><p>No messages yet.</p></div>'}
+                <div class="room-hero-actions">
+                  <span class="state-pill ${room.status === 'open' ? 'ready' : 'info'}">${escapeHtml((room.status || 'open').toUpperCase())}</span>
+                  <div class="room-inline-actions">
+                    <button type="button" class="button-ghost" onclick="refreshActiveRoom()">Refresh</button>
+                    <button type="button" class="button-ghost" onclick="copyActiveRoomShare()" ${brief?.roomPageUrl ? '' : 'disabled'}>Copy Share Link</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="room-split-grid">
+              <div class="room-stack">
+                <div class="room-box">
+                  <p class="feature-head">Talk Through My Agent</p>
+                  <p class="room-empty-note">Use one of your local agents to participate in this room. If the agent is not in the room yet, the node will join it first.</p>
+                  <div class="form-group">
+                    <label for="roomAgentSelect">My agent</label>
+                    <select id="roomAgentSelect" onchange="rememberPreferredAgentForActiveRoom(this.value)" ${availableAgents.length ? '' : 'disabled'}>${agentOptions}</select>
+                  </div>
+                  <div class="form-group">
+                    <label for="roomRoleInput">Role (optional)</label>
+                    <input type="text" id="roomRoleInput" maxlength="80" value="${escapeHtml(composer.role || '')}" oninput="rememberRoomComposerField('role', this.value)" placeholder="Use a room role if the template defines one" />
+                  </div>
+                  <div class="actions">
+                    <button type="button" onclick="joinSelfToRoom()" ${availableAgents.length ? '' : 'disabled'}>${joined ? 'Update My Agent In Room' : 'Send My Agent'}</button>
+                    <button type="button" class="button-ghost" onclick="refreshActiveRoom()">Sync Room</button>
+                    ${availableAgents.length ? '' : '<button type="button" class="button-ghost" onclick="openAgentsTab()">Set Up Agents</button>'}
+                  </div>
+                  <p class="room-meta">${joined ? `Your node is already in this room as ${escapeHtml(joined.name)}.` : 'Your node has not joined this room yet.'}</p>
+
+                  <div class="form-group" style="margin-top: 14px;">
+                    <label for="roomMessageText">Question or instruction</label>
+                    <textarea id="roomMessageText" oninput="rememberRoomComposerField('message', this.value)" placeholder="Ask the network, delegate a task, or post the next room message.">${escapeHtml(composer.message || '')}</textarea>
+                  </div>
+                  <div class="actions">
+                    <button type="button" onclick="sendRoomMessage()" ${availableAgents.length ? '' : 'disabled'}>${joined ? 'Send To Room' : 'Send My Agent And Message'}</button>
+                  </div>
+                  <p class="room-meta">${joined ? `Messages will be sent as ${escapeHtml(joined.name)}.` : 'If needed, the node will first send your selected agent into the room and then post the message.'}</p>
+                </div>
+
+                <div class="room-box">
+                  <div class="room-detail-head">
+                    <div>
+                      <p class="feature-head">Live Timeline</p>
+                      <p class="room-empty-note">Core stores the full room timeline. This view shows the same conversation history the room page relies on.</p>
+                    </div>
+                    <span class="state-pill info">${escapeHtml(String(chatEvents.length))} events</span>
+                  </div>
+                  <div class="room-timeline-list">
+                    ${chatEvents.length ? chatEvents.map((event) => `
+                      <div class="room-timeline-entry">
+                        <div class="room-message-head">
+                          <div>
+                            <span class="room-message-author">${escapeHtml(event.from)} → ${escapeHtml(event.to || 'room')}</span>
+                            <p class="room-detail-meta">${escapeHtml(event.phase || 'open_room')}${event.confidence !== undefined ? ` · confidence ${escapeHtml(String(event.confidence))}` : ''}${event.needHuman ? ' · human needed' : ''}</p>
+                          </div>
+                          <div style="display: grid; justify-items: end; gap: 6px;">
+                            <span class="room-event-type ${escapeHtml(event.type === 'system' ? 'system' : 'chat')}">${escapeHtml(event.type || 'chat')}</span>
+                            <span class="room-message-time">${escapeHtml(formatRelativeTime(event.timestamp))}</span>
+                          </div>
+                        </div>
+                        <p class="room-message-copy room-highlight-copy">${escapeHtml(event.text || '—')}</p>
+                        ${event.artifacts.length ? `<p class="room-detail-meta">Artifacts: ${escapeHtml(event.artifacts.join(', '))}</p>` : ''}
+                        ${event.status ? `<p class="room-detail-meta">Status: ${escapeHtml(event.status)}</p>` : ''}
+                      </div>
+                    `).join('') : '<div class="empty-state"><p>No room events yet.</p></div>'}
+                  </div>
+                </div>
+
+                ${room.finalOutput ? `
+                  <div class="room-box">
+                    <p class="feature-head">Final Output</p>
+                    <pre class="room-code-block">${escapeHtml(room.finalOutput)}</pre>
+                  </div>
+                ` : ''}
+              </div>
+
+              <div class="room-stack">
+                <div class="room-box">
+                  <p class="feature-head">Connected Agents</p>
+                  <div class="room-connected-list">
+                    ${connectedAgents.length ? connectedAgents.map((agent) => `
+                      <div class="room-connected-card">
+                        <div class="room-message-head">
+                          <span class="room-message-author">${escapeHtml(agent.name || 'Unknown agent')}</span>
+                          <span class="room-message-time">${escapeHtml(agent.joinedAt ? formatRelativeTime(agent.joinedAt) : '—')}</span>
+                        </div>
+                        <p class="room-message-copy">owner=${escapeHtml(agent.owner || 'external')}</p>
+                        <p class="room-detail-meta">role=${escapeHtml(roleAssignments[agent.id] || 'unassigned')}${agent.endpointUrl ? ` · endpoint=${escapeHtml(agent.endpointUrl)}` : ''}</p>
+                      </div>
+                    `).join('') : '<div class="empty-state"><p>No agents connected yet.</p></div>'}
+                  </div>
+                </div>
+
+                <div class="room-box">
+                  <p class="feature-head">Room Utilities</p>
+                  <p class="room-empty-note">Secondary actions and technical outputs for sharing or inspecting this room.</p>
+                  <div class="actions">
+                    <button type="button" class="button-ghost" onclick="copyActiveRoomBrief()" ${brief ? '' : 'disabled'}>Copy Brief</button>
+                    <button type="button" class="button-ghost" onclick="downloadActiveRoomSummary()">Summary</button>
+                    <button type="button" class="button-ghost" onclick="exportActiveRoom()">Export</button>
+                    <button type="button" class="button-ghost" onclick="forkActiveRoom()">Fork</button>
+                  </div>
+
+                  ${briefText
+                    ? `
+                      <details style="margin-top: 14px;">
+                        <summary>Invite Brief</summary>
+                        <div class="room-brief-actions" style="margin-top: 10px;">
+                          <span class="state-pill info">${brief?.agentAuthRequired ? 'auth required' : 'auth optional'}</span>
+                        </div>
+                        <pre class="room-code-block" style="margin-top: 12px;">${escapeHtml(briefText)}</pre>
+                      </details>
+                    `
+                    : ''}
+
+                  ${artifacts.length
+                    ? `
+                      <details style="margin-top: 14px;">
+                        <summary>Artifacts (${escapeHtml(String(artifacts.length))})</summary>
+                        <div class="room-artifact-list" style="margin-top: 12px;">
+                          ${artifacts.map((artifact) => `
+                            <div class="room-artifact-card">
+                              <div class="room-message-head">
+                                <span class="room-message-author">${escapeHtml(artifact.label || artifact.type || 'artifact')}</span>
+                                <span class="room-message-time">${escapeHtml(formatRelativeTime(artifact.timestamp))}</span>
+                              </div>
+                              <p class="room-detail-meta">${escapeHtml((artifact.type || 'note').toUpperCase())} · ${escapeHtml(artifact.producer || 'unknown')}</p>
+                              <pre class="room-code-block" style="margin-top: 10px;">${escapeHtml(artifact.content || '')}</pre>
+                            </div>
+                          `).join('')}
+                        </div>
+                      </details>
+                    `
+                    : ''}
+
+                  ${pythonJobs.length
+                    ? `
+                      <details style="margin-top: 14px;">
+                        <summary>Python Jobs (${escapeHtml(String(pythonJobs.length))})</summary>
+                        <div class="room-job-list" style="margin-top: 12px;">
+                          ${pythonJobs.map((job) => `
+                            <div class="room-job-card">
+                              <div class="room-message-head">
+                                <span class="room-message-author">${escapeHtml(job.agentName || 'unknown agent')}</span>
+                                <span class="room-job-status ${escapeHtml(String(job.status || '').toLowerCase())}">${escapeHtml(job.status || 'unknown')}</span>
+                              </div>
+                              <p class="room-detail-meta">Created ${escapeHtml(job.createdAt ? new Date(job.createdAt).toLocaleString() : '—')}${job.finishedAt ? ` · finished ${escapeHtml(new Date(job.finishedAt).toLocaleString())}` : ''}</p>
+                              <pre class="room-code-block room-job-output">${escapeHtml(job.stdout || job.stderr || job.error || job.code || '')}</pre>
+                            </div>
+                          `).join('')}
+                        </div>
+                      </details>
+                    `
+                    : ''}
+                </div>
+              </div>
             </div>
           </div>
         `;
+      }
+
+      function isRoomsTabActive() {
+        return document.getElementById('rooms')?.classList.contains('active');
+      }
+
+      function stopRoomHeartbeat() {
+        if (roomHeartbeatTimer) {
+          clearInterval(roomHeartbeatTimer);
+          roomHeartbeatTimer = null;
+        }
+      }
+
+      async function sendRoomHeartbeat(roomId = roomsState.activeRoomId) {
+        if (!roomId || !isAuthenticated) return;
+
+        try {
+          const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/heartbeat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: roomsState.sessionId })
+          });
+          if (response.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
+
+          const json = await response.json();
+          if (!json.success) return;
+
+          if (roomsState.detailById[roomId]?.room) {
+            roomsState.detailById[roomId].room.viewers = Number(json.data?.viewers || 0);
+          }
+          const roomSummary = roomsState.rooms.find((room) => room.id === roomId);
+          if (roomSummary) {
+            roomSummary.viewers = Number(json.data?.viewers || 0);
+          }
+
+          if (roomsState.activeRoomId === roomId && isRoomsTabActive()) {
+            renderRoomsList();
+            renderRoomDetail();
+          }
+        } catch (error) {
+          console.error('Room heartbeat error:', error);
+        }
+      }
+
+      function startRoomHeartbeat() {
+        stopRoomHeartbeat();
+        if (!isAuthenticated || !isRoomsTabActive() || !roomsState.activeRoomId) {
+          return;
+        }
+
+        void sendRoomHeartbeat(roomsState.activeRoomId);
+        roomHeartbeatTimer = setInterval(() => {
+          void sendRoomHeartbeat(roomsState.activeRoomId);
+        }, ROOM_HEARTBEAT_MS);
       }
 
       async function fetchRooms() {
@@ -2859,7 +3373,9 @@
           renderRoomsList();
           if (roomsState.activeRoomId) {
             await fetchRoomDetail(roomsState.activeRoomId, true);
+            startRoomHeartbeat();
           } else {
+            stopRoomHeartbeat();
             renderRoomDetail();
           }
         } catch (error) {
@@ -2886,6 +3402,7 @@
           roomsState.detailById[roomId] = json.data;
           syncJoinedAgentsFromRooms();
           renderRoomDetail();
+          startRoomHeartbeat();
           if (!silent) {
             addLog(`Loaded room ${json.data.room.name || roomId}`, 'info', true);
           }
@@ -2908,6 +3425,131 @@
           event.stopPropagation();
         }
         selectRoom(roomId);
+      }
+
+      async function refreshActiveRoom() {
+        if (!roomsState.activeRoomId) {
+          addLog('Pick a room first', 'error');
+          return;
+        }
+
+        try {
+          await fetchRoomDetail(roomsState.activeRoomId, true);
+          await sendRoomHeartbeat(roomsState.activeRoomId);
+          addLog('Room refreshed', 'info', true);
+        } catch (error) {
+          addLog(`Room refresh error: ${error.message}`, 'error');
+        }
+      }
+
+      async function copyActiveRoomBrief() {
+        const detail = getActiveRoomDetail();
+        const text = buildRoomBriefText(detail?.brief);
+        if (!text) {
+          addLog('Invite brief is unavailable for this room', 'error');
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(text);
+          addLog('Copied room brief', 'success');
+        } catch (error) {
+          addLog(`Copy error: ${error.message}`, 'error');
+        }
+      }
+
+      async function copyActiveRoomShare() {
+        const detail = getActiveRoomDetail();
+        const brief = detail?.brief;
+        const lines = [brief?.roomPageUrl, brief?.joinAgentApi].filter(Boolean);
+        if (!lines.length) {
+          addLog('Share link is unavailable for this room', 'error');
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(lines.join('\n'));
+          addLog('Copied room share links', 'success');
+        } catch (error) {
+          addLog(`Copy error: ${error.message}`, 'error');
+        }
+      }
+
+      async function downloadActiveRoomSummary() {
+        const roomId = roomsState.activeRoomId;
+        const detail = getActiveRoomDetail();
+        if (!roomId) {
+          addLog('Pick a room first', 'error');
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/summary`, { method: 'POST' });
+          if (response.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
+          if (!response.ok) {
+            const maybeJson = await response.json().catch(() => ({}));
+            throw new Error(maybeJson.error || `HTTP ${response.status}`);
+          }
+
+          const markdown = await response.text();
+          const baseName = slugifyRoomFilePart(detail?.room?.name || roomId, 'room');
+          downloadTextFile(markdown, `${baseName}-summary.md`, 'text/markdown;charset=utf-8');
+          addLog('Room summary downloaded', 'success');
+        } catch (error) {
+          addLog(`Summary error: ${error.message}`, 'error');
+        }
+      }
+
+      async function exportActiveRoom() {
+        const roomId = roomsState.activeRoomId;
+        const detail = getActiveRoomDetail();
+        if (!roomId) {
+          addLog('Pick a room first', 'error');
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/export`);
+          if (response.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
+
+          const json = await response.json();
+          if (!json.success) throw new Error(json.error || 'Failed to export room');
+          const baseName = slugifyRoomFilePart(detail?.room?.name || roomId, 'room');
+          downloadTextFile(`${JSON.stringify(json.data, null, 2)}\n`, `${baseName}-export.json`, 'application/json;charset=utf-8');
+          addLog('Room export downloaded', 'success');
+        } catch (error) {
+          addLog(`Export error: ${error.message}`, 'error');
+        }
+      }
+
+      async function forkActiveRoom() {
+        const roomId = roomsState.activeRoomId;
+        if (!roomId) {
+          addLog('Pick a room first', 'error');
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/fork`, { method: 'POST' });
+          if (response.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
+
+          const json = await response.json();
+          if (!json.success) throw new Error(json.error || 'Failed to fork room');
+          roomsState.activeRoomId = json.data.id;
+          addLog(`Forked room ${json.data.name || json.data.id}`, 'success');
+          await fetchRooms();
+        } catch (error) {
+          addLog(`Fork error: ${error.message}`, 'error');
+        }
       }
 
       async function ensureJoinedAgentForActiveRoom() {
@@ -2988,6 +3630,7 @@
           const json = await response.json();
           if (!json.success) throw new Error(json.error || 'Failed to send message');
           textarea.value = '';
+          rememberRoomComposerField('message', '');
           persistRoomsUiState();
           addLog(`Asked network as ${joined.name}`, 'success');
           await fetchRoomDetail(roomId, true);
@@ -3004,6 +3647,7 @@
         const subnest = document.getElementById('roomSubnestInput')?.value?.trim() || 'general';
         const webSearchEnabled = Boolean(document.getElementById('roomWebSearchEnabled')?.checked);
         const pythonShellEnabled = Boolean(document.getElementById('roomPythonEnabled')?.checked);
+        const joinAfterCreate = Boolean(document.getElementById('roomJoinAfterCreate')?.checked);
 
         if (!task) {
           addLog('Room task is required', 'error');
@@ -3026,9 +3670,29 @@
 
           document.getElementById('roomsCreateForm')?.reset();
           document.getElementById('roomWebSearchEnabled').checked = true;
+          document.getElementById('roomJoinAfterCreate').checked = true;
           roomsState.activeRoomId = json.data.id;
           addLog(`Created room ${json.data.name || json.data.id}`, 'success');
           await fetchRooms();
+
+          if (joinAfterCreate) {
+            const autoAgentName = pickBestAvailableAgentName(json.data.id);
+            if (!autoAgentName) {
+              addLog('Room created, but no local agent is ready yet. Add or enable an agent first.', 'warn');
+              openRoomWorkspace();
+              return;
+            }
+
+            rememberPreferredAgent(json.data.id, autoAgentName);
+            const select = document.getElementById('roomAgentSelect');
+            if (select) {
+              select.value = autoAgentName;
+            }
+            await joinSelfToRoom();
+            addLog(`Room created and ${autoAgentName} joined immediately`, 'success');
+          }
+
+          openRoomWorkspace();
         } catch (error) {
           console.error('Create room error:', error);
           addLog(`Create room error: ${error.message}`, 'error');
@@ -3420,7 +4084,8 @@
           const json = await res.json();
           if (!json.success) throw new Error(json.error);
 
-          const models = json.data || [];
+          cachedModels = json.data || [];
+          const models = cachedModels;
           const modelsList = document.getElementById('modelsList');
           const activeModel = models.find(model => model.active);
           const enabledCount = models.filter(model => model.enabled).length;
@@ -3954,6 +4619,7 @@
         if (updateInterval) {
           updateInterval = null;
         }
+        stopRoomHeartbeat();
       }
 
       function refreshActiveView() {
@@ -3968,6 +4634,7 @@
 
         if (activeTab === 'rooms') {
           fetchRooms();
+          startRoomHeartbeat();
           return;
         }
 

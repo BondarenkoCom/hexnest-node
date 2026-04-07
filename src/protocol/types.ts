@@ -146,6 +146,74 @@ export interface CoreConnectedAgent {
   joinedAt?: string;
 }
 
+export interface CoreRoomSettings {
+  pythonShellEnabled: boolean;
+  webSearchEnabled?: boolean;
+  marketDataEnabled?: boolean;
+  isPublic?: boolean;
+}
+
+export interface CoreRoomTemplateRole {
+  name: string;
+  description?: string;
+  required: boolean;
+  maxAgents: number;
+}
+
+export interface CoreRoomTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  roles?: CoreRoomTemplateRole[];
+  phases?: string[];
+  rules?: string;
+  defaultSettings?: CoreRoomSettings;
+  subnest?: string;
+}
+
+export interface CoreRoomEnvelope {
+  message_type?: string;
+  from_agent?: string;
+  to_agent?: string;
+  scope?: "room" | "direct";
+  triggered_by?: string | null;
+  task_id?: string;
+  intent?: string;
+  artifacts?: string[];
+  status?: string;
+  confidence?: number;
+  assumptions?: string[];
+  risks?: string[];
+  need_human?: boolean;
+  explanation?: string;
+}
+
+export interface CoreRoomTimelineEvent {
+  id: string;
+  timestamp: string;
+  phase?: string;
+  envelope: CoreRoomEnvelope;
+}
+
+export interface CorePythonJob {
+  id: string;
+  roomId: string;
+  agentId: string;
+  agentName: string;
+  status: string;
+  code: string;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  timeoutSec?: number;
+  exitCode?: number | null;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+  outputTruncated?: boolean;
+}
+
 export interface CoreRoomDetails {
   id: string;
   name: string;
@@ -161,6 +229,69 @@ export interface CoreRoomDetails {
   latestMessageText?: string;
   latestMessageAt?: string;
   latestMessageFrom?: string;
+}
+
+export interface CoreRoomSnapshot extends CoreRoomDetails {
+  settings: CoreRoomSettings;
+  agentIds?: string[];
+  pythonJobs: CorePythonJob[];
+  timeline: CoreRoomTimelineEvent[];
+  artifacts: Artifact[];
+  finalOutput?: string;
+  messageCount?: number;
+  pythonJobsCount?: number;
+  template?: CoreRoomTemplate;
+  agentRoles?: Record<string, string>;
+}
+
+export interface CoreRoomStats {
+  agents: number;
+  agentNames: string[];
+  totalMessages: number;
+  totalShares: number;
+  totalViewers: number;
+  lastActivity: string;
+}
+
+export interface CoreRoomConnectBrief {
+  roomId?: string;
+  roomName?: string;
+  task?: string;
+  pythonShellEnabled?: boolean;
+  agentAuthRequired?: boolean;
+  authNote?: string;
+  pythonNote?: string;
+  webSearchEnabled?: boolean;
+  webSearchNote?: string;
+  marketDataEnabled?: boolean;
+  marketDataNote?: string;
+  roleNote?: string;
+  availableRoles?: Array<{
+    name: string;
+    description?: string;
+    required: boolean;
+    maxAgents: number;
+    occupied?: number;
+    remaining?: number;
+  }>;
+  isPublic?: boolean;
+  agentInstructions?: string;
+  roomPageUrl?: string;
+  roomApi?: string;
+  registerAgentApi?: string;
+  joinAgentApi?: string;
+  postMessageApi?: string;
+  pythonJobsApi?: string;
+  searchJobsApi?: string;
+  marketDataMarketsApi?: string;
+  marketDataMarketApi?: string;
+  marketDataCommentsApi?: string;
+  sampleRegisterPayload?: unknown;
+  sampleJoinPayload?: unknown;
+  sampleMessagePayload?: unknown;
+  sampleDirectMessagePayload?: unknown;
+  samplePythonPayload?: unknown;
+  sampleSearchPayload?: unknown;
 }
 
 export interface CoreRoomMessage {
@@ -190,6 +321,10 @@ export interface CoreRoomMessagesResponse {
   count: number;
   messages: CoreRoomMessage[];
   scope?: string;
+}
+
+export interface CoreRoomHeartbeatResponse {
+  viewers?: number;
 }
 
 export interface CreateCoreRoomInput {

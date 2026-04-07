@@ -3,8 +3,12 @@ import {
   AuthLoginRequest,
   AuthRegisterRequest,
   AuthResponse,
+  CoreRoomConnectBrief,
   CoreRoomDetails,
+  CoreRoomHeartbeatResponse,
   CoreRoomMessagesResponse,
+  CoreRoomSnapshot,
+  CoreRoomStats,
   CoreRoomsListResponse,
   CreateCoreRoomInput,
   DeleteNodeResponse,
@@ -37,7 +41,13 @@ export interface HexNestClientLike {
   markOffline(nodeId: string): Promise<void>;
   listRooms(limit?: number): Promise<CoreRoomsListResponse>;
   createRoom(payload: CreateCoreRoomInput): Promise<CoreRoomDetails>;
-  getRoom(roomId: string): Promise<CoreRoomDetails>;
+  getRoom(roomId: string): Promise<CoreRoomSnapshot>;
+  getRoomStats(roomId: string): Promise<CoreRoomStats>;
+  getRoomConnectBrief(roomId: string): Promise<CoreRoomConnectBrief>;
+  heartbeatRoom(roomId: string, sessionId: string): Promise<CoreRoomHeartbeatResponse>;
+  forkRoom(roomId: string): Promise<CoreRoomSnapshot>;
+  downloadRoomSummary(roomId: string): Promise<string>;
+  exportRoom(roomId: string): Promise<unknown>;
   getRoomMessages(roomId: string, limit?: number): Promise<CoreRoomMessagesResponse>;
   joinRoom(roomId: string, agentName: string, role: string): Promise<JoinRoomResponse>;
   postRoomMessage(input: PostRoomMessageInput): Promise<void>;
@@ -200,8 +210,39 @@ export class HexNestClient implements HexNestClientLike {
     });
   }
 
-  async getRoom(roomId: string): Promise<CoreRoomDetails> {
-    return this.request<CoreRoomDetails>(`/api/rooms/${encodeURIComponent(roomId)}`);
+  async getRoom(roomId: string): Promise<CoreRoomSnapshot> {
+    return this.request<CoreRoomSnapshot>(`/api/rooms/${encodeURIComponent(roomId)}`);
+  }
+
+  async getRoomStats(roomId: string): Promise<CoreRoomStats> {
+    return this.request<CoreRoomStats>(`/api/rooms/${encodeURIComponent(roomId)}/stats`);
+  }
+
+  async getRoomConnectBrief(roomId: string): Promise<CoreRoomConnectBrief> {
+    return this.request<CoreRoomConnectBrief>(`/api/rooms/${encodeURIComponent(roomId)}/connect`);
+  }
+
+  async heartbeatRoom(roomId: string, sessionId: string): Promise<CoreRoomHeartbeatResponse> {
+    return this.request<CoreRoomHeartbeatResponse>(`/api/rooms/${encodeURIComponent(roomId)}/heartbeat`, {
+      method: "POST",
+      body: { sessionId }
+    });
+  }
+
+  async forkRoom(roomId: string): Promise<CoreRoomSnapshot> {
+    return this.request<CoreRoomSnapshot>(`/api/rooms/${encodeURIComponent(roomId)}/fork`, {
+      method: "POST"
+    });
+  }
+
+  async downloadRoomSummary(roomId: string): Promise<string> {
+    return this.requestText(`/api/rooms/${encodeURIComponent(roomId)}/summary`, {
+      method: "POST"
+    });
+  }
+
+  async exportRoom(roomId: string): Promise<unknown> {
+    return this.request(`/api/rooms/${encodeURIComponent(roomId)}/export`);
   }
 
   async getRoomMessages(roomId: string, limit = 50): Promise<CoreRoomMessagesResponse> {
@@ -371,6 +412,92 @@ export class HexNestClient implements HexNestClientLike {
           }
         );
       }
+    } catch (error) {
+      if ((error as Error).name === "AbortError") {
+        throw new CoreApiError(
+          `Core API timeout after ${this.timeoutMs}ms: ${path}`,
+          "timeout",
+          {
+            path,
+            url: `${this.coreUrl}${path}`
+          }
+        );
+      }
+      if (error instanceof TypeError) {
+        throw new CoreApiError(
+          `Core API is unreachable at ${this.coreUrl}${path}`,
+          "network",
+          {
+            path,
+            url: `${this.coreUrl}${path}`
+          }
+        );
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async requestText(
+    path: string,
+    options: {
+      method?: string;
+      authRequired?: boolean | "user" | "node";
+      body?: unknown;
+    } = {}
+  ): Promise<string> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
+
+      if (options.authRequired === "user") {
+        if (!this.userToken) {
+          throw new Error("User token is required for this request");
+        }
+        headers.Authorization = bearer(this.userToken);
+      } else if (options.authRequired === "node" || (options.authRequired === true && path.includes("/nodes/"))) {
+        if (!this.nodeToken) {
+          throw new Error("Node token is required for this request");
+        }
+        headers.Authorization = bearer(this.nodeToken);
+      } else if (options.authRequired) {
+        if (!this.nodeToken) {
+          throw new Error("Node token is required for this request");
+        }
+        headers.Authorization = bearer(this.nodeToken);
+      }
+
+      const response = await fetch(`${this.coreUrl}${path}`, {
+        method: options.method || "GET",
+        headers,
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        const contentType = response.headers.get("content-type");
+        const summary = summarizeErrorBody(body, contentType);
+        throw new CoreApiError(
+          `Core API failed ${response.status} ${response.statusText}: ${summary}`,
+          "http",
+          {
+            status: response.status,
+            statusText: response.statusText,
+            contentType,
+            body,
+            path,
+            url: `${this.coreUrl}${path}`
+          }
+        );
+      }
+
+      return await response.text();
     } catch (error) {
       if ((error as Error).name === "AbortError") {
         throw new CoreApiError(
