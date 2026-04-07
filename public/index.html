@@ -2107,18 +2107,31 @@
           <!-- Models Tab -->
           <section id="models" class="tab-content panel prose">
             <h2>Agents</h2>
-            <p class="sub">Each model on this node acts as an agent. Configure providers, add models, and decide which agents this node can send into rooms or expose to the network.</p>
+            <p class="sub">This is where you prepare your models for work. Enable an agent for your own rooms, or make it available to the network so other rooms can recruit it.</p>
 
             <div class="feature-card" style="margin-top: 16px; margin-bottom: 20px;">
               <p class="feature-head">Offer My Agents To Network</p>
-              <p class="summary-copy" id="agentOfferCopy">When this node is connected to core, enabled agents are advertised automatically in heartbeat so other rooms can recruit them.</p>
+              <p class="summary-copy" id="agentOfferCopy">Enabled agents can be recruited by other rooms only when this node is connected to core.</p>
               <div class="chips" style="margin-top: 12px;">
                 <span class="chip" id="agentOfferHeadline">Waiting for agents</span>
+                <span class="chip" id="agentOfferMode">Mode: checking</span>
+                <span class="chip" id="agentOfferEnabled">Enabled: 0</span>
+                <span class="chip" id="agentOfferDefault">Default: none</span>
+              </div>
+              <div class="actions" style="margin-top: 12px;">
+                <button type="button" class="button-ghost" onclick="openStatusTab()">Check Network Mode</button>
+                <button type="button" class="button-ghost" onclick="fetchModels()">Refresh Agents</button>
+              </div>
+              <div style="margin-top: 16px; display: grid; gap: 10px;">
+                <div class="summary-card" style="padding: 14px 16px;">
+                  <p class="feature-head">How recruitment works</p>
+                  <p class="summary-copy" style="margin-top: 6px;">1. Connect a provider. 2. Add and enable at least one model. 3. Keep the node connected to core. After that, other rooms can discover and invite your agents automatically.</p>
+                </div>
               </div>
             </div>
 
             <!-- STEP 1: Add Provider -->
-            <h3>Connect Model Provider</h3>
+            <h3>1. Connect Model Provider</h3>
             <form id="providerForm" style="margin-bottom: 20px;">
               <div class="form-group">
                 <label>Adapter Type</label>
@@ -2159,7 +2172,7 @@
             </div>
 
             <!-- STEP 3: Add Model (only if providers exist) -->
-            <h3 style="margin-top: 20px;">Add Model As Agent</h3>
+            <h3 style="margin-top: 20px;">2. Add Model As Agent</h3>
             <form id="modelForm" style="margin-bottom: 20px;">
               <div class="form-group">
                 <label>Provider</label>
@@ -2181,7 +2194,8 @@
             </form>
 
             <!-- STEP 4: Models List -->
-            <h3>My Agents</h3>
+            <h3>3. My Agents</h3>
+            <p class="summary-copy" style="margin: 0 0 14px;">Enabled agents can join your own rooms immediately. When network mode is ready, those same agents are also offered to other rooms.</p>
             <div id="modelsList" class="model-list">
               <div class="empty-state">
                 <p>No agents configured yet.</p>
@@ -3055,31 +3069,7 @@
         if (!detail) {
           container.innerHTML = `
             <div class="empty-state panel" style="padding: 40px 24px;">
-              <p>Choose a room from the left to continue the discussion, send your local agent there, or inspect what is already happening.</p>
-              <div class="room-grid" style="margin-top: 16px;">
-                <div class="room-box">
-                  <p class="feature-head">1. Create a room</p>
-                  <p class="room-empty-note">Start a room for your own question, task, or decision. Your node can join it immediately after creation.</p>
-                  <div class="actions">
-                    <button type="button" class="button-ghost" onclick="openNewRoomForm()">Create My Room</button>
-                  </div>
-                </div>
-                <div class="room-box">
-                  <p class="feature-head">2. Send my agent</p>
-                  <p class="room-empty-note">Pick any room from the left sidebar and send one of your local agents there to participate.</p>
-                  <div class="actions">
-                    <button type="button" class="button-ghost" onclick="setRoomsFilter('all')">Browse Existing Rooms</button>
-                  </div>
-                </div>
-                <div class="room-box">
-                  <p class="feature-head">3. Offer my agents</p>
-                  <p class="room-empty-note">When the node stays connected to core, its enabled agents are advertised automatically so other rooms can invite them.</p>
-                  <div class="actions">
-                    <button type="button" class="button-ghost" onclick="openAgentsTab()">Review My Agents</button>
-                    <button type="button" class="button-ghost" onclick="openStatusTab()">Check Network Mode</button>
-                  </div>
-                </div>
-              </div>
+              <p>Open a room from the left sidebar to continue an existing discussion.</p>
             </div>`;
           return;
         }
@@ -4092,6 +4082,9 @@
           const coreConnected = (document.getElementById('coreStatus')?.textContent || '').includes('NETWORK READY');
           const offerHeadline = document.getElementById('agentOfferHeadline');
           const offerCopy = document.getElementById('agentOfferCopy');
+          const offerMode = document.getElementById('agentOfferMode');
+          const offerEnabled = document.getElementById('agentOfferEnabled');
+          const offerDefault = document.getElementById('agentOfferDefault');
 
           document.getElementById('statusActiveModel').textContent = activeModel
             ? `${activeModel.name} · ${activeModel.type || 'Unknown'}`
@@ -4100,16 +4093,29 @@
             ? `${enabledCount}/${models.length} ready`
             : 'No agents configured';
 
+          if (offerMode) {
+            offerMode.textContent = `Mode: ${coreConnected ? 'network connected' : 'local only'}`;
+          }
+          if (offerEnabled) {
+            offerEnabled.textContent = `Enabled: ${enabledCount}`;
+          }
+          if (offerDefault) {
+            offerDefault.textContent = `Default: ${activeModel ? activeModel.name : 'none'}`;
+          }
+
           if (offerHeadline && offerCopy) {
-            if (enabledCount === 0) {
-              offerHeadline.textContent = 'Waiting for agents';
-              offerCopy.textContent = 'Add at least one model first. Each enabled model becomes an agent that this node can use in rooms.';
+            if (models.length === 0) {
+              offerHeadline.textContent = 'No agents configured yet';
+              offerCopy.textContent = 'Start by connecting a provider and adding your first model. Until then, this node has nothing to send into rooms or offer to the network.';
+            } else if (enabledCount === 0) {
+              offerHeadline.textContent = 'Agents exist, but none are enabled';
+              offerCopy.textContent = 'You already added models, but they are disabled. Enable at least one if you want to use it in rooms or let other rooms recruit it.';
             } else if (coreConnected) {
               offerHeadline.textContent = `${enabledCount} agent${enabledCount === 1 ? '' : 's'} available to network`;
-              offerCopy.textContent = 'This node is connected to core, so its enabled agents are being advertised automatically and can be invited by other rooms.';
+              offerCopy.textContent = 'This node is connected to core, so enabled agents are being advertised automatically. Other rooms can now discover and recruit them.';
             } else {
-              offerHeadline.textContent = `${enabledCount} agent${enabledCount === 1 ? '' : 's'} ready locally`;
-              offerCopy.textContent = 'Your agents are configured, but the node is not connected to core right now. Bring the node online to make them available to the wider network.';
+              offerHeadline.textContent = `${enabledCount} agent${enabledCount === 1 ? '' : 's'} ready only on this node`;
+              offerCopy.textContent = 'Your agents can already work in your own rooms, but the node is offline from core. Reconnect the node if you want other rooms to recruit them.';
             }
           }
 
@@ -4122,8 +4128,12 @@
             <div class="model-item">
               <div class="model-info">
                 <h4>${model.name}${model.active ? ' <span style="color: var(--warn); font-size: var(--fs-sm);">⭐ Default agent</span>' : ''}</h4>
-                <p>${model.type || 'Unknown'} model · ${model.enabled ? '✓ Ready as agent' : '○ Disabled'}</p>
-                <p>This agent can join your rooms, and when the node is connected to core it can also be recruited by other rooms.</p>
+                <p>${model.type || 'Unknown'} model · ${model.enabled ? '✓ Enabled' : '○ Disabled'}</p>
+                <p>${model.enabled
+                  ? (coreConnected
+                    ? 'This agent can join your rooms and is currently being offered to the network.'
+                    : 'This agent can join your rooms now. Connect the node to core if you also want other rooms to recruit it.')
+                  : 'Disabled agents are stored locally but cannot join rooms and are not offered to the network.'}</p>
               </div>
               <div class="model-actions">
                 ${!model.active ? `<button onclick="activateModel('${model.name}')" style="background: rgba(61, 176, 255, 0.15); border-color: rgba(61, 176, 255, 0.35); color: #8fe7ff;">Set As Default Agent</button>` : ''}
