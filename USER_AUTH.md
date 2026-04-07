@@ -1,323 +1,249 @@
-# User Authentication & Node Registration
+# User Authentication and Node Registration
 
 ## Overview
 
-HexNest Node now supports user-based authentication. Operators:
+HexNest Node now supports operator authentication directly from the local node manager.
 
-1. **Sign up/in via web UI** at `https://hex-nest.com/signup` or `/signin`
-2. **Get JWT token** from their user account
-3. **Add token to .env** in hexnest-node
-4. **Start node** - it auto-registers under their account
+The current flow is:
 
-## Architecture
+1. Start the local node manager
+2. Sign up or sign in from the local auth screen
+3. Let the runtime reconnect to HexNest Core automatically
+4. Use the returned operator session to attach or register the node
 
-### hexnest-mvp-showcase (Core)
+Manual JWT copy-paste into `.env` is no longer the primary operator workflow.
 
-Web UI provides:
-- `https://hex-nest.com/signup` — User registration page
-- `https://hex-nest.com/signin` — User login page
-- `POST /api/auth/register` — Backend registration endpoint
-- `POST /api/auth/login` — Backend login endpoint
-- `POST /api/nodes/register` — Node registration (requires user JWT)
+## Where Authentication Happens
 
-Database schema:
-- `users` table: id, email, password_hash, name, role, created_at
-- `nodes` table: ...existing fields..., owner_user_id (FK to users)
+### Core platform
 
-### hexnest-node (Client)
+The HexNest core platform still owns user accounts and credentials.
 
-The node runtime:
-- Reads `HEXNEST_USER_TOKEN` from `.env`
-- Uses token to register with core
-- Runs locally if token not provided
+Relevant upstream endpoints include:
 
-No CLI auth commands needed - everything goes through web UI.
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/nodes/register`
 
-## Workflow for Operators
+### Local node manager
 
-### Step 1: Setup Node Name
+HexNest Node exposes local auth routes through its embedded manager:
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/session`
+- `POST /api/auth/logout`
+
+The local manager proxies registration and login to core, stores the resulting operator session locally, and then tries to reconnect the node immediately.
+
+## Recommended Operator Flow
+
+### Step 1. Prepare the node locally
 
 ```bash
-$ cd hexnest-node
-$ npm install
-$ cp .env.example .env
-$ npm run setup
+cd hexnest-node
+npm install
+cp .env.example .env
+npm run setup
 ```
 
-Prompts:
+### Step 2. Start the node manager
+
+For browser mode:
+
+```bash
+npm run dev
 ```
-? HexNest core URL: https://hex-nest.com
-? Node name: MyWorkerNode
-? Operator name: Alice Labs
-? Operator email for login: alice@example.com
-? Ollama model [qwen2.5:14b]:
+
+For desktop shell mode:
+
+```bash
+npm run desktop:dev
 ```
 
-Updates `.env` with node configuration.
+### Step 3. Authenticate from the local manager
 
-### Step 2: Create User Account via Web UI
+Use one of these options:
 
-Go to **https://hex-nest.com/signup**:
+- create a new operator account
+- sign in with an existing operator account
 
-1. Click "Create Account"
-2. Enter:
-   - **Name**: Your full name
-   - **Email**: alice@example.com
-   - **Password**: min 8 characters
-3. Click "Sign Up"
+On success, the local manager:
 
-→ **You're now logged in!**
+- stores `user_email` in the local database
+- stores `user_token` in the local database
+- creates a local authenticated session
+- triggers a runtime reconnect to core
 
-### Step 3: Get Your User Token
+### Step 4. Let the runtime attach to core
 
-After login, go to **https://hex-nest.com/dashboard → Settings**:
+After authentication, the runtime tries to:
 
-1. Find section: "API Tokens" or "Node Registration"
-2. Copy your **User Token** (JWT)
-3. Add to `.env`:
+- reuse the current node identity if valid
+- reset a stale identity if needed
+- register a fresh node if no valid identity exists
+- report the result back to the local UI
+
+The response flow includes:
+
+- `coreUrl`
+- `coreConnected`
+- `nodeId`
+- optional `coreConnectionError`
+
+## Local Storage Model
+
+### Stored in the local database
+
+- operator email
+- operator token
+- node configuration values
+- node identity
+- model configuration
+
+### Legacy identity file support
+
+HexNest Node still supports the legacy identity file for compatibility:
+
+- `.hexnest-identity.json`
+
+If present, it can be migrated into the local database.
+
+## Registration Behavior
+
+Once the operator session is valid, HexNest Node registers or reconnects the node under that operator account.
+
+Typical outcomes:
+
+- `coreConnected: true` and a valid `nodeId`
+- `coreConnected: false` with a connection error message
+- local mode if core is unavailable
+
+Depending on the core environment, the node may be:
+
+- approved immediately
+- placed in pending review
+
+## Browser and Desktop UX
+
+### Browser mode
+
+The terminal prints the local URL:
+
+```text
+[hexnest-web] server running at http://127.0.0.1:3000
+```
+
+If the preferred port is occupied, the runtime selects a free one automatically.
+
+### Desktop shell mode
+
+The Tauri shell starts the runtime for you and redirects to the local manager automatically.
+
+Additional desktop behavior:
+
+- single-instance shell behavior
+- close hides to tray
+- tray menu supports show, hide, and quit
+
+## Environment Variables
+
+### Still useful
+
+```env
+HEXNEST_CORE_URL=https://hex-nest.com
+HEXNEST_NODE_NAME=MyWorkerNode
+HEXNEST_OPERATOR_NAME=Alice Labs
+HEXNEST_OPERATOR_EMAIL=alice@example.com
+```
+
+### Optional manual auth injection
+
+Manual auth in `.env` still works when needed:
 
 ```env
 HEXNEST_USER_EMAIL=alice@example.com
 HEXNEST_USER_TOKEN=eyJhbGc...xyz
 ```
 
-### Step 4: Start Node
+Use this only when you explicitly want to seed auth without going through the local sign-in UI.
 
-```bash
-$ npm run dev
-```
+### Auto-managed values
 
-Node will:
-- Authenticate with core using user token
-- Register itself under your account
-- Display: `[node] registered id=node-abc123 status=pending`
-- Store nodeId/nodeToken in `.hexnest-identity.json`
-
-### Step 5: Wait for Admin Approval
-
-Nodes start in `pending` status. Admin must approve:
-
-- Core admin goes to: **https://hex-nest.com/admin/nodes**
-- Finds your node
-- Clicks "Approve"
-
-After approval, your node goes `online`.
-
-## Environment Variables
-
-### Required
+HexNest Node may store and refresh these locally over time:
 
 ```env
-HEXNEST_CORE_URL=https://hex-nest.com
-HEXNEST_NODE_NAME=MyWorkerNode
-HEXNEST_OPERATOR_NAME=Alice Labs
+HEXNEST_NODE_ID=node-abc123
+HEXNEST_NODE_TOKEN=node_token_xyz
 ```
 
-### From Web UI
-
-```env
-HEXNEST_USER_EMAIL=alice@example.com
-HEXNEST_USER_TOKEN=eyJhbGc...xyz    # Obtained from web UI
-```
-
-### Auto-generated After Registration
-
-```env
-HEXNEST_NODE_ID=node-abc123         # Generated by core
-HEXNEST_NODE_TOKEN=node_token_xyz   # Generated by core
-```
-
-### Optional
-
-```env
-HEXNEST_OPERATOR_EMAIL=alice@labs.com     # Optional
-HEXNEST_CALLBACK_URL=https://...          # For webhooks
-HEXNEST_AUTO_ACCEPT_INVITES=true
-```
-
-## Testing Your Setup
-
-### 1. Verify Configuration
-
-```bash
-npm run config:test
-```
-
-Output:
-```
-=== HexNest Node Configuration Test ===
-
-✓ Configuration loaded:
-  - Core URL: https://hex-nest.com
-  - Node name: MyWorkerNode
-  - Operator: Alice Labs
-  - User token: SET ✓
-  - Adapters: 1
-
-✓ Available adapters:
-  - ollama (qwen, reasoning)
-
-✓ Database initialized
-✓ User token configured - node will auto-register on startup
-
-✓ All checks passed!
-```
-
-### 2. Start Node (Dry Run)
-
-```bash
-npm run dev
-```
-
-Monitor logs:
-```
-[hexnest-node] starting setup...
-[hexnest-node] user email=alice@example.com token=SET
-[node] registered id=node-abc123 status=pending
-[node] waiting for approval...
-[node] ready node=MyWorkerNode adapters=1 status=offline
-```
-
-Web UI available: **http://localhost:3000**
-
-### 3. Check on Core
-
-Go to **https://hex-nest.com/admin/nodes**:
-- See your node listed under "Pending"
-- Shows: node name, operator, status
-- Approve it
+Those values are not the primary place of truth anymore when the local database is active.
 
 ## Troubleshooting
 
-### "User token is required"
+### Login succeeds but core stays disconnected
 
-Error: Node won't register without token
+Look for:
 
-**Solution:**
-1. Make sure you signed up at https://hex-nest.com/signup
-2. Copy token from dashboard
-3. Add to `.env`: `HEXNEST_USER_TOKEN=...`
-4. Restart: `npm run dev`
+- unreachable core URL
+- revoked or stale node identity
+- upstream core errors
 
-### "Invalid credentials"
+The local auth response may include `coreConnectionError` with the reason.
 
-**Solution:**
-- Double-check email/password on web UI
-- Try signing in again: https://hex-nest.com/signin
-- Copy fresh token
+### Local auth returns upstream error
 
-### Node stays in "pending" forever
+HexNest Node maps upstream auth failures to JSON errors instead of exposing raw browser failures.
 
-**Solution:**
-- Core admin hasn't approved yet
-- Go to https://hex-nest.com/admin/nodes
-- Find your node
-- Click "Approve"
+Typical cases:
 
-### Token expired
+- `400` invalid form payload
+- `401` invalid credentials
+- `503` core unavailable
+- `504` upstream timeout
 
-Error: `401 Unauthorized` after period of time
+### Node was deleted in core
 
-**Solution** (future enhancement):
-- Currently: get new token from web UI and update `.env`
-- Future: automatic token refresh coming
+If core rejects heartbeat or usage submission with `401` or `404`, the runtime can clear the local identity and fall back to local mode.
 
-## Architecture Details
+At that point, sign in again or reconnect from the local manager.
 
-### User Registration Flow (Web UI)
+### Operator wants to detach the node
 
-```
-User clicks "Sign Up"
-    ↓
-Fills form: name, email, password
-    ↓
-POST /api/auth/register
-    ↓
-Core creates user, generates JWT
-    ↓
-Returns token to frontend
-    ↓
-Frontend stores in localStorage
-    ↓
-User sees: "You can now register nodes"
-```
+The local manager supports protected operator flows for:
 
-### Node Registration Flow
-
-```
-npm run dev
-    ↓
-Node reads config (HEXNEST_USER_TOKEN)
-    ↓
-Creates HexNestClient(coreUrl, { userToken })
-    ↓
-POST /api/nodes/register
-  Header: Authorization: Bearer {userToken}
-    ↓
-Core validates JWT
-    ↓
-Core extracts userId from JWT
-    ↓
-Core creates node record with owner_user_id
-    ↓
-Core returns: nodeId, nodeToken, status=pending
-    ↓
-Node stores nodeId/nodeToken in .hexnest-identity.json
-    ↓
-Node starts heartbeat with nodeToken
-```
-
-### Multi-Node Setup
-
-One user can register multiple nodes (for parallel workers):
-
-```bash
-# Terminal 1: Node A
-$ export HEXNEST_NODE_NAME=Worker-GPU-0
-$ npm run dev
-
-# Terminal 2: Node B (different .env)
-$ export HEXNEST_NODE_NAME=Worker-GPU-1
-$ npm run dev
-```
-
-Both nodes register under same user account via same `HEXNEST_USER_TOKEN`.
+- disconnect from core
+- reset local node identity
+- remove the node from core
 
 ## Security Notes
 
-### Token Storage
+### Operator token
 
-⚠️ JWT tokens stored in `.env` file.
+- issued by core auth
+- stored locally by HexNest Node
+- used to reconnect or register the node under the operator account
 
-Best practices:
-- Never commit `.env` to git
-- Use `.gitignore` (already done)
-- **Production**: Use environment variable management
-  - Render.com: environment variables
-  - Railway: secrets
-  - Docker: pass as env var
-  - Kubernetes: secrets
+### Node token
 
-### Token Lifecycle
+- issued after node registration
+- used for node-to-core operations such as heartbeat and usage submission
 
-- **User Token (JWT)**: 
-  - Issued after signup/login
-  - Valid for 7 days (configurable on server)
-  - Used for node registration only
-  - Can be refreshed via login again
+### Best practice
 
-- **Node Token**:
-  - Persistent, never expires
-  - Issued once per node registration
-  - Stored in `.hexnest-identity.json`
-  - Used for heartbeat and room operations
+- do not commit `.env`
+- treat the local database and identity artifacts as sensitive operator data
+- prefer desktop app data directories or managed runtime paths in packaged desktop mode
 
-### Password Security
+## Summary
 
-- Never transmitted after signup
-- Only used in signup/login forms
-- Server stores bcrypt hash
-- Can be reset via web UI in future
+The intended operator experience is now:
+
+1. start HexNest Node locally
+2. authenticate in the local manager
+3. let the runtime reconnect and register itself automatically
+
+That is the same auth model used by both browser mode and the Tauri desktop shell.
 
 ## Migration from Old Setup
 

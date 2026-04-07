@@ -1,17 +1,44 @@
-# HexNest Node + User Auth - Quick Start Guide
+# HexNest Node Quick Start
 
-## What Changed
+## What This Guide Covers
 
-✅ **Operators no longer need CLI commands to register users**
-✅ **User authentication via web UI only** (SignUp/SignIn pages)
-✅ **Node auto-registers when token is provided in `.env`**
-✅ **Offline-first operation** (works without user token)
+HexNest Node can now be used in two local operator flows:
 
----
+- Browser mode via `npm run dev`
+- Desktop shell via `npm run desktop:dev`
 
-## For Operators: 5-Step Setup
+Both flows use the same local node manager, the same runtime, and the same authentication flow.
+You no longer need to manually copy a user JWT into `.env` just to sign in.
 
-### 1️⃣ **Initialize Node Configuration**
+## Prerequisites
+
+### Browser mode
+
+- Node.js 20+
+- `npm install`
+
+### Desktop shell mode
+
+- Node.js 20+
+- Rust toolchain installed
+- `npm install`
+
+## Fastest Path
+
+```bash
+cd hexnest-node
+npm install
+cp .env.example .env
+npm run setup
+npm run dev
+```
+
+Then open the local node manager URL printed in the terminal.
+If `3000` is busy, HexNest Node automatically switches to a free port.
+
+## 5-Step Operator Setup
+
+### 1. Initialize local config
 
 ```bash
 cd hexnest-node
@@ -20,274 +47,228 @@ cp .env.example .env
 npm run setup
 ```
 
-This creates `.env` with basic node config:
-- Core URL
-- Node name
-- Operator name/email
+This prepares:
 
-### 2️⃣ **Verify Configuration**
+- core URL
+- node name
+- operator name
+- base local settings
+
+### 2. Verify the runtime config
 
 ```bash
 npm run config:test
 ```
 
-Expected output:
-```
+Expected result:
+
+```text
 ✓ Configuration loaded
 ✓ Available adapters: ollama-local
 ✓ Database initialized
-⚠️ Note: HEXNEST_USER_TOKEN not set
 ```
 
-If no token: Node will run in **offline mode** (local UI only) ✓
+If no operator session is configured yet, that is fine. You can sign in later from the local node manager.
 
-### 3️⃣ **Create User Account (Web UI)**
+### 3. Start the local node manager
 
-Visit `https://hex-nest.com/signup`:
-
-1. Click **"Create Account"**
-2. Enter:
-   - **Name**: Your name
-   - **Email**: your.email@example.com
-   - **Password**: min 8 characters
-3. Click **"Sign Up"**
-
-→ You're now logged in!
-
-### 4️⃣ **Get Your User Token**
-
-On dashboard, go to **Settings** (or similar section):
-
-1. Find "API Tokens" or "User Token"
-2. Copy your **JWT token**
-3. Add to `.env`:
-
-```env
-HEXNEST_USER_EMAIL=your.email@example.com
-HEXNEST_USER_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-### 5️⃣ **Start Your Node**
+#### Browser mode
 
 ```bash
 npm run dev
 ```
 
-You should see:
-```
-[hexnest-node] starting setup...
-[node] registered id=node-abc123 status=pending
+Watch for output like:
+
+```text
+[hexnest-web] server running at http://127.0.0.1:3000
 [node] ready node=MyWorkerNode adapters=1 status=online
 ```
 
-→ Node is now registered under your user account!
+If the preferred port is busy, you may instead see:
 
----
-
-## For Admins: Approve Nodes
-
-After operator starts their node:
-
-1. Go to **https://hex-nest.com/admin/nodes**
-2. Find the pending node
-3. Click **"Approve"**
-
-Node status changes from `pending` → `online`
-
----
-
-## Architecture
-
-```
-┌──────────────────────────────────┐
-│  Operator's Browser              │
-│  https://hex-nest.com/signup     │
-│  ↓ Sign up                       │
-│  ↓ Get JWT token                 │
-└──────────┬───────────────────────┘
-           │ Token copied to .env
-           ↓
-┌──────────────────────────────────┐
-│  hexnest-node (Operator's PC)    │
-│  npm run dev                     │
-│  ↓ Read .env                     │
-│  ↓ Use user token                │
-│  ↓ Register with core            │
-└──────────┬───────────────────────┘
-           │ POST /api/nodes/register
-           │ + Authorization: Bearer token
-           ↓
-┌──────────────────────────────────┐
-│  HexNest Core (Cloud)            │
-│  - Validate JWT token            │
-│  - Create node under user        │
-│  - Return nodeId + nodeToken     │
-│                                  │
-│  Dashboard:                      │
-│  https://hex-nest.com/admin      │
-│  - Admin approves node           │
-└──────────────────────────────────┘
+```text
+[hexnest-web] preferred port 3000 is busy, switched to http://127.0.0.1:58018
 ```
 
----
+#### Desktop shell mode
 
-## Token Security
+```bash
+npm run desktop:dev
+```
 
-### User Token (JWT)
-- **Generated**: During signup/login
-- **Storage**: `.env` file (⚠️ never commit!)
-- **Used for**: Initial node registration
-- **Lifetime**: ~7 days then expires
+This launches the Tauri desktop shell and starts the same runtime behind it.
 
-### Node Token
-- **Generated**: After successful node registration
-- **Storage**: `.hexnest-identity.json` (auto-created)
-- **Used for**: Heartbeat and room operations
-- **Lifetime**: Persistent (until revoked)
+### 4. Sign up or sign in from the local node manager
 
----
+Use the local auth screen exposed by HexNest Node.
+
+- create a new operator account, or
+- sign in with an existing HexNest account
+
+After successful authentication, the node manager stores the operator session locally and immediately attempts to reconnect the node to HexNest Core.
+
+### 5. Confirm node status
+
+After auth, the runtime should:
+
+- attach the operator session to the local node manager
+- reconnect to HexNest Core
+- register or reuse a node identity
+- show current readiness and node status in the local UI
+
+Depending on core policy, your node may appear as:
+
+- `approved` and ready immediately, or
+- `pending` until reviewed by an admin
+
+## Desktop Commands
+
+### Start desktop shell in development
+
+```bash
+npm run desktop:dev
+```
+
+### Build the host sidecar binary
+
+```bash
+npm run desktop:sidecar
+```
+
+This packages the Node runtime into a host binary for the Tauri app resources.
+
+### Build the desktop app bundle
+
+```bash
+npm run desktop:build
+```
+
+This runs:
+
+1. TypeScript build
+2. sidecar packaging
+3. Tauri bundle build
+
+## Browser Mode vs Desktop Shell
+
+### Browser mode
+
+- easiest development path
+- local URL is printed in terminal
+- falls back to a free localhost port automatically
+
+### Desktop shell
+
+- single app window instead of manual browser navigation
+- close action hides the window to tray instead of stopping the runtime
+- tray menu supports show, hide, and quit actions
+- intended direction for normal operator desktop experience
 
 ## Offline Mode
 
-If you **don't provide `HEXNEST_USER_TOKEN`**:
+HexNest Node still supports local-only mode.
+
+If the runtime cannot connect to core, or the operator has not signed in yet, it can still:
+
+- start the local manager
+- manage adapters and config
+- run locally
+
+What offline mode does not do:
+
+- receive remote room work
+- heartbeat to core
+- submit usage to core
+
+## Common Issues
+
+### Port 3000 is already in use
+
+Usually no action is needed.
+HexNest Node now falls back to a free port automatically unless strict port mode is enabled.
+
+To force a specific port:
+
+```env
+HEXNEST_WEB_PORT=3100
+```
+
+To request an automatic free port explicitly:
+
+```env
+HEXNEST_WEB_PORT=0
+```
+
+### Local manager opens but core stays disconnected
+
+Possible causes:
+
+- wrong core URL
+- core not reachable from the machine
+- operator is not signed in locally
+- existing node identity was revoked remotely
+
+First checks:
 
 ```bash
-# .env without token
-HEXNEST_CORE_URL=https://hex-nest.com
-HEXNEST_NODE_NAME=MyNode
-# ... (no HEXNEST_USER_TOKEN)
-
+npm run config:test
 npm run dev
 ```
 
-Node will:
-- ✅ Start successfully
-- ✅ Show web UI at http://localhost:3000
-- ❌ Not register with core
-- ❌ Not receive tasks from rooms
+Then sign in again from the local manager and review the readiness screen.
 
-**Use case**: Development, testing, local demos
+### Desktop shell does not start
 
----
+Likely causes:
 
-## Troubleshooting
+- Rust is not installed
+- Tauri prerequisites are missing on the machine
 
-### "Configuration loaded ... User token: NOT SET ⚠"
+Check:
 
-**Expected** if you haven't added token to `.env` yet.
-
-**Fix**: Add token (see Step 4)
-
-### "401 Unauthorized" on startup
-
-**Cause**: Invalid or expired token in `.env`
-
-**Fix**: 
-1. Sign in again: https://hex-nest.com/signin
-2. Copy fresh token
-3. Update `.env`
-4. Restart: `npm run dev`
-
-### Node stays "pending" forever
-
-**Cause**: Admin hasn't approved yet
-
-**Fix**: Admin needs to approve at https://hex-nest.com/admin/nodes
-
-### Node appears twice in admin panel
-
-**Cause**: You deleted `.hexnest-identity.json` and restarted
-
-**Fix**: Delete duplicate, keep one
-
----
-
-## Environment Variables Reference
-
-### Minimal Setup
-
-```env
-HEXNEST_CORE_URL=https://hex-nest.com
-HEXNEST_NODE_NAME=MyNode
-HEXNEST_OPERATOR_NAME=Your Name
-HEXNEST_USER_TOKEN=... # from web signup
+```bash
+cargo --version
 ```
 
-### Full Example
+### Packaged desktop build fails
+
+Check the sequence manually:
+
+```bash
+npm run build
+npm run desktop:sidecar
+npm run desktop:build
+```
+
+## Recommended Environment Variables
 
 ```env
-# Core connection
 HEXNEST_CORE_URL=https://hex-nest.com
-
-# Node info
 HEXNEST_NODE_NAME=WorkerNode-GPU-1
 HEXNEST_OPERATOR_NAME=Alice Labs
 HEXNEST_OPERATOR_EMAIL=alice@labs.com
 
-# User authentication (from web UI)
-HEXNEST_USER_EMAIL=alice@labs.com
-HEXNEST_USER_TOKEN=eyJhbGc...
-
-# Auto-filled after registration
-HEXNEST_NODE_ID=node-abc123
-HEXNEST_NODE_TOKEN=nt_xyz...
-
-# Web UI
+HEXNEST_WEB_HOST=127.0.0.1
 HEXNEST_WEB_PORT=3000
+HEXNEST_WEB_PORT_STRICT=false
 
-# Adapters
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=qwen2.5:14b
-
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-
-ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-3-7-sonnet-latest
 ```
 
----
+Desktop-specific overrides are optional:
+
+```env
+HEXNEST_APP_DATA_DIR=
+HEXNEST_PUBLIC_DIR=
+HEXNEST_RUNTIME_INFO_PATH=
+```
 
 ## Next Steps
 
-1. ✅ Follow steps 1-5 above
-2. 🟡 Share node ID with admin for approval
-3. 🔵 Monitor http://localhost:3000 for node status
-4. 🟢 Wait for heartbeat confirmation
-5. 📊 View node on dashboard: https://hex-nest.com/dashboard
-
----
-
-## Support
-
-**Docs:**
-- [USER_AUTH.md](./USER_AUTH.md) — Detailed authentication guide
-- [README.md](./README.md) — Node setup and features
-- [USER_AUTH_INTEGRATION.md](../hexnest-mvp-showcase/USER_AUTH_INTEGRATION.md) — Architecture docs
-
-**Commands:**
-```bash
-npm run setup          # Interactive configuration wizard
-npm run config:test    # Verify configuration loads correctly
-npm run dev            # Start node with current .env
-npm run build          # Build TypeScript
-npm run check          # Check types
-```
-
----
-
-## Timeline
-
-| Step | Time | Action |
-|------|------|--------|
-| 1 | ~5 min | `npm run setup` |
-| 2 | ~1 min | `npm run config:test` |
-| 3 | ~5 min | Sign up at web UI |
-| 4 | ~1 min | Copy token, edit .env |
-| 5 | ~30 sec | `npm run dev` |
-| 6 | ~10 min | Admin approves node |
-| **Total** | **~25 min** | **Node online and ready!** |
-
----
-
-Ready to start? ➡️ Go to **Step 1** above!
+1. Start the local manager in browser or desktop mode.
+2. Sign in from the local auth screen.
+3. Confirm node readiness and core connection.
+4. Add or activate your model providers.
+5. If you want a packaged desktop app, move on to `npm run desktop:build`.

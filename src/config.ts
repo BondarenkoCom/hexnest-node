@@ -9,6 +9,11 @@ import { OllamaAdapter } from "./adapters/OllamaAdapter.js";
 import { OpenAIAdapter } from "./adapters/OpenAIAdapter.js";
 import { DatabaseService } from "./db/database.js";
 import type { ModelConfig } from "./db/database.js";
+import {
+  resolveDefaultEnvFile,
+  resolveDefaultYamlConfigPath,
+  resolveRuntimePath
+} from "./runtime-paths.js";
 
 export interface NodeConfig {
   coreUrl: string;
@@ -95,7 +100,7 @@ function stringArray(value: unknown): string[] {
 function resolveOptionalPath(rawPath: string | undefined): string | null {
   const input = str(rawPath);
   if (!input) return null;
-  return path.isAbsolute(input) ? input : path.resolve(process.cwd(), input);
+  return resolveRuntimePath(input);
 }
 
 export function loadEnvMap(baseEnv: NodeJS.ProcessEnv = process.env): Record<string, string> {
@@ -104,9 +109,7 @@ export function loadEnvMap(baseEnv: NodeJS.ProcessEnv = process.env): Record<str
     if (typeof value === "string") envMap[key] = value;
   }
 
-  const explicitEnvFile = resolveOptionalPath(envMap.HEXNEST_ENV_FILE);
-  const defaultEnvFile = path.resolve(process.cwd(), ".env");
-  const envPath = explicitEnvFile || (fs.existsSync(defaultEnvFile) ? defaultEnvFile : null);
+  const envPath = resolveDefaultEnvFile(baseEnv);
   if (!envPath || !fs.existsSync(envPath)) {
     return envMap;
   }
@@ -121,9 +124,7 @@ export function loadEnvMap(baseEnv: NodeJS.ProcessEnv = process.env): Record<str
 }
 
 function loadYamlConfig(env: Record<string, string>): YamlNodeConfig {
-  const explicitPath = resolveOptionalPath(env.HEXNEST_CONFIG_PATH);
-  const defaultPath = path.resolve(process.cwd(), "node-config.yaml");
-  const yamlPath = explicitPath || (fs.existsSync(defaultPath) ? defaultPath : null);
+  const yamlPath = resolveDefaultYamlConfigPath(env);
   if (!yamlPath || !fs.existsSync(yamlPath)) {
     return {};
   }
@@ -413,7 +414,7 @@ export function buildAdapters(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = 
 }
 
 export function loadRuntimeSetup(baseEnv: NodeJS.ProcessEnv = process.env): RuntimeSetup {
-  const dbPath = str(baseEnv.HEXNEST_DB_PATH) || ".hexnest.db";
+  const dbPath = resolveRuntimePath(str(baseEnv.HEXNEST_DB_PATH) || ".hexnest.db", baseEnv);
   const database = new DatabaseService(dbPath);
   const config = loadConfig(database, baseEnv);
   const adapters = buildAdapters(database, baseEnv);
@@ -421,7 +422,7 @@ export function loadRuntimeSetup(baseEnv: NodeJS.ProcessEnv = process.env): Runt
 }
 
 export async function loadRuntimeSetupAsync(baseEnv: NodeJS.ProcessEnv = process.env): Promise<RuntimeSetup> {
-  const dbPath = str(baseEnv.HEXNEST_DB_PATH) || ".hexnest.db";
+  const dbPath = resolveRuntimePath(str(baseEnv.HEXNEST_DB_PATH) || ".hexnest.db", baseEnv);
   const database = new DatabaseService(dbPath);
   await database.ensureReady();
   const config = loadConfig(database, baseEnv);

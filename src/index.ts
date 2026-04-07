@@ -1,10 +1,59 @@
-import { loadRuntimeSetupAsync } from "./config.js";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { loadEnvMap, loadRuntimeSetupAsync } from "./config.js";
 import { NodeRuntime } from "./core/NodeRuntime.js";
+import { resolveRuntimePath } from "./runtime-paths.js";
 import { createWebServer, startWebServer } from "./web/server.js";
 
+function parseWebPort(rawPort: string | undefined): { port: number; explicit: boolean } {
+  if (rawPort == null || rawPort.trim() === "") {
+    return { port: 3000, explicit: false };
+  }
+  const parsed = Number.parseInt(rawPort, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return { port: 3000, explicit: false };
+  }
+  return { port: parsed, explicit: true };
+}
+
+function parseBooleanFlag(rawValue: string | undefined): boolean {
+  const normalized = String(rawValue || "").trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "y";
+}
+
+async function persistRuntimeInfo(
+  env: Record<string, string>,
+  webServer: { host: string; port: number; url: string }
+): Promise<string> {
+  const runtimeInfoPath = resolveRuntimePath(env.HEXNEST_RUNTIME_INFO_PATH || ".hexnest-runtime.json", env);
+  const payload = {
+    pid: process.pid,
+    host: webServer.host,
+    port: webServer.port,
+    url: webServer.url,
+    startedAt: new Date().toISOString()
+  };
+  await fs.mkdir(path.dirname(runtimeInfoPath), { recursive: true });
+  await fs.writeFile(runtimeInfoPath, JSON.stringify(payload, null, 2), "utf8");
+  return runtimeInfoPath;
+}
+
+async function clearRuntimeInfo(runtimeInfoPath: string | null): Promise<void> {
+  if (!runtimeInfoPath) {
+    return;
+  }
+  try {
+    await fs.rm(runtimeInfoPath, { force: true });
+  } catch {
+    // Ignore runtime info cleanup failures during shutdown.
+  }
+}
+
 async function main(): Promise<void> {
-  const { config, adapters, database } = await loadRuntimeSetupAsync();
+  const env = loadEnvMap();
+  const { config, adapters, database } = await loadRuntimeSetupAsync(env);
   const runtime = new NodeRuntime(config, adapters, { database });
+  let runtimeInfoPath: string | null = null;
 
   // Create web server with runtime context
   const webApp = createWebServer({
@@ -21,8 +70,14 @@ async function main(): Promise<void> {
   });
 
   // Start web server FIRST (don't wait for runtime)
-  const webPort = parseInt(process.env.HEXNEST_WEB_PORT || "3000", 10);
-  await startWebServer(webApp, webPort);
+  const requestedWebPort = parseWebPort(env.HEXNEST_WEB_PORT);
+  const webServer = await startWebServer(webApp, requestedWebPort.port, {
+    host: env.HEXNEST_WEB_HOST,
+    allowPortFallback: !parseBooleanFlag(env.HEXNEST_WEB_PORT_STRICT)
+  });
+  process.env.HEXNEST_WEB_PORT = String(webServer.port);
+  process.env.HEXNEST_WEB_URL = webServer.url;
+  runtimeInfoPath = await persistRuntimeInfo(env, webServer);
 
   // Start runtime in background (allow local operation without core connection)
   void (async () => {
@@ -42,6 +97,7 @@ async function main(): Promise<void> {
     try {
       await runtime.stop();
     } finally {
+      await clearRuntimeInfo(runtimeInfoPath);
       database.close();
       process.exit(0);
     }

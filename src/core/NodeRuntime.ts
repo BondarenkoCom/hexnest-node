@@ -618,7 +618,9 @@ export class NodeRuntime {
     this.logger.warn(
       `[node] failed to connect to core: ${this.lastCoreError}`
     );
-    this.logger.warn(`[node] operating in local mode - web UI is available at http://localhost:${process.env.HEXNEST_WEB_PORT || 3000}`);
+    this.logger.warn(
+      `[node] operating in local mode - web UI is available at ${process.env.HEXNEST_WEB_URL || `http://127.0.0.1:${process.env.HEXNEST_WEB_PORT || 3000}`}`
+    );
     this.status = "offline";
     this.recordActivity("warn", `Node is operating in local mode: ${this.lastCoreError}`);
   }

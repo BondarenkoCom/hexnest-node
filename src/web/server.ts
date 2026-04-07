@@ -1,4 +1,5 @@
 import express, { Express, Request, Response, NextFunction } from "express";
+import { AddressInfo } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseService } from "../db/database.js";
@@ -13,6 +14,7 @@ import { roomsRouter } from "./api/rooms.js";
 import { createNodeWebAuthMiddleware } from "./auth-session.js";
 import type { RuntimeActivityItem } from "../core/NodeRuntime.js";
 import type { AgentDescriptor } from "../protocol/types.js";
+import { resolvePublicDir } from "../runtime-paths.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -60,7 +62,7 @@ export function createWebServer(context: WebServerContext): Express {
   });
 
   // Serve static files - resolve from project root
-  const publicDir = path.resolve(process.cwd(), "public");
+  const publicDir = resolvePublicDir();
   app.use(express.static(publicDir));
 
   // Public API routes
@@ -101,26 +103,67 @@ export function createWebServer(context: WebServerContext): Express {
 
   return app;
 }
+export interface WebServerStartResult {
+  host: string;
+  port: number;
+  url: string;
+}
 
-export async function startWebServer(app: Express, port: number = 3000): Promise<void> {
+interface WebServerStartOptions {
+  host?: string;
+  allowPortFallback?: boolean;
+}
+
+function normalizeDisplayHost(host: string): string {
+  if (host === "0.0.0.0" || host === "::") {
+    return "127.0.0.1";
+  }
+  return host;
+}
+
+function listenOnce(app: Express, host: string, port: number): Promise<{ host: string; port: number }> {
   return new Promise((resolve, reject) => {
-    const server = app.listen(port, "0.0.0.0");
+    const server = app.listen(port, host);
 
     server.once("listening", () => {
-      console.log(`[hexnest-web] server running at http://0.0.0.0:${port}`);
-      resolve();
+      const address = server.address() as AddressInfo | null;
+      const actualPort = address?.port ?? port;
+      server.removeAllListeners("error");
+      resolve({ host, port: actualPort });
     });
 
     server.once("error", (error: NodeJS.ErrnoException) => {
-      if (error.code === "EADDRINUSE") {
-        reject(
-          new Error(
-            `Port ${port} is already in use. Set HEXNEST_WEB_PORT to a free port (for example: 3100) and restart.`
-          )
-        );
-        return;
-      }
       reject(error);
     });
   });
+}
+
+export async function startWebServer(
+  app: Express,
+  port: number = 3000,
+  options: WebServerStartOptions = {}
+): Promise<WebServerStartResult> {
+  const host = (options.host || process.env.HEXNEST_WEB_HOST || "127.0.0.1").trim() || "127.0.0.1";
+  const allowPortFallback = options.allowPortFallback ?? false;
+
+  try {
+    const started = await listenOnce(app, host, port);
+    const url = `http://${normalizeDisplayHost(started.host)}:${started.port}`;
+    console.log(`[hexnest-web] server running at ${url}`);
+    return { host: started.host, port: started.port, url };
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === "EADDRINUSE" && allowPortFallback && port !== 0) {
+      const started = await listenOnce(app, host, 0);
+      const url = `http://${normalizeDisplayHost(started.host)}:${started.port}`;
+      console.warn(`[hexnest-web] preferred port ${port} is busy, switched to ${url}`);
+      return { host: started.host, port: started.port, url };
+    }
+    if (err.code === "EADDRINUSE") {
+      throw new Error(
+        `Port ${port} is already in use. Set HEXNEST_WEB_PORT to 0 for an automatic port or choose a free port and restart.`
+      );
+    }
+    throw error;
+  }
 }

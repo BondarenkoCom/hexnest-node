@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
+import { resolveRuntimePath } from "../runtime-paths.js";
 
 type SqlRow = unknown[];
 
@@ -42,7 +43,7 @@ export class DatabaseService {
   private ready: Promise<void>;
 
   constructor(dbPath: string = ".hexnest.db") {
-    this.dbPath = path.isAbsolute(dbPath) ? dbPath : path.resolve(process.cwd(), dbPath);
+    this.dbPath = resolveRuntimePath(dbPath);
     this.ready = this.initialize();
   }
 

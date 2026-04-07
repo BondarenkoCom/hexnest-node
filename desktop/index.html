@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HexNest Node Desktop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <p class="eyebrow">HEXNEST NODE DESKTOP</p>
+        <h1>Starting local runtime</h1>
+        <p id="status" class="status">Preparing the node manager and negotiating a local control channel.</p>
+        <div class="meta">
+          <div class="meta-card">
+            <span class="meta-label">Mode</span>
+            <strong id="mode">Desktop shell</strong>
+          </div>
+          <div class="meta-card">
+            <span class="meta-label">Window</span>
+            <strong>Close hides to tray</strong>
+          </div>
+        </div>
+        <div class="pulse" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <p id="hint" class="hint">If the main window disappears, reopen it from the tray icon.</p>
+      </section>
+    </main>
+    <script>
+      window.__HEXNEST_DESKTOP__ = {
+        setStatus(message) {
+          const status = document.getElementById("status");
+          if (status) {
+            status.textContent = message;
+          }
+        },
+        setError(message) {
+          const status = document.getElementById("status");
+          if (status) {
+            status.textContent = message;
+            status.dataset.state = "error";
+          }
+        },
+        setMode(message) {
+          const mode = document.getElementById("mode");
+          if (mode) {
+            mode.textContent = message;
+          }
+        },
+        setHint(message) {
+          const hint = document.getElementById("hint");
+          if (hint) {
+            hint.textContent = message;
+          }
+        }
+      };
+    </script>
+  </body>
+</html>
