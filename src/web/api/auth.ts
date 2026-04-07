@@ -7,6 +7,7 @@ import {
   hasValidNodeWebSession,
   setNodeWebSession
 } from "../auth-session.js";
+import { resolveCoreUrl, resolveReachableCoreUrl } from "../resolve-core-url.js";
 
 async function reconnectNodeAfterAuth(
   context: WebServerContext,
@@ -14,10 +15,11 @@ async function reconnectNodeAfterAuth(
   userEmail: string
 ): Promise<{ coreUrl: string; coreConnected: boolean; nodeId: string | null; coreConnectionError?: string }> {
   try {
+    resolveCoreUrl(context);
     return await context.reconnectToCore({ userToken, userEmail });
   } catch (error) {
     return {
-      coreUrl: context.nodeConfig.coreUrl,
+      coreUrl: resolveCoreUrl(context),
       coreConnected: false,
       nodeId: null,
       coreConnectionError: error instanceof Error ? error.message : "Failed to connect node to core"
@@ -29,6 +31,7 @@ export function authRouter(context: WebServerContext): Router {
   const router = Router();
 
   router.post("/login", async (req: Request, res: Response) => {
+    let coreUrl = resolveCoreUrl(context);
     try {
       const { email, password } = req.body;
       if (!email || !password) {
@@ -37,7 +40,7 @@ export function authRouter(context: WebServerContext): Router {
       }
 
       // Authenticate with core server
-      const coreUrl = context.nodeConfig.coreUrl;
+      coreUrl = await resolveReachableCoreUrl(context);
       if (!coreUrl) {
         res.status(500).json({ success: false, error: "Core connection is not configured in node settings" });
         return;
@@ -65,7 +68,7 @@ export function authRouter(context: WebServerContext): Router {
         coreConnectionError: connection.coreConnectionError
       });
     } catch (error) {
-      const mapped = mapUpstreamError(error, "login", context.nodeConfig.coreUrl);
+      const mapped = mapUpstreamError(error, "login", coreUrl);
       console.error("[auth] login error:", mapped.message);
       res.status(mapped.status).json({
         success: false,
@@ -75,6 +78,7 @@ export function authRouter(context: WebServerContext): Router {
   });
 
   router.post("/register", async (req: Request, res: Response) => {
+    let coreUrl = resolveCoreUrl(context);
     try {
       const { name, nodeName, email, password } = req.body;
       if (!name || !nodeName || !email || !password) {
@@ -83,7 +87,7 @@ export function authRouter(context: WebServerContext): Router {
       }
 
       // Register with core server
-      const coreUrl = context.nodeConfig.coreUrl;
+      coreUrl = await resolveReachableCoreUrl(context);
       if (!coreUrl) {
         res.status(500).json({ success: false, error: "Core connection is not configured in node settings" });
         return;
@@ -112,7 +116,7 @@ export function authRouter(context: WebServerContext): Router {
         coreConnectionError: connection.coreConnectionError
       });
     } catch (error) {
-      const mapped = mapUpstreamError(error, "registration", context.nodeConfig.coreUrl);
+      const mapped = mapUpstreamError(error, "registration", coreUrl);
       console.error("[auth] register error:", mapped.message);
       res.status(mapped.status).json({
         success: false,

@@ -318,7 +318,7 @@ export class NodeRuntime {
       userToken: this.resolveUserToken(),
       timeoutMs: this.config.httpTimeoutMs
     });
-    const capabilities = this.getAvailableAgents().flatMap((agent) => agent.capabilities);
+    const capabilities = this.buildAvailableAgents().flatMap((agent) => agent.capabilities);
     const payload: RegisterNodeRequest = {
       name: this.config.nodeName,
       operatorName: this.config.operatorName,
@@ -767,7 +767,7 @@ export class NodeRuntime {
     return {
       nodeId: this.nodeId || undefined,
       status: this.status,
-      availableAgents: this.getAvailableAgents(),
+      availableAgents: this.buildAvailableAgents(),
       activeRooms: [...this.activeRoomRuns.keys()],
       meter: {
         totalTokensUsed: meter.totalTokensUsed,
@@ -803,6 +803,10 @@ export class NodeRuntime {
     return [...this.recentActivity];
   }
 
+  getAvailableAgents(): AgentDescriptor[] {
+    return this.buildAvailableAgents();
+  }
+
   getNodeStatus() {
     const meter = this.meter.getSnapshot();
     return {
@@ -820,7 +824,7 @@ export class NodeRuntime {
     };
   }
 
-  private getAvailableAgents(): AgentDescriptor[] {
+  private buildAvailableAgents(): AgentDescriptor[] {
     return [...this.adapters.values()].map((adapter) => ({
       name: adapter.name,
       capabilities: adapter.capabilities,

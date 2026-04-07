@@ -9,8 +9,10 @@ import { configRouter } from "./api/config.js";
 import { statusRouter } from "./api/status.js";
 import { coreRouter } from "./api/core.js";
 import { authRouter } from "./api/auth.js";
+import { roomsRouter } from "./api/rooms.js";
 import { createNodeWebAuthMiddleware } from "./auth-session.js";
 import type { RuntimeActivityItem } from "../core/NodeRuntime.js";
+import type { AgentDescriptor } from "../protocol/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,6 +26,7 @@ export interface WebServerContext {
   resetNodeIdentity: () => Promise<{ previousNodeId: string | null }>;
   removeNodeFromCore: () => Promise<{ removed: boolean; nodeId: string | null }>;
   getRecentActivity: () => RuntimeActivityItem[];
+  getAvailableAgents: () => AgentDescriptor[];
   getNodeStatus: () => {
     id: string | null;
     isRunning: boolean;
@@ -75,6 +78,7 @@ export function createWebServer(context: WebServerContext): Express {
   app.use("/api/config", configRouter(context));
   app.use("/api/status", statusRouter(context));
   app.use("/api/core", coreRouter(context));
+  app.use("/api/rooms", roomsRouter(context));
 
   // Serve index.html for all other routes (SPA)
   app.get("*", (req: Request, res: Response) => {
@@ -99,10 +103,24 @@ export function createWebServer(context: WebServerContext): Express {
 }
 
 export async function startWebServer(app: Express, port: number = 3000): Promise<void> {
-  return new Promise((resolve) => {
-    app.listen(port, "0.0.0.0", () => {
+  return new Promise((resolve, reject) => {
+    const server = app.listen(port, "0.0.0.0");
+
+    server.once("listening", () => {
       console.log(`[hexnest-web] server running at http://0.0.0.0:${port}`);
       resolve();
+    });
+
+    server.once("error", (error: NodeJS.ErrnoException) => {
+      if (error.code === "EADDRINUSE") {
+        reject(
+          new Error(
+            `Port ${port} is already in use. Set HEXNEST_WEB_PORT to a free port (for example: 3100) and restart.`
+          )
+        );
+        return;
+      }
+      reject(error);
     });
   });
 }

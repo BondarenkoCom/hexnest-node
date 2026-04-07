@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { WebServerContext } from "../server.js";
 import { ApiResponse } from "../types.js";
+import { resolveCoreUrl } from "../resolve-core-url.js";
 
 export interface CoreInfo {
   coreUrl: string;
@@ -28,8 +29,9 @@ export function coreRouter(context: WebServerContext) {
   router.get("/", (req: Request, res: Response) => {
     try {
       const nodeStatus = context.getNodeStatus();
+      const coreUrl = resolveCoreUrl(context);
       const coreInfo: CoreInfo = {
-        coreUrl: context.nodeConfig.coreUrl,
+        coreUrl,
         coreConnected: nodeStatus.coreConnected,
         connectionReason: nodeStatus.coreConnectionReason,
         nodeName: context.nodeConfig.nodeName,
@@ -52,7 +54,7 @@ export function coreRouter(context: WebServerContext) {
   // Test connection to core
   router.post("/test", async (req: Request, res: Response) => {
     try {
-      const configuredCoreUrl = context.nodeConfig.coreUrl;
+      const configuredCoreUrl = resolveCoreUrl(context);
       const requestedCoreUrl = typeof req.body?.coreUrl === "string" ? req.body.coreUrl.trim() : "";
       const testUrl = configuredCoreUrl;
 
@@ -120,7 +122,7 @@ export function coreRouter(context: WebServerContext) {
   // Reconnect to core using the current runtime and optional updated core URL
   router.post("/reconnect", async (req: Request, res: Response) => {
     try {
-      const configuredCoreUrl = context.nodeConfig.coreUrl;
+      const configuredCoreUrl = resolveCoreUrl(context);
       const requestedCoreUrl = typeof req.body?.coreUrl === "string" ? req.body.coreUrl.trim() : "";
       const { userToken, userEmail } = req.body;
 

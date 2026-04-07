@@ -16,6 +16,7 @@ async function main(): Promise<void> {
     resetNodeIdentity: () => runtime.resetNodeIdentityByOperator(),
     removeNodeFromCore: () => runtime.removeCurrentNodeFromCore(),
     getRecentActivity: () => runtime.getRecentActivity(),
+    getAvailableAgents: () => runtime.getAvailableAgents(),
     getNodeStatus: () => runtime.getNodeStatus()
   });
 

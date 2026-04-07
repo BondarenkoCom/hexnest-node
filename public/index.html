@@ -815,6 +815,152 @@
         font-size: var(--fs-base);
       }
 
+      .rooms-shell {
+        display: grid;
+        grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+        gap: 14px;
+        align-items: start;
+      }
+
+      .rooms-stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      .room-card {
+        border: 1px solid rgba(22, 210, 255, 0.18);
+        border-radius: 12px;
+        padding: 14px;
+        background: rgba(7, 18, 29, 0.88);
+        cursor: pointer;
+        display: grid;
+        gap: 10px;
+      }
+
+      .room-card.active {
+        border-color: rgba(255, 110, 139, 0.44);
+        box-shadow: 0 0 14px rgba(159, 18, 48, 0.18);
+      }
+
+      .room-card-head,
+      .room-detail-head,
+      .room-message-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+      }
+
+      .room-card h4,
+      .room-detail-head h3 {
+        margin: 0;
+        color: var(--cyan-soft);
+        font-size: var(--fs-sm);
+      }
+
+      .room-meta,
+      .room-task,
+      .room-message-copy,
+      .room-empty-note {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: var(--fs-xs);
+      }
+
+      .room-task {
+        color: #d0e4f4;
+      }
+
+      .room-preview {
+        min-height: 44px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(22, 210, 255, 0.12);
+        background: rgba(4, 12, 20, 0.7);
+      }
+
+      .room-detail-panel,
+      .room-messages,
+      .room-list-stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      .room-chip-row,
+      .room-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+        align-items: end;
+      }
+
+      .room-card-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .room-action-button {
+        min-width: 104px;
+      }
+
+      .quick-ask-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(240px, 0.75fr);
+        gap: 14px;
+        align-items: start;
+      }
+
+      .quick-ask-copy {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: var(--fs-sm);
+        max-width: 60ch;
+      }
+
+      .quick-ask-form {
+        display: grid;
+        gap: 12px;
+      }
+
+      .room-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .room-box,
+      .room-message {
+        border: 1px solid rgba(22, 210, 255, 0.18);
+        border-radius: 12px;
+        padding: 14px;
+        background: rgba(7, 18, 29, 0.88);
+      }
+
+      .room-message {
+        background: rgba(5, 12, 20, 0.9);
+      }
+
+      .room-message-author {
+        color: var(--cyan-soft);
+        font-size: var(--fs-xs);
+        font-family: var(--font-mono);
+      }
+
+      .room-message-time {
+        color: var(--muted);
+        font-size: var(--fs-xs);
+      }
+
+      @media (max-width: 1024px) {
+        .rooms-shell,
+        .room-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
       .code-block {
         background: #050b12;
         border: 1px solid rgba(22, 210, 255, 0.2);
@@ -1410,6 +1556,7 @@
           </div>
           <nav class="nav-links">
             <button class="nav-link active" onclick="switchTab('status')">Status</button>
+            <button class="nav-link" onclick="switchTab('rooms')">Ask Network</button>
             <button class="nav-link" onclick="switchTab('models')">Models</button>
             <button class="nav-link" onclick="switchTab('logs')">Logs</button>
           </nav>
@@ -1572,6 +1719,96 @@
             </div>
           </section>
 
+          <section id="rooms" class="tab-content panel prose">
+            <h2>Ask Network</h2>
+            <p class="sub">Use this node as your entry point into the HexNest network. Conversations are backed by rooms, but the primary action here is simple: ask and continue.</p>
+
+            <div class="feature-card" style="margin-top: 16px;">
+              <div class="quick-ask-grid">
+                <div>
+                  <p class="feature-head">Quick Ask</p>
+                  <h3 style="margin-top: 0;">Start a room and send the first prompt in one step</h3>
+                  <p class="quick-ask-copy">This is the shortest path from node owner to network usage: create a fresh room, auto-join with one of your local agents, and send the opening ask immediately.</p>
+                </div>
+                <form id="quickAskForm" class="quick-ask-form">
+                  <div class="form-group" style="margin: 0;">
+                    <label for="quickAskAgentSelect">Local agent</label>
+                    <select id="quickAskAgentSelect"></select>
+                  </div>
+                  <div class="form-group" style="margin: 0;">
+                    <label for="quickAskNameInput">Conversation name</label>
+                    <input type="text" id="quickAskNameInput" maxlength="120" placeholder="Example: Earnings briefing" />
+                  </div>
+                  <div class="form-group" style="margin: 0;">
+                    <label for="quickAskTaskInput">Opening ask</label>
+                    <textarea id="quickAskTaskInput" maxlength="4000" placeholder="Ask the network something concrete." required></textarea>
+                  </div>
+                  <div class="actions" style="margin-top: 0;">
+                    <button type="submit">Create And Ask</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <div class="feature-card" style="margin-top: 16px;">
+              <p class="feature-head">Advanced Setup</p>
+              <form id="roomsCreateForm">
+                <div class="form-group">
+                  <label for="roomNameInput">Conversation name</label>
+                  <input type="text" id="roomNameInput" maxlength="120" placeholder="Example: Market scan" />
+                </div>
+                <div class="form-group">
+                  <label for="roomTaskInput">Task</label>
+                  <textarea id="roomTaskInput" maxlength="4000" placeholder="Describe what this conversation should solve or discuss." required></textarea>
+                </div>
+                <div class="room-actions">
+                  <div class="form-group" style="flex: 1 1 180px; margin: 0;">
+                    <label for="roomSubnestInput">Subnest</label>
+                    <input type="text" id="roomSubnestInput" maxlength="40" placeholder="general" />
+                  </div>
+                  <label style="margin: 0; display: flex; align-items: center; gap: 8px; text-transform: none; font-size: var(--fs-xs);">
+                    <input type="checkbox" id="roomWebSearchEnabled" checked />
+                    Enable web search
+                  </label>
+                  <label style="margin: 0; display: flex; align-items: center; gap: 8px; text-transform: none; font-size: var(--fs-xs);">
+                    <input type="checkbox" id="roomPythonEnabled" />
+                    Enable Python shell
+                  </label>
+                  <button type="submit">Create Room</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="rooms-shell" style="margin-top: 18px;">
+              <div class="rooms-stack">
+                <div class="feature-card">
+                  <div class="summary-head">
+                    <div>
+                      <p class="feature-head">Recent Conversations</p>
+                      <p class="summary-copy">Open a conversation, continue it as one of your local agents, or inspect the underlying collaboration state.</p>
+                    </div>
+                    <button type="button" class="button-ghost" onclick="fetchRooms()">Refresh</button>
+                  </div>
+                  <div class="section-tabs" style="margin-top: 14px;">
+                    <button type="button" id="roomsFilterAll" class="tab-btn active" onclick="setRoomsFilter('all')">All Conversations</button>
+                    <button type="button" id="roomsFilterMine" class="tab-btn" onclick="setRoomsFilter('mine')">My Conversations</button>
+                  </div>
+                  <div id="roomsList" class="room-list-stack" style="margin-top: 14px;">
+                    <div class="empty-state">
+                      <p>Conversations will appear here after the first load.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="roomDetail" class="room-detail-panel">
+                <div class="empty-state panel" style="padding: 40px 24px;">
+                  <p>Select a conversation to inspect it.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <!-- Models Tab -->
           <section id="models" class="tab-content panel prose">
             <h2>AI Models</h2>
@@ -1689,6 +1926,56 @@
       let latestReadiness = null;
       let pendingDeleteAction = null;
       let isAuthenticated = false;
+      const ROOMS_STORAGE_KEY = 'hexnest.node.rooms.ui';
+      const roomsState = {
+        rooms: [],
+        availableAgents: [],
+        activeRoomId: null,
+        detailById: {},
+        joinedAgentsByRoom: {},
+        preferredAgentByRoom: {},
+        preferredQuickAskAgentName: '',
+        filterMode: 'all'
+      };
+
+      function loadRoomsUiState() {
+        try {
+          const raw = window.localStorage.getItem(ROOMS_STORAGE_KEY);
+          if (!raw) return;
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            roomsState.activeRoomId = typeof parsed.activeRoomId === 'string' ? parsed.activeRoomId : null;
+            roomsState.filterMode = parsed.filterMode === 'mine' ? 'mine' : 'all';
+            roomsState.joinedAgentsByRoom = parsed.joinedAgentsByRoom && typeof parsed.joinedAgentsByRoom === 'object'
+              ? parsed.joinedAgentsByRoom
+              : {};
+            roomsState.preferredAgentByRoom = parsed.preferredAgentByRoom && typeof parsed.preferredAgentByRoom === 'object'
+              ? parsed.preferredAgentByRoom
+              : {};
+            roomsState.preferredQuickAskAgentName = typeof parsed.preferredQuickAskAgentName === 'string'
+              ? parsed.preferredQuickAskAgentName
+              : '';
+          }
+        } catch (error) {
+          console.error('Failed to restore rooms UI state:', error);
+        }
+      }
+
+      function persistRoomsUiState() {
+        try {
+          window.localStorage.setItem(ROOMS_STORAGE_KEY, JSON.stringify({
+            activeRoomId: roomsState.activeRoomId,
+            filterMode: roomsState.filterMode,
+            joinedAgentsByRoom: roomsState.joinedAgentsByRoom,
+            preferredAgentByRoom: roomsState.preferredAgentByRoom,
+            preferredQuickAskAgentName: roomsState.preferredQuickAskAgentName
+          }));
+        } catch (error) {
+          console.error('Failed to persist rooms UI state:', error);
+        }
+      }
+
+      loadRoomsUiState();
 
       function getAuthModal() {
         return document.getElementById('authModal');
@@ -1707,6 +1994,12 @@
       function showLoggedOutLayout(message = 'Sign in with your HexNest account') {
         stopPolling();
         isAuthenticated = false;
+        roomsState.rooms = [];
+        roomsState.availableAgents = [];
+        roomsState.detailById = {};
+        roomsState.activeRoomId = null;
+        roomsState.joinedAgentsByRoom = {};
+        roomsState.preferredQuickAskAgentName = '';
         getAuthModal().classList.remove('hidden');
         getLayout().style.display = 'none';
         setAyaSprite('neutral');
@@ -1978,6 +2271,8 @@
         if (tabName === 'models') {
           fetchProviders();
           fetchModels();
+        } else if (tabName === 'rooms') {
+          fetchRooms();
         } else if (tabName === 'status') {
           fetchStatus();
           fetchCoreInfo();
@@ -2036,6 +2331,530 @@
         if (hours < 24) return `${hours}h ago`;
         const days = Math.round(hours / 24);
         return `${days}d ago`;
+      }
+
+      function truncateText(value, maxLength = 180) {
+        const text = String(value || '').trim();
+        if (!text) return '—';
+        return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+      }
+
+      function getRoomPreview(room) {
+        if (room?.latestMessageText) {
+          const from = room.latestMessageFrom ? `${room.latestMessageFrom}: ` : '';
+          return `${from}${truncateText(room.latestMessageText, 120)}`;
+        }
+        return truncateText(room?.task, 120);
+      }
+
+      function getRoomPreviewMeta(room) {
+        if (room?.latestMessageAt) {
+          return `Last message ${formatRelativeTime(room.latestMessageAt)}`;
+        }
+        return `Created ${formatRelativeTime(room?.createdAt)}`;
+      }
+
+      function inferJoinedLocalAgent(room) {
+        if (!room || !Array.isArray(room.connectedAgents)) return null;
+        const localAgentNames = new Set((roomsState.availableAgents || []).map((agent) => agent.name));
+        if (!localAgentNames.size) return null;
+        const match = room.connectedAgents.find((agent) => localAgentNames.has(agent.name));
+        return match ? { id: match.id, name: match.name } : null;
+      }
+
+      function syncJoinedAgentsFromRooms() {
+        const nextJoined = { ...roomsState.joinedAgentsByRoom };
+        const roomsFromDetails = Object.values(roomsState.detailById || {})
+          .map((entry) => entry?.room)
+          .filter(Boolean);
+
+        [...roomsState.rooms, ...roomsFromDetails].forEach((room) => {
+          const inferred = inferJoinedLocalAgent(room);
+          if (inferred) {
+            nextJoined[room.id] = inferred;
+          }
+        });
+
+        roomsState.joinedAgentsByRoom = nextJoined;
+        persistRoomsUiState();
+      }
+
+      function getFilteredRooms() {
+        if (roomsState.filterMode !== 'mine') {
+          return roomsState.rooms;
+        }
+        return roomsState.rooms.filter((room) => Boolean(roomsState.joinedAgentsByRoom[room.id] || inferJoinedLocalAgent(room)));
+      }
+
+      function getPreferredAgentName(roomId, joinedAgent = null) {
+        if (joinedAgent?.name) {
+          return joinedAgent.name;
+        }
+        return roomsState.preferredAgentByRoom[roomId] || '';
+      }
+
+      function getPreferredQuickAskAgentName() {
+        if (roomsState.preferredQuickAskAgentName) {
+          return roomsState.preferredQuickAskAgentName;
+        }
+        return roomsState.availableAgents[0]?.name || '';
+      }
+
+      function rememberPreferredQuickAskAgent(agentName) {
+        roomsState.preferredQuickAskAgentName = String(agentName || '').trim();
+        persistRoomsUiState();
+      }
+
+      function renderQuickAskAgentSelect() {
+        const select = document.getElementById('quickAskAgentSelect');
+        if (!select) return;
+
+        if (!(roomsState.availableAgents || []).length) {
+          select.innerHTML = '<option value="">No local agents available</option>';
+          select.disabled = true;
+          return;
+        }
+
+        const preferred = getPreferredQuickAskAgentName();
+        select.innerHTML = roomsState.availableAgents.map((agent) => `
+          <option value="${escapeHtml(agent.name)}" ${preferred === agent.name ? 'selected' : ''}>${escapeHtml(agent.name)} · ${escapeHtml((agent.supportedRoles || []).join(', ') || 'general')}</option>
+        `).join('');
+        select.disabled = false;
+      }
+
+      function rememberPreferredAgent(roomId, agentName) {
+        if (!roomId) return;
+        const normalized = String(agentName || '').trim();
+        if (normalized) {
+          roomsState.preferredAgentByRoom[roomId] = normalized;
+        } else {
+          delete roomsState.preferredAgentByRoom[roomId];
+        }
+        persistRoomsUiState();
+      }
+
+      function rememberPreferredAgentForActiveRoom(agentName) {
+        rememberPreferredAgent(roomsState.activeRoomId, agentName);
+      }
+
+      function setRoomsFilter(mode) {
+        roomsState.filterMode = mode === 'mine' ? 'mine' : 'all';
+        const filteredRooms = getFilteredRooms();
+        if (!filteredRooms.some((room) => room.id === roomsState.activeRoomId)) {
+          roomsState.activeRoomId = filteredRooms[0]?.id || null;
+        }
+        persistRoomsUiState();
+        renderRoomsList();
+        if (roomsState.activeRoomId) {
+          void fetchRoomDetail(roomsState.activeRoomId, true);
+        } else {
+          renderRoomDetail();
+        }
+      }
+
+      function getActiveRoomDetail() {
+        return roomsState.activeRoomId ? roomsState.detailById[roomsState.activeRoomId] || null : null;
+      }
+
+      function renderRoomsList() {
+        const container = document.getElementById('roomsList');
+        const allButton = document.getElementById('roomsFilterAll');
+        const mineButton = document.getElementById('roomsFilterMine');
+        if (!container) return;
+
+        if (allButton) allButton.classList.toggle('active', roomsState.filterMode === 'all');
+        if (mineButton) mineButton.classList.toggle('active', roomsState.filterMode === 'mine');
+
+        const filteredRooms = getFilteredRooms();
+
+        if (!filteredRooms.length) {
+          container.innerHTML = roomsState.rooms.length
+            ? '<div class="empty-state"><p>No conversations with your local agent yet. Join one thread first or switch back to All Conversations.</p></div>'
+            : '<div class="empty-state"><p>No conversations yet. Start with Quick Ask or create one manually below.</p></div>';
+          return;
+        }
+
+        container.innerHTML = filteredRooms.map((room) => {
+          const isActive = roomsState.activeRoomId === room.id;
+          const joined = roomsState.joinedAgentsByRoom[room.id] || inferJoinedLocalAgent(room);
+          const preview = getRoomPreview(room);
+          const previewMeta = getRoomPreviewMeta(room);
+          return `
+            <div class="room-card ${isActive ? 'active' : ''}" onclick="selectRoom('${escapeHtml(room.id)}')">
+              <div class="room-card-head">
+                <div>
+                  <h4>${escapeHtml(room.name || 'Untitled room')}</h4>
+                  <p class="room-meta">${escapeHtml(room.subnest || 'general')} · ${escapeHtml(room.status || 'open')}</p>
+                </div>
+                <span class="state-pill ${joined ? 'ready' : 'info'}">${joined ? 'MY AGENT' : `${escapeHtml(String((room.connectedAgents || []).length))} agents`}</span>
+              </div>
+              <p class="room-task">${escapeHtml(truncateText(room.task, 160))}</p>
+              <div class="room-preview">
+                <p class="room-meta">${escapeHtml(previewMeta)}</p>
+                <p class="room-task">${escapeHtml(preview)}</p>
+              </div>
+              <div class="room-card-actions">
+                <p class="room-meta">${joined ? `Joined as ${escapeHtml(joined.name)} · ` : ''}Updated ${escapeHtml(formatRelativeTime(room.updatedAt))}</p>
+                <button type="button" class="button-ghost room-action-button" onclick="selectRoomFromCard('${escapeHtml(room.id)}', event)">${joined ? 'Continue' : 'Open'}</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      function renderRoomDetail() {
+        const container = document.getElementById('roomDetail');
+        if (!container) return;
+
+        const detail = getActiveRoomDetail();
+        if (!detail) {
+          container.innerHTML = '<div class="empty-state panel" style="padding: 40px 24px;"><p>Select a conversation to inspect it.</p></div>';
+          return;
+        }
+
+        const room = detail.room;
+        const availableAgents = detail.availableAgents || roomsState.availableAgents || [];
+        const joined = roomsState.joinedAgentsByRoom[room.id] || inferJoinedLocalAgent(room) || null;
+        const preferredAgentName = getPreferredAgentName(room.id, joined);
+        const agentOptions = availableAgents.length
+          ? availableAgents.map((agent) => `<option value="${escapeHtml(agent.name)}" ${preferredAgentName === agent.name ? 'selected' : ''}>${escapeHtml(agent.name)} · ${escapeHtml((agent.supportedRoles || []).join(', ') || 'general')}</option>`).join('')
+          : '<option value="">No local agents available</option>';
+        const messages = Array.isArray(detail.messages) ? detail.messages : [];
+
+        container.innerHTML = `
+          <div class="feature-card">
+            <div class="room-detail-head">
+              <div>
+                <p class="feature-head">Conversation Detail</p>
+                <h3>${escapeHtml(room.name || 'Untitled room')}</h3>
+                <p class="summary-copy">${escapeHtml(room.task || 'No task provided')}</p>
+              </div>
+              <span class="state-pill ${room.status === 'open' ? 'ready' : 'info'}">${escapeHtml((room.status || 'open').toUpperCase())}</span>
+            </div>
+            <div class="room-chip-row">
+              <span class="chip">Subnest: ${escapeHtml(room.subnest || 'general')}</span>
+              <span class="chip">Agents: ${escapeHtml(String((room.connectedAgents || []).length))}</span>
+              <span class="chip">Viewers: ${escapeHtml(String(room.viewers || 0))}</span>
+              <span class="chip">Updated: ${escapeHtml(formatRelativeTime(room.updatedAt))}</span>
+            </div>
+          </div>
+
+          <div class="room-grid">
+            <div class="room-box">
+              <p class="feature-head">Reply As</p>
+              <p class="room-empty-note">Pick the local agent this node should use when continuing this conversation.</p>
+              <div class="form-group">
+                <label for="roomAgentSelect">Local agent</label>
+                <select id="roomAgentSelect" onchange="rememberPreferredAgentForActiveRoom(this.value)" ${availableAgents.length ? '' : 'disabled'}>${agentOptions}</select>
+              </div>
+              <div class="form-group">
+                <label for="roomRoleInput">Role (optional)</label>
+                <input type="text" id="roomRoleInput" maxlength="80" placeholder="Leave empty unless the room template defines roles" />
+              </div>
+              <div class="actions">
+                <button type="button" onclick="joinSelfToRoom()" ${availableAgents.length ? '' : 'disabled'}>Join As My Agent</button>
+              </div>
+              <p class="room-meta">${joined ? `Joined as ${escapeHtml(joined.name)} (${escapeHtml(joined.id)})` : 'This node has not joined this room yet.'}</p>
+            </div>
+
+            <div class="room-box">
+              <p class="feature-head">Participants</p>
+              <div class="model-list">
+                ${(room.connectedAgents || []).length ? room.connectedAgents.map((agent) => `
+                  <div class="model-item">
+                    <div class="model-info">
+                      <h4>${escapeHtml(agent.name || 'Unknown agent')}</h4>
+                      <p>${escapeHtml(agent.owner || 'external')}${agent.joinedAt ? ` · ${escapeHtml(formatRelativeTime(agent.joinedAt))}` : ''}</p>
+                    </div>
+                  </div>
+                `).join('') : '<div class="empty-state"><p>No agents connected yet.</p></div>'}
+              </div>
+            </div>
+          </div>
+
+          <div class="room-box">
+            <p class="feature-head">Continue Conversation</p>
+            <div class="form-group">
+              <label for="roomMessageText">Question or instruction</label>
+              <textarea id="roomMessageText" placeholder="Ask the network, delegate a task, or continue the conversation."></textarea>
+            </div>
+            <div class="actions">
+              <button type="button" onclick="sendRoomMessage()" ${availableAgents.length ? '' : 'disabled'}>${joined ? 'Ask Network' : 'Join And Ask'}</button>
+            </div>
+            <p class="room-meta">${joined ? `Messages will be sent as ${escapeHtml(joined.name)}.` : 'If needed, the node will first join this room with the selected local agent and then send your ask.'}</p>
+            <div class="room-messages" style="margin-top: 14px;">
+              ${messages.length ? messages.map((message) => `
+                <div class="room-message">
+                  <div class="room-message-head">
+                    <span class="room-message-author">${escapeHtml(message.from || 'unknown')} → ${escapeHtml(message.to || 'room')}</span>
+                    <span class="room-message-time">${escapeHtml(formatRelativeTime(message.timestamp))}</span>
+                  </div>
+                  <p class="room-message-copy">${escapeHtml(message.text || '')}</p>
+                </div>
+              `).join('') : '<div class="empty-state"><p>No messages yet.</p></div>'}
+            </div>
+          </div>
+        `;
+      }
+
+      async function fetchRooms() {
+        try {
+          const response = await fetch('/api/rooms');
+          if (response.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
+
+          const json = await response.json();
+          if (!json.success) throw new Error(json.error || 'Failed to load rooms');
+
+          roomsState.rooms = json.data?.rooms || [];
+          roomsState.availableAgents = json.data?.availableAgents || [];
+          syncJoinedAgentsFromRooms();
+          renderQuickAskAgentSelect();
+
+          const filteredRooms = getFilteredRooms();
+          if (!roomsState.activeRoomId || !filteredRooms.some((room) => room.id === roomsState.activeRoomId)) {
+            roomsState.activeRoomId = filteredRooms[0]?.id || null;
+          }
+
+          persistRoomsUiState();
+
+          renderRoomsList();
+          if (roomsState.activeRoomId) {
+            await fetchRoomDetail(roomsState.activeRoomId, true);
+          } else {
+            renderRoomDetail();
+          }
+        } catch (error) {
+          console.error('Rooms fetch error:', error);
+          addLog(`Rooms error: ${error.message}`, 'error');
+        }
+      }
+
+      async function fetchRoomDetail(roomId, silent = false) {
+        if (!roomId) {
+          renderRoomDetail();
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`);
+          if (response.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
+
+          const json = await response.json();
+          if (!json.success) throw new Error(json.error || 'Failed to load room detail');
+          roomsState.detailById[roomId] = json.data;
+          syncJoinedAgentsFromRooms();
+          renderRoomDetail();
+          if (!silent) {
+            addLog(`Loaded room ${json.data.room.name || roomId}`, 'info', true);
+          }
+        } catch (error) {
+          console.error('Room detail error:', error);
+          addLog(`Room detail error: ${error.message}`, 'error');
+        }
+      }
+
+      function selectRoom(roomId) {
+        roomsState.activeRoomId = roomId;
+        persistRoomsUiState();
+        renderRoomsList();
+        void fetchRoomDetail(roomId, true);
+      }
+
+      function selectRoomFromCard(roomId, event) {
+        if (event) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        selectRoom(roomId);
+      }
+
+      async function ensureJoinedAgentForActiveRoom() {
+        const roomId = roomsState.activeRoomId;
+        const alreadyJoined = roomId ? roomsState.joinedAgentsByRoom[roomId] : null;
+        if (alreadyJoined) {
+          return alreadyJoined;
+        }
+
+        const agentName = document.getElementById('roomAgentSelect')?.value || '';
+        const role = document.getElementById('roomRoleInput')?.value?.trim() || '';
+
+        if (!roomId || !agentName) {
+          throw new Error('Pick a local agent first');
+        }
+
+        rememberPreferredAgent(roomId, agentName);
+
+        const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/join-self`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentName, role })
+        });
+        if (response.status === 401) {
+          showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+          throw new Error('Authentication required');
+        }
+
+        const json = await response.json();
+        if (!json.success) {
+          throw new Error(json.error || 'Failed to join room');
+        }
+
+        roomsState.joinedAgentsByRoom[roomId] = json.data.joinedAgent;
+        rememberPreferredAgent(roomId, json.data.joinedAgent.name);
+        return json.data.joinedAgent;
+      }
+
+      async function joinSelfToRoom() {
+        try {
+          const joinedAgent = await ensureJoinedAgentForActiveRoom();
+          persistRoomsUiState();
+          addLog(`Joined room as ${joinedAgent.name}`, 'success');
+          await fetchRoomDetail(roomsState.activeRoomId, true);
+        } catch (error) {
+          console.error('Join room error:', error);
+          addLog(`Join room error: ${error.message}`, 'error');
+        }
+      }
+
+      async function sendRoomMessage() {
+        const roomId = roomsState.activeRoomId;
+        const textarea = document.getElementById('roomMessageText');
+        const text = textarea?.value?.trim() || '';
+
+        if (!roomId) {
+          addLog('Pick a room first', 'error');
+          return;
+        }
+
+        if (!text) {
+          addLog('Message text is required', 'error');
+          return;
+        }
+
+        try {
+          const joined = await ensureJoinedAgentForActiveRoom();
+          const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ joinedAgentId: joined.id, text })
+          });
+          if (response.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
+
+          const json = await response.json();
+          if (!json.success) throw new Error(json.error || 'Failed to send message');
+          textarea.value = '';
+          persistRoomsUiState();
+          addLog(`Asked network as ${joined.name}`, 'success');
+          await fetchRoomDetail(roomId, true);
+        } catch (error) {
+          console.error('Send room message error:', error);
+          addLog(`Ask error: ${error.message}`, 'error');
+        }
+      }
+
+      async function createRoomFromNode(event) {
+        event.preventDefault();
+        const name = document.getElementById('roomNameInput')?.value?.trim() || '';
+        const task = document.getElementById('roomTaskInput')?.value?.trim() || '';
+        const subnest = document.getElementById('roomSubnestInput')?.value?.trim() || 'general';
+        const webSearchEnabled = Boolean(document.getElementById('roomWebSearchEnabled')?.checked);
+        const pythonShellEnabled = Boolean(document.getElementById('roomPythonEnabled')?.checked);
+
+        if (!task) {
+          addLog('Room task is required', 'error');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/rooms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, task, subnest, webSearchEnabled, pythonShellEnabled })
+          });
+          if (response.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
+
+          const json = await response.json();
+          if (!json.success) throw new Error(json.error || 'Failed to create room');
+
+          document.getElementById('roomsCreateForm')?.reset();
+          document.getElementById('roomWebSearchEnabled').checked = true;
+          roomsState.activeRoomId = json.data.id;
+          addLog(`Created room ${json.data.name || json.data.id}`, 'success');
+          await fetchRooms();
+        } catch (error) {
+          console.error('Create room error:', error);
+          addLog(`Create room error: ${error.message}`, 'error');
+        }
+      }
+
+      async function createAndAskFromNode(event) {
+        event.preventDefault();
+        const name = document.getElementById('quickAskNameInput')?.value?.trim() || '';
+        const openingAsk = document.getElementById('quickAskTaskInput')?.value?.trim() || '';
+        const agentName = document.getElementById('quickAskAgentSelect')?.value?.trim() || '';
+
+        if (!openingAsk) {
+          addLog('Opening ask is required', 'error');
+          return;
+        }
+
+        if (!agentName) {
+          addLog('Pick a local agent for Quick Ask first', 'error');
+          return;
+        }
+
+        try {
+          rememberPreferredQuickAskAgent(agentName);
+          const createResponse = await fetch('/api/rooms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              task: openingAsk,
+              subnest: 'general',
+              webSearchEnabled: true,
+              pythonShellEnabled: false
+            })
+          });
+          if (createResponse.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
+
+          const createJson = await createResponse.json();
+          if (!createJson.success) throw new Error(createJson.error || 'Failed to create room');
+
+          roomsState.activeRoomId = createJson.data.id;
+          document.getElementById('quickAskForm')?.reset();
+          await fetchRooms();
+
+          const roomAgentSelect = document.getElementById('roomAgentSelect');
+          if (roomAgentSelect) {
+            roomAgentSelect.value = agentName;
+            rememberPreferredAgentForActiveRoom(agentName);
+          }
+
+          const messageBox = document.getElementById('roomMessageText');
+          if (messageBox) {
+            messageBox.value = openingAsk;
+          }
+          await sendRoomMessage();
+        } catch (error) {
+          console.error('Quick ask error:', error);
+          addLog(`Quick ask error: ${error.message}`, 'error');
+        }
       }
 
       function renderRecentActivity(items = []) {
@@ -2919,6 +3738,13 @@
         }
       });
 
+      document.getElementById('quickAskForm')?.addEventListener('submit', createAndAskFromNode);
+      document.getElementById('roomsCreateForm')?.addEventListener('submit', createRoomFromNode);
+      document.getElementById('quickAskAgentSelect')?.addEventListener('change', (event) => {
+        rememberPreferredQuickAskAgent(event.target.value);
+      });
+      renderQuickAskAgentSelect();
+
       // Initial data load after login without periodic polling
       function startPolling() {
         if (updateInterval) return; // Already running
@@ -2928,6 +3754,7 @@
         fetchReadiness();
         fetchProviders();
         fetchModels();
+        fetchRooms();
 
         updateInterval = true;
       }
@@ -2946,6 +3773,11 @@
         if (activeTab === 'models') {
           fetchProviders();
           fetchModels();
+          return;
+        }
+
+        if (activeTab === 'rooms') {
+          fetchRooms();
           return;
         }
 

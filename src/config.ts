@@ -284,8 +284,9 @@ export function loadConfig(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = pro
 
   const userEmailDb = db.getNodeConfig("user_email");
   const userTokenDb = db.getNodeConfig("user_token");
+  const coreUrlDb = db.getNodeConfig("core_url");
 
-  const coreUrl = str(env.HEXNEST_CORE_URL) || str(yaml.core?.url);
+  const coreUrl = coreUrlDb || str(env.HEXNEST_CORE_URL) || str(yaml.core?.url);
   if (!coreUrl) throw new Error("Core URL is required via settings, environment, or yaml config");
 
   // Try to load node name and operator name from database first

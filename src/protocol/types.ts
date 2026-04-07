@@ -124,6 +124,83 @@ export interface JoinRoomResponse {
   roomId: string;
 }
 
+export interface CoreRoomSummary {
+  id: string;
+  name: string;
+  task: string;
+  subnest: string;
+  status: string;
+  phase?: string;
+  createdAt: string;
+  updatedAt: string;
+  connectedAgentsCount: number;
+  messageCount: number;
+}
+
+export interface CoreConnectedAgent {
+  id: string;
+  name: string;
+  owner?: string;
+  endpointUrl?: string;
+  note?: string;
+  joinedAt?: string;
+}
+
+export interface CoreRoomDetails {
+  id: string;
+  name: string;
+  task: string;
+  subnest: string;
+  status: string;
+  phase?: string;
+  createdAt: string;
+  updatedAt: string;
+  viewers?: number;
+  connectedAgents: CoreConnectedAgent[];
+  artifacts?: Artifact[];
+  latestMessageText?: string;
+  latestMessageAt?: string;
+  latestMessageFrom?: string;
+}
+
+export interface CoreRoomMessage {
+  id: string;
+  timestamp: string;
+  from: string;
+  to: string;
+  scope: "room" | "direct";
+  type?: string;
+  text: string;
+  intent?: string;
+  confidence?: number;
+  artifacts?: Artifact[];
+  triggeredBy?: string | null;
+}
+
+export interface CoreRoomsListResponse {
+  value: CoreRoomSummary[];
+  count: number;
+  limit?: number | null;
+  total?: number;
+  hasMore?: boolean;
+}
+
+export interface CoreRoomMessagesResponse {
+  roomId: string;
+  count: number;
+  messages: CoreRoomMessage[];
+  scope?: string;
+}
+
+export interface CreateCoreRoomInput {
+  name?: string;
+  task: string;
+  subnest?: string;
+  pythonShellEnabled?: boolean;
+  webSearchEnabled?: boolean;
+  marketDataEnabled?: boolean;
+}
+
 export interface PostRoomMessageInput {
   roomId: string;
   joinedAgentId: string;

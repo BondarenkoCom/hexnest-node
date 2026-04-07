@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { WebServerContext } from "../server.js";
 import { ApiResponse, NodeReadiness, NodeStatus, ReadinessCheck, ReadinessState } from "../types.js";
+import { resolveCoreUrl } from "../resolve-core-url.js";
 
 const PROVIDERS = [
   { type: "ClaudeAdapter", label: "Claude" },
@@ -25,9 +26,10 @@ async function probeCoreHealth(context: WebServerContext): Promise<{ ok: boolean
   const controller = new AbortController();
   const timeoutMs = Math.min(Math.max(2_000, Math.round(context.nodeConfig.httpTimeoutMs / 2)), 5_000);
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const coreUrl = resolveCoreUrl(context);
 
   try {
-    const response = await fetch(`${context.nodeConfig.coreUrl.replace(/\/+$/, "")}/health`, {
+    const response = await fetch(`${coreUrl.replace(/\/+$/, "")}/health`, {
       method: "GET",
       signal: controller.signal
     });

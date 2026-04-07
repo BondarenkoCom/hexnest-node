@@ -3,6 +3,10 @@ import {
   AuthLoginRequest,
   AuthRegisterRequest,
   AuthResponse,
+  CoreRoomDetails,
+  CoreRoomMessagesResponse,
+  CoreRoomsListResponse,
+  CreateCoreRoomInput,
   DeleteNodeResponse,
   HeartbeatPayload,
   NodeApprovalStatusResponse,
@@ -31,6 +35,10 @@ export interface HexNestClientLike {
   heartbeat(nodeId: string, payload: HeartbeatPayload): Promise<HeartbeatResponse>;
   submitUsage(nodeId: string, records: UsageRecord[]): Promise<SubmitUsageResponse>;
   markOffline(nodeId: string): Promise<void>;
+  listRooms(limit?: number): Promise<CoreRoomsListResponse>;
+  createRoom(payload: CreateCoreRoomInput): Promise<CoreRoomDetails>;
+  getRoom(roomId: string): Promise<CoreRoomDetails>;
+  getRoomMessages(roomId: string, limit?: number): Promise<CoreRoomMessagesResponse>;
   joinRoom(roomId: string, agentName: string, role: string): Promise<JoinRoomResponse>;
   postRoomMessage(input: PostRoomMessageInput): Promise<void>;
   getRoomContext(roomId: string, role: string): Promise<RoomContext>;
@@ -174,6 +182,35 @@ export class HexNestClient implements HexNestClientLike {
       authRequired: true,
       body: {}
     });
+  }
+
+  async listRooms(limit = 50): Promise<CoreRoomsListResponse> {
+    const params = new URLSearchParams();
+    if (Number.isFinite(limit) && limit > 0) {
+      params.set("limit", String(limit));
+    }
+    const suffix = params.size > 0 ? `?${params.toString()}` : "";
+    return this.request<CoreRoomsListResponse>(`/api/rooms${suffix}`);
+  }
+
+  async createRoom(payload: CreateCoreRoomInput): Promise<CoreRoomDetails> {
+    return this.request<CoreRoomDetails>("/api/rooms", {
+      method: "POST",
+      body: payload
+    });
+  }
+
+  async getRoom(roomId: string): Promise<CoreRoomDetails> {
+    return this.request<CoreRoomDetails>(`/api/rooms/${encodeURIComponent(roomId)}`);
+  }
+
+  async getRoomMessages(roomId: string, limit = 50): Promise<CoreRoomMessagesResponse> {
+    const params = new URLSearchParams();
+    if (Number.isFinite(limit) && limit > 0) {
+      params.set("limit", String(limit));
+    }
+    const suffix = params.size > 0 ? `?${params.toString()}` : "";
+    return this.request<CoreRoomMessagesResponse>(`/api/rooms/${encodeURIComponent(roomId)}/messages${suffix}`);
   }
 
   async joinRoom(roomId: string, agentName: string, role: string): Promise<JoinRoomResponse> {
