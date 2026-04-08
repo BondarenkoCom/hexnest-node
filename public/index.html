@@ -197,6 +197,7 @@
         margin-bottom: 16px;
         position: relative;
         z-index: 1;
+        min-height: 0;
       }
 
       .sidebar-label {
@@ -211,6 +212,24 @@
       .room-list {
         display: grid;
         gap: 8px;
+        max-height: min(48vh, 34rem);
+        overflow-y: auto;
+        padding-right: 4px;
+        scrollbar-gutter: stable;
+      }
+
+      .room-list::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .room-list::-webkit-scrollbar-thumb {
+        background: rgba(74, 217, 255, 0.28);
+        border-radius: 999px;
+      }
+
+      .room-list::-webkit-scrollbar-track {
+        background: rgba(4, 12, 20, 0.42);
+        border-radius: 999px;
       }
 
       .room-item,
@@ -2244,6 +2263,7 @@
       let pendingDeleteAction = null;
       let isAuthenticated = false;
       let cachedModels = [];
+      let cachedProviders = [];
       let roomHeartbeatTimer = null;
       const ROOM_HEARTBEAT_MS = 10000;
       const ROOMS_STORAGE_KEY = 'hexnest.node.rooms.ui';
@@ -2879,7 +2899,7 @@
         const container = document.getElementById('sidebarRoomsList');
         if (!container) return;
 
-        const rooms = getFilteredRooms().slice(0, 6);
+        const rooms = getFilteredRooms();
         if (!rooms.length) {
           container.innerHTML = '<div class="room-empty">No rooms yet.</div>';
           return;
@@ -2901,7 +2921,7 @@
               </div>
               <span class="room-task">${escapeHtml(truncateText(room.name || room.task || 'Untitled room', 54))}</span>
               <span class="room-phase"><span class="subnest-tag">n/${escapeHtml(room.subnest || 'general')}</span>${escapeHtml(phaseLabel)}</span>
-              ${joined ? `<span class="room-phase">Joined as ${escapeHtml(joined.name)}</span>` : ''}
+              ${joined ? `<span class="room-phase">Joined as ${escapeHtml(formatAgentPrimaryTitle(joined.name))}</span>` : ''}
             </div>
           `;
         }).join('');
@@ -2950,7 +2970,7 @@
                 <p class="room-task">${escapeHtml(preview)}</p>
               </div>
               <div class="room-card-actions">
-                <p class="room-meta">${joined ? `Joined as ${escapeHtml(joined.name)} · ` : ''}Updated ${escapeHtml(formatRelativeTime(room.updatedAt))}</p>
+                <p class="room-meta">${joined ? `Joined as ${escapeHtml(formatAgentPrimaryTitle(joined.name))} · ` : ''}Updated ${escapeHtml(formatRelativeTime(room.updatedAt))}</p>
                 <button type="button" class="button-ghost room-action-button" onclick="selectRoomFromCard('${escapeHtml(room.id)}', event)">${joined ? 'Continue' : 'Open'}</button>
               </div>
             </div>
@@ -3043,6 +3063,25 @@
         return Array.isArray(cachedModels)
           ? cachedModels.find((model) => model && model.name === name) || null
           : null;
+      }
+
+      function getAgentIdentity(agentName) {
+        const normalizedName = String(agentName || '').trim();
+        if (!normalizedName) {
+          return { title: 'Unknown agent', secondary: '' };
+        }
+
+        const model = getCachedModelByName(normalizedName);
+        const modelId = String(model?.model || '').trim();
+        if (!modelId || modelId === normalizedName) {
+          return { title: normalizedName, secondary: '' };
+        }
+
+        return { title: modelId, secondary: normalizedName };
+      }
+
+      function formatAgentPrimaryTitle(agentName) {
+        return getAgentIdentity(agentName).title;
       }
 
       function getRoomSessionControlState(session) {
@@ -3147,13 +3186,20 @@
         const room = detail.room || {};
         const stats = detail.stats || null;
         const brief = detail.brief || null;
-        const availableAgents = detail.availableAgents || roomsState.availableAgents || [];
+        const detailAvailableAgents = Array.isArray(detail.availableAgents) ? detail.availableAgents : [];
+        const globalAvailableAgents = Array.isArray(roomsState.availableAgents) ? roomsState.availableAgents : [];
+        const availableAgents = detailAvailableAgents.length ? detailAvailableAgents : globalAvailableAgents;
         const joined = roomsState.joinedAgentsByRoom[room.id] || inferJoinedLocalAgent(room) || null;
+        const joinedIdentity = joined ? getAgentIdentity(joined.name) : null;
         const preferredAgentName = getPreferredAgentName(room.id, joined);
+        const selectedAgentIdentity = preferredAgentName ? getAgentIdentity(preferredAgentName) : null;
         const composer = getRoomComposerState(room.id);
         const agentOptions = availableAgents.length
-          ? availableAgents.map((agent) => `<option value="${escapeHtml(agent.name)}" ${preferredAgentName === agent.name ? 'selected' : ''}>${escapeHtml(agent.name)} · ${escapeHtml((agent.supportedRoles || []).join(', ') || 'general')}</option>`).join('')
+          ? availableAgents.map((agent) => `<option value="${escapeHtml(agent.name)}" ${preferredAgentName === agent.name ? 'selected' : ''}>${escapeHtml(formatAgentPrimaryTitle(agent.name))} · ${escapeHtml((agent.supportedRoles || []).join(', ') || 'general')}</option>`).join('')
           : '<option value="">No local agents available</option>';
+        const configuredModels = Array.isArray(cachedModels) ? cachedModels : [];
+        const enabledConfiguredModels = configuredModels.filter((model) => model?.enabled);
+        const hasConfiguredButUnavailableAgents = enabledConfiguredModels.length > 0 && availableAgents.length === 0;
 
         const allEvents = Array.isArray(room.timeline)
           ? room.timeline.slice().sort((left, right) => Date.parse(left.timestamp || 0) - Date.parse(right.timestamp || 0))
@@ -3165,6 +3211,60 @@
         const localSessions = Array.isArray(detail.localSessions) ? detail.localSessions.map(normalizeLocalRoomSession) : [];
         const roleAssignments = room.agentRoles || {};
         const briefText = buildRoomBriefText(brief);
+        const selectedAgentSecondaryText = selectedAgentIdentity && selectedAgentIdentity.secondary
+          ? `<p class="room-detail-meta">Configured agent name: ${escapeHtml(selectedAgentIdentity.secondary)}</p>`
+          : '';
+        const joinedPrimaryTitle = joinedIdentity ? joinedIdentity.title : '';
+        const joinedSecondaryText = joinedIdentity && joinedIdentity.secondary
+          ? `<p class="room-detail-meta">Configured agent name: ${escapeHtml(joinedIdentity.secondary)}</p>`
+          : '';
+        const localSessionsHtml = localSessions.length
+          ? localSessions.map((session) => {
+              const control = getRoomSessionControlState(session);
+              const sessionIdentity = getAgentIdentity(session.agentName || 'Unknown agent');
+              const sessionSecondaryPrefix = sessionIdentity.secondary
+                ? `agent=${escapeHtml(sessionIdentity.secondary)} · `
+                : '';
+              return `
+                        <div class="room-connected-card">
+                          <div class="room-message-head">
+                            <span class="room-message-author">${escapeHtml(sessionIdentity.title)}</span>
+                            <span class="state-pill ${mapRoomSessionPillClass(session.status)}">${escapeHtml(formatRoomSessionLabel(session))}</span>
+                          </div>
+                          <p class="room-detail-meta">${sessionSecondaryPrefix}role=${escapeHtml(session.role || 'unassigned')} · mode=${escapeHtml(control.mode)} · updated ${escapeHtml(session.updatedAt ? formatRelativeTime(new Date(session.updatedAt).toISOString()) : '—')}</p>
+                          <p class="room-message-copy">${session.lastRespondedAt ? `Last autonomous response ${escapeHtml(formatRelativeTime(new Date(session.lastRespondedAt).toISOString()))}` : 'No autonomous response recorded yet.'}</p>
+                          ${!control.canRestart && control.restartReason
+                            ? `<p class="room-detail-meta">Restart unavailable: ${escapeHtml(control.restartReason)}</p>`
+                            : ''}
+                          ${!control.canStop && control.stopReason
+                            ? `<p class="room-detail-meta">Stop unavailable: ${escapeHtml(control.stopReason)}</p>`
+                            : ''}
+                          <div class="actions" style="margin-top: 10px;">
+                            <button type="button" class="button-ghost" onclick="controlRoomSession('${escapeHtml(session.roomId)}', '${escapeHtml(session.agentName)}', 'restart')" ${control.canRestart ? '' : 'disabled'} title="${escapeHtml(control.restartReason)}">Restart</button>
+                            <button type="button" class="button-ghost" onclick="controlRoomSession('${escapeHtml(session.roomId)}', '${escapeHtml(session.agentName)}', 'stop')" ${control.canStop ? '' : 'disabled'} title="${escapeHtml(control.stopReason)}">Stop</button>
+                          </div>
+                        </div>
+                      `;
+            }).join('')
+          : '<div class="empty-state"><p>No local room sessions yet.</p></div>';
+        const connectedAgentsHtml = connectedAgents.length
+          ? connectedAgents.map((agent) => {
+              const agentIdentity = getAgentIdentity(agent.name || 'Unknown agent');
+              const agentSecondaryPrefix = agentIdentity.secondary
+                ? `agent=${escapeHtml(agentIdentity.secondary)} · `
+                : '';
+              return `
+                      <div class="room-connected-card">
+                        <div class="room-message-head">
+                          <span class="room-message-author">${escapeHtml(agentIdentity.title)}</span>
+                          <span class="room-message-time">${escapeHtml(agent.joinedAt ? formatRelativeTime(agent.joinedAt) : '—')}</span>
+                        </div>
+                        <p class="room-message-copy">owner=${escapeHtml(agent.owner || 'external')}</p>
+                        <p class="room-detail-meta">${agentSecondaryPrefix}role=${escapeHtml(roleAssignments[agent.id] || 'unassigned')}${agent.endpointUrl ? ` · endpoint=${escapeHtml(agent.endpointUrl)}` : ''}</p>
+                      </div>
+                    `;
+            }).join('')
+          : '<div class="empty-state"><p>No agents connected yet.</p></div>';
         const statBadge = stats
           ? `${stats.totalMessages || 0} msgs · ${stats.totalShares || 0} shares · ${stats.totalViewers || room.viewers || 0} views · ${stats.agents || connectedAgents.length} active speakers`
           : `${chatEvents.length} timeline events · ${connectedAgents.length} connected agents`;
@@ -3203,11 +3303,15 @@
               <div class="room-stack">
                 <div class="room-box">
                   <p class="feature-head">Talk Through My Agent</p>
-                  <p class="room-empty-note">Use one of your local agents to participate in this room. If the agent is not in the room yet, the node will join it first.</p>
+                  <p class="room-empty-note">Use one of your local agents to participate in this room. If the agent is not in the room yet, the node will join it first. This list only shows enabled agents that the runtime can load right now.</p>
                   <div class="form-group">
                     <label for="roomAgentSelect">My agent</label>
                     <select id="roomAgentSelect" onchange="rememberPreferredAgentForActiveRoom(this.value)" ${availableAgents.length ? '' : 'disabled'}>${agentOptions}</select>
                   </div>
+                  ${selectedAgentSecondaryText}
+                  ${hasConfiguredButUnavailableAgents
+                    ? '<p class="room-detail-meta">Agents exist in the Agents tab, but none are runtime-ready right now. Check whether the model is enabled and whether its provider configuration or API key is available to the local runtime.</p>'
+                    : ''}
                   <div class="form-group">
                     <label for="roomRoleInput">Role (optional)</label>
                     <input type="text" id="roomRoleInput" maxlength="80" value="${escapeHtml(composer.role || '')}" oninput="rememberRoomComposerField('role', this.value)" placeholder="Use a room role if the template defines one" />
@@ -3217,34 +3321,11 @@
                     <button type="button" class="button-ghost" onclick="refreshActiveRoom()">Sync Room</button>
                     ${availableAgents.length ? '' : '<button type="button" class="button-ghost" onclick="openAgentsTab()">Set Up Agents</button>'}
                   </div>
-                  <p class="room-meta">${joined ? `Your node is already in this room as ${escapeHtml(joined.name)}.` : 'Your node has not joined this room yet.'}</p>
+                  <p class="room-meta">${joinedIdentity ? `Your node is already in this room as ${escapeHtml(joinedPrimaryTitle)}.` : 'Your node has not joined this room yet.'}</p>
+                  ${joinedSecondaryText}
 
                   <div style="margin-top: 14px; display: grid; gap: 10px;">
-                    ${localSessions.length
-                      ? localSessions.map((session) => {
-                        const control = getRoomSessionControlState(session);
-                        return `
-                        <div class="room-connected-card">
-                          <div class="room-message-head">
-                            <span class="room-message-author">${escapeHtml(session.agentName || 'Unknown agent')}</span>
-                            <span class="state-pill ${mapRoomSessionPillClass(session.status)}">${escapeHtml(formatRoomSessionLabel(session))}</span>
-                          </div>
-                          <p class="room-detail-meta">role=${escapeHtml(session.role || 'unassigned')} · mode=${escapeHtml(control.mode)} · updated ${escapeHtml(session.updatedAt ? formatRelativeTime(new Date(session.updatedAt).toISOString()) : '—')}</p>
-                          <p class="room-message-copy">${session.lastRespondedAt ? `Last autonomous response ${escapeHtml(formatRelativeTime(new Date(session.lastRespondedAt).toISOString()))}` : 'No autonomous response recorded yet.'}</p>
-                          ${!control.canRestart && control.restartReason
-                            ? `<p class="room-detail-meta">Restart unavailable: ${escapeHtml(control.restartReason)}</p>`
-                            : ''}
-                          ${!control.canStop && control.stopReason
-                            ? `<p class="room-detail-meta">Stop unavailable: ${escapeHtml(control.stopReason)}</p>`
-                            : ''}
-                          <div class="actions" style="margin-top: 10px;">
-                            <button type="button" class="button-ghost" onclick="controlRoomSession('${escapeHtml(session.roomId)}', '${escapeHtml(session.agentName)}', 'restart')" ${control.canRestart ? '' : 'disabled'} title="${escapeHtml(control.restartReason)}">Restart</button>
-                            <button type="button" class="button-ghost" onclick="controlRoomSession('${escapeHtml(session.roomId)}', '${escapeHtml(session.agentName)}', 'stop')" ${control.canStop ? '' : 'disabled'} title="${escapeHtml(control.stopReason)}">Stop</button>
-                          </div>
-                        </div>
-                      `;
-                      }).join('')
-                      : '<div class="empty-state"><p>No local room sessions yet.</p></div>'}
+                    ${localSessionsHtml}
                   </div>
 
                   <div class="form-group" style="margin-top: 14px;">
@@ -3254,7 +3335,7 @@
                   <div class="actions">
                     <button type="button" onclick="sendRoomMessage()" ${availableAgents.length ? '' : 'disabled'}>${joined ? 'Send To Room' : 'Send My Agent And Message'}</button>
                   </div>
-                  <p class="room-meta">${joined ? `Messages will be sent as ${escapeHtml(joined.name)}.` : 'If needed, the node will first send your selected agent into the room and then post the message.'}</p>
+                  <p class="room-meta">${joinedIdentity ? `Messages will be sent as ${escapeHtml(joinedPrimaryTitle)}.` : 'If needed, the node will first send your selected agent into the room and then post the message.'}</p>
                 </div>
 
                 <div class="room-box">
@@ -3298,16 +3379,7 @@
                 <div class="room-box">
                   <p class="feature-head">Connected Agents</p>
                   <div class="room-connected-list">
-                    ${connectedAgents.length ? connectedAgents.map((agent) => `
-                      <div class="room-connected-card">
-                        <div class="room-message-head">
-                          <span class="room-message-author">${escapeHtml(agent.name || 'Unknown agent')}</span>
-                          <span class="room-message-time">${escapeHtml(agent.joinedAt ? formatRelativeTime(agent.joinedAt) : '—')}</span>
-                        </div>
-                        <p class="room-message-copy">owner=${escapeHtml(agent.owner || 'external')}</p>
-                        <p class="room-detail-meta">role=${escapeHtml(roleAssignments[agent.id] || 'unassigned')}${agent.endpointUrl ? ` · endpoint=${escapeHtml(agent.endpointUrl)}` : ''}</p>
-                      </div>
-                    `).join('') : '<div class="empty-state"><p>No agents connected yet.</p></div>'}
+                    ${connectedAgentsHtml}
                   </div>
                 </div>
 
@@ -4273,43 +4345,75 @@
             return;
           }
 
-          modelsList.innerHTML = models.map(model => `
-            <div class="model-item">
-              <div class="model-info">
-                <h4>${model.name}${model.active ? ' <span style="color: var(--warn); font-size: var(--fs-sm);">⭐ Default agent</span>' : ''}</h4>
-                <p>${model.type || 'Unknown'} model · ${model.enabled ? '✓ Enabled' : '○ Disabled'}</p>
-                <p>${model.enabled
-                  ? (coreConnected
-                    ? (model.agentMode === 'manual'
-                      ? 'This agent can join your rooms, but it is not advertised to the network.'
-                      : model.agentMode === 'autonomous'
-                        ? 'This agent can join your rooms and is advertised to the network as autonomous after join.'
-                        : 'This agent can join your rooms and is currently being offered to the network.')
-                    : (model.agentMode === 'manual'
-                      ? 'This agent can join your rooms now. It is intentionally local-only.'
-                      : 'This agent can join your rooms now. Connect the node to core if you also want other rooms to recruit it.'))
-                  : 'Disabled agents are stored locally but cannot join rooms and are not offered to the network.'}</p>
-                <div class="chips" style="margin-top: 10px;">
+          modelsList.innerHTML = models.map(model => {
+            const runtimeOnly = Boolean(model.runtimeOnly);
+            const title = model.model || model.name;
+            const secondaryText = model.model && model.model !== model.name
+              ? `<p>Agent name: ${model.name}</p>`
+              : (runtimeOnly ? `<p>Runtime name: ${model.name}</p>` : '');
+            const statusText = runtimeOnly
+              ? `${model.type || 'Unknown'} runtime agent · available from environment`
+              : `${model.type || 'Unknown'} model · ${model.enabled ? '✓ Enabled' : '○ Disabled'}`;
+            const description = runtimeOnly
+              ? 'This agent is available in the local runtime from environment configuration. Add it through "2. Add Model As Agent" if you want saved controls here for mode, enablement, and removal.'
+              : (model.enabled
+                ? (coreConnected
+                  ? (model.agentMode === 'manual'
+                    ? 'This agent can join your rooms, but it is not advertised to the network.'
+                    : model.agentMode === 'autonomous'
+                      ? 'This agent can join your rooms and is advertised to the network as autonomous after join.'
+                      : 'This agent can join your rooms and is currently being offered to the network.')
+                  : (model.agentMode === 'manual'
+                    ? 'This agent can join your rooms now. It is intentionally local-only.'
+                    : 'This agent can join your rooms now. Connect the node to core if you also want other rooms to recruit it.'))
+                : 'Disabled agents are stored locally but cannot join rooms and are not offered to the network.');
+            const chipsHtml = runtimeOnly
+              ? '<span class="chip">Runtime only</span><span class="chip">Env managed</span><span class="chip">Local only until saved</span>'
+              : `
                   <span class="chip">Mode: ${model.agentMode}</span>
                   ${model.agentMode === 'manual' ? '<span class="chip">Local only</span>' : ''}
                   ${model.agentMode === 'recruitable' ? '<span class="chip">Invitable</span>' : ''}
                   ${model.agentMode === 'autonomous' ? '<span class="chip">Auto after join</span>' : ''}
+                `;
+            const actionsHtml = runtimeOnly
+              ? `
+                  <div class="model-actions" style="flex-direction: column; align-items: flex-end;">
+                    <button onclick='saveRuntimeAgent(${JSON.stringify(model.name)}, ${JSON.stringify(model.type)}, ${JSON.stringify(model.model)}, ${JSON.stringify(model.baseUrl || '')})' style="background: rgba(61, 176, 255, 0.15); border-color: rgba(61, 176, 255, 0.35); color: #8fe7ff;">
+                      Save As Agent
+                    </button>
+                    <span class="meta" style="max-width: 260px; text-align: right; color: var(--muted);">Managed by runtime environment right now. Save it as an agent to edit mode, enablement, and default selection here.</span>
+                  </div>
+                `
+              : `
+                  <div class="model-actions">
+                    <select onchange="updateAgentMode('${model.name}', this.value)" style="min-width: 180px;">
+                      <option value="manual" ${model.agentMode === 'manual' ? 'selected' : ''}>Manual only</option>
+                      <option value="recruitable" ${model.agentMode === 'recruitable' ? 'selected' : ''}>Recruitable</option>
+                      <option value="autonomous" ${model.agentMode === 'autonomous' ? 'selected' : ''}>Autonomous after join</option>
+                    </select>
+                    <button onclick="toggleAgentEnabled('${model.name}', ${model.enabled ? 'false' : 'true'})" style="background: rgba(6, 15, 24, 0.8); border-color: rgba(22, 210, 255, 0.35);">
+                      ${model.enabled ? 'Disable Agent' : 'Enable Agent'}
+                    </button>
+                    ${!model.active ? `<button onclick="activateModel('${model.name}')" style="background: rgba(61, 176, 255, 0.15); border-color: rgba(61, 176, 255, 0.35); color: #8fe7ff;">Set As Default Agent</button>` : ''}
+                    <button onclick="deleteModel('${model.name}')" style="background: rgba(159, 18, 48, 0.22); border-color: rgba(255, 110, 139, 0.5); color: #ffaec0;">Remove Agent</button>
+                  </div>
+                `;
+
+            return `
+            <div class="model-item">
+              <div class="model-info">
+                <h4>${title}${model.active ? ' <span style="color: var(--warn); font-size: var(--fs-sm);">⭐ Default agent</span>' : ''}</h4>
+                ${secondaryText}
+                <p>${statusText}</p>
+                <p>${description}</p>
+                <div class="chips" style="margin-top: 10px;">
+                  ${chipsHtml}
                 </div>
               </div>
-              <div class="model-actions">
-                <select onchange="updateAgentMode('${model.name}', this.value)" style="min-width: 180px;">
-                  <option value="manual" ${model.agentMode === 'manual' ? 'selected' : ''}>Manual only</option>
-                  <option value="recruitable" ${model.agentMode === 'recruitable' ? 'selected' : ''}>Recruitable</option>
-                  <option value="autonomous" ${model.agentMode === 'autonomous' ? 'selected' : ''}>Autonomous after join</option>
-                </select>
-                <button onclick="toggleAgentEnabled('${model.name}', ${model.enabled ? 'false' : 'true'})" style="background: rgba(6, 15, 24, 0.8); border-color: rgba(22, 210, 255, 0.35);">
-                  ${model.enabled ? 'Disable Agent' : 'Enable Agent'}
-                </button>
-                ${!model.active ? `<button onclick="activateModel('${model.name}')" style="background: rgba(61, 176, 255, 0.15); border-color: rgba(61, 176, 255, 0.35); color: #8fe7ff;">Set As Default Agent</button>` : ''}
-                <button onclick="deleteModel('${model.name}')" style="background: rgba(159, 18, 48, 0.22); border-color: rgba(255, 110, 139, 0.5); color: #ffaec0;">Remove Agent</button>
-              </div>
+              ${actionsHtml}
             </div>
-          `).join('');
+          `;
+          }).join('');
 
           addLog(`Loaded ${models.length} agents`, 'info', true);
         } catch (err) {
@@ -4380,6 +4484,32 @@
         });
       }
 
+      async function saveRuntimeAgent(name, adapter, modelName, baseUrl) {
+        try {
+          const res = await fetch('/api/models', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              adapter,
+              config: {
+                model: modelName,
+                baseUrl: baseUrl || undefined
+              }
+            })
+          });
+          const json = await res.json();
+          if (!json.success) throw new Error(json.error || 'Failed to save runtime agent');
+
+          addLog(`Saved runtime agent: ${name}`, 'info');
+          await fetchProviders();
+          await fetchModels();
+        } catch (err) {
+          console.error('Save runtime agent error:', err);
+          addLog(`Save agent error: ${err.message}`, 'error');
+        }
+      }
+
       async function testProvider() {
         const adapter = document.getElementById('providerAdapter').value;
         const apiKey = document.getElementById('providerApiKey').value;
@@ -4439,20 +4569,12 @@
 
       async function fetchProviders() {
         try {
-          const adapters = ['ClaudeAdapter', 'OpenAIAdapter', 'OllamaAdapter'];
-          const providers = [];
+          const res = await fetch('/api/adapters');
+          const json = await res.json();
+          if (!json.success) throw new Error(json.error || 'Failed to load providers');
 
-          for (const adapter of adapters) {
-            try {
-              const res = await fetch(`/api/adapters/${adapter}`);
-              const json = await res.json();
-              if (json.success && json.data) {
-                providers.push(json.data);
-              }
-            } catch (err) {
-              // Provider not configured yet
-            }
-          }
+          const providers = Array.isArray(json.data) ? json.data : [];
+          cachedProviders = providers;
 
           const list = document.getElementById('providersList');
           if (providers.length === 0) {
@@ -4473,7 +4595,7 @@
           }
 
           // Update model form with available providers
-          updateProviderSelect();
+          updateProviderSelect(providers);
           addLog(`Loaded ${providers.length} providers`, 'info', true);
         } catch (err) {
           console.error('Providers fetch error:', err);
@@ -4496,43 +4618,34 @@
         });
       }
 
-      function updateProviderSelect() {
+      function updateProviderSelect(providers = cachedProviders) {
         const select = document.getElementById('modelAdapter');
-        const adapters = ['ClaudeAdapter', 'OpenAIAdapter', 'OllamaAdapter'];
         const currentValue = select.value; // Зберігаємо поточне значення
-        
-        Promise.all(adapters.map(async (adapter) => {
-          try {
-            const res = await fetch(`/api/adapters/${adapter}`);
-            const json = await res.json();
-            return json.success ? adapter : null;
-          } catch {
-            return null;
-          }
-        })).then(configured => {
-          const available = adapters.filter(a => configured.includes(a));
-          
-          // Не переписуємо, якщо список не змінився
-          const currentOptions = Array.from(select.options).map(o => o.value).filter(v => v !== '');
-          if (JSON.stringify(available.sort()) === JSON.stringify(currentOptions.sort()) && currentValue) {
-            return; // Нічого не змінилось, залишаємо як є
-          }
-          
-          select.innerHTML = '<option value="">— Select provider —</option>';
-          available.forEach(adapter => {
-            const label = adapter === 'ClaudeAdapter' ? '🔮 Claude' : 
-                         adapter === 'OpenAIAdapter' ? '🚀 OpenAI' : '🦙 Ollama';
-            const option = document.createElement('option');
-            option.value = adapter;
-            option.textContent = label;
-            select.appendChild(option);
-          });
-          
-          // Відновлюємо попереднє значення якщо воно ще існує
-          if (currentValue && available.includes(currentValue)) {
-            select.value = currentValue;
-          }
+
+        const available = Array.isArray(providers)
+          ? providers.map((provider) => provider.type).filter(Boolean)
+          : [];
+
+        // Не переписуємо, якщо список не змінився
+        const currentOptions = Array.from(select.options).map(o => o.value).filter(v => v !== '');
+        if (JSON.stringify([...available].sort()) === JSON.stringify([...currentOptions].sort()) && currentValue) {
+          return; // Нічого не змінилось, залишаємо як є
+        }
+
+        select.innerHTML = '<option value="">— Select provider —</option>';
+        available.forEach(adapter => {
+          const label = adapter === 'ClaudeAdapter' ? '🔮 Claude' : 
+                       adapter === 'OpenAIAdapter' ? '🚀 OpenAI' : '🦙 Ollama';
+          const option = document.createElement('option');
+          option.value = adapter;
+          option.textContent = label;
+          select.appendChild(option);
         });
+
+        // Відновлюємо попереднє значення якщо воно ще існує
+        if (currentValue && available.includes(currentValue)) {
+          select.value = currentValue;
+        }
       }
 
       async function loadAvailableModels() {
@@ -4548,17 +4661,16 @@
         modelSelect.disabled = true;
 
         try {
-          // Отримуємо конфіг провайдера
-          const configRes = await fetch(`/api/adapters/${adapter}`);
-          const configJson = await configRes.json();
-          
-          if (!configJson.success) {
+          // Отримуємо конфіг провайдера з локального кешу списку
+          const config = Array.isArray(cachedProviders)
+            ? cachedProviders.find((provider) => provider.type === adapter)
+            : null;
+
+          if (!config) {
             modelSelect.innerHTML = '<option value="">Provider not configured</option>';
             addLog(`Provider ${adapter} not configured`, 'error');
             return;
           }
-
-          const config = configJson.data;
 
           // Викликаємо test-list щоб отримати доступні моделі
           const testRes = await fetch('/api/models/test-list', {

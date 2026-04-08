@@ -92,6 +92,20 @@ function str(value: unknown): string | undefined {
   return s.length > 0 ? s : undefined;
 }
 
+function normalizeAdapterKind(value: unknown): string {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "ollama" || normalized === "ollamaadapter") {
+    return "ollama";
+  }
+  if (normalized === "openai" || normalized === "openaiadapter") {
+    return "openai";
+  }
+  if (normalized === "claude" || normalized === "claudeadapter" || normalized === "anthropic") {
+    return "claude";
+  }
+  return normalized;
+}
+
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item ?? "").trim()).filter(Boolean);
@@ -167,7 +181,7 @@ function migrateIdentityToDatabase(db: DatabaseService, identityPath: string | n
 }
 
 function adapterFromSource(source: AdapterConfigSource, env: Record<string, string>): AgentAdapter | null {
-  const type = str(source.type)?.toLowerCase();
+  const type = normalizeAdapterKind(str(source.type));
   const name = str(source.name);
   const model = str(source.model);
   const baseUrl = str(source.baseUrl);
@@ -216,7 +230,7 @@ function adapterFromSource(source: AdapterConfigSource, env: Record<string, stri
 }
 
 function adapterFromModelConfig(config: ModelConfig, env: Record<string, string>): AgentAdapter | null {
-  const type = config.type.toLowerCase();
+  const type = normalizeAdapterKind(config.type);
   const name = config.name;
   const model = config.model;
   const baseUrl = config.baseUrl;
@@ -384,15 +398,6 @@ export function buildAdapters(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = 
       registerAdapter(adaptersByName, adapterFromSource(source, env));
     }
   }
-
-  // Load default adapters from env variables (if not already in database)
-  registerAdapter(
-    adaptersByName,
-    new OllamaAdapter({
-      model: str(env.OLLAMA_MODEL) || "qwen2.5:14b",
-      baseUrl: str(env.OLLAMA_BASE_URL) || "http://localhost:11434"
-    })
-  );
 
   const openAiKey = str(env.OPENAI_API_KEY);
   if (openAiKey) {

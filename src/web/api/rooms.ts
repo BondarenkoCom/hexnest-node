@@ -104,7 +104,7 @@ export function roomsRouter(context: WebServerContext) {
   router.get("/", async (_req: Request, res: Response) => {
     try {
       const client = createClient(context);
-      const list = await client.listRooms(80);
+      const list = await client.listRooms(200);
       const roomIds = list.value
         .slice()
         .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))

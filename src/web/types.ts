@@ -83,6 +83,7 @@ export interface ModelInfo {
   enabled: boolean;
   agentMode: "manual" | "recruitable" | "autonomous";
   active: boolean;
+  runtimeOnly?: boolean;
 }
 
 export interface NodeConfigInfo {

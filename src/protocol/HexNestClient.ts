@@ -197,7 +197,8 @@ export class HexNestClient implements HexNestClientLike {
   async listRooms(limit = 50): Promise<CoreRoomsListResponse> {
     const params = new URLSearchParams();
     if (Number.isFinite(limit) && limit > 0) {
-      params.set("limit", String(limit));
+      const normalizedLimit = Math.min(200, Math.max(1, Math.floor(limit)));
+      params.set("limit", String(normalizedLimit));
     }
     const suffix = params.size > 0 ? `?${params.toString()}` : "";
     return this.request<CoreRoomsListResponse>(`/api/rooms${suffix}`);

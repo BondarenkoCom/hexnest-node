@@ -1,7 +1,94 @@
 import { Router, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
+import { loadEnvMap } from "../../config.js";
 import { WebServerContext } from "../server.js";
 import { ApiResponse, ModelInfo } from "../types.js";
+
+function toModelInfo(model: {
+  id: string;
+  name: string;
+  type: string;
+  model: string;
+  baseUrl?: string;
+  roles?: string[];
+  capabilities?: string[];
+  enabled: boolean;
+  agentMode: "manual" | "recruitable" | "autonomous";
+  active: boolean;
+  runtimeOnly?: boolean;
+}): ModelInfo {
+  return {
+    id: model.id,
+    name: model.name,
+    type: model.type,
+    model: model.model,
+    baseUrl: model.baseUrl,
+    roles: model.roles,
+    capabilities: model.capabilities,
+    enabled: model.enabled,
+    agentMode: model.agentMode,
+    active: model.active,
+    runtimeOnly: model.runtimeOnly
+  };
+}
+
+function getRuntimeOnlyModels(context: WebServerContext): ModelInfo[] {
+  const persistedModels = context.db.getModelConfigs();
+  const persistedNames = new Set(persistedModels.map((model) => model.name));
+  const runtimeNames = new Set(context.getAvailableAgents().map((agent) => agent.name));
+  const env = loadEnvMap();
+  const runtimeOnly: ModelInfo[] = [];
+  const hasPersistedActive = persistedModels.some((model) => model.active);
+
+  const pushRuntimeModel = (model: ModelInfo): void => {
+    if (persistedNames.has(model.name) || !runtimeNames.has(model.name)) {
+      return;
+    }
+    runtimeOnly.push(model);
+  };
+
+  pushRuntimeModel({
+    id: "runtime:ollama-local",
+    name: "ollama-local",
+    type: "OllamaAdapter",
+    model: String(env.OLLAMA_MODEL || "").trim() || "qwen2.5:14b",
+    baseUrl: String(env.OLLAMA_BASE_URL || "").trim() || "http://localhost:11434",
+    enabled: true,
+    agentMode: "manual",
+    active: !hasPersistedActive,
+    runtimeOnly: true
+  });
+
+  if (String(env.OPENAI_API_KEY || "").trim()) {
+    pushRuntimeModel({
+      id: "runtime:openai",
+      name: "openai",
+      type: "OpenAIAdapter",
+      model: String(env.OPENAI_MODEL || "").trim() || "gpt-4o-mini",
+      baseUrl: String(env.OPENAI_BASE_URL || "").trim() || "https://api.openai.com/v1",
+      enabled: true,
+      agentMode: "manual",
+      active: !hasPersistedActive && runtimeOnly.length === 0,
+      runtimeOnly: true
+    });
+  }
+
+  if (String(env.ANTHROPIC_API_KEY || "").trim()) {
+    pushRuntimeModel({
+      id: "runtime:claude",
+      name: "claude",
+      type: "ClaudeAdapter",
+      model: String(env.ANTHROPIC_MODEL || "").trim() || "claude-3-7-sonnet-latest",
+      baseUrl: String(env.ANTHROPIC_BASE_URL || "").trim() || "https://api.anthropic.com/v1",
+      enabled: true,
+      agentMode: "manual",
+      active: !hasPersistedActive && runtimeOnly.length === 0,
+      runtimeOnly: true
+    });
+  }
+
+  return runtimeOnly;
+}
 
 export function modelsRouter(context: WebServerContext) {
   const router = Router();
@@ -10,20 +97,13 @@ export function modelsRouter(context: WebServerContext) {
   router.get("/", (req: Request, res: Response) => {
     try {
       const models = context.db.getModelConfigs();
+      const data = [
+        ...models.map((model) => toModelInfo(model)),
+        ...getRuntimeOnlyModels(context)
+      ];
       const response: ApiResponse<ModelInfo[]> = {
         success: true,
-        data: models.map((m) => ({
-          id: m.id,
-          name: m.name,
-          type: m.type,
-          model: m.model,
-          baseUrl: m.baseUrl,
-          roles: m.roles,
-          capabilities: m.capabilities,
-          enabled: m.enabled,
-          agentMode: m.agentMode,
-          active: m.active
-        }))
+        data
       };
       res.json(response);
     } catch (error) {
@@ -47,18 +127,7 @@ export function modelsRouter(context: WebServerContext) {
       }
       const response: ApiResponse<ModelInfo> = {
         success: true,
-        data: {
-          id: model.id,
-          name: model.name,
-          type: model.type,
-          model: model.model,
-          baseUrl: model.baseUrl,
-          roles: model.roles,
-          capabilities: model.capabilities,
-          enabled: model.enabled,
-          agentMode: model.agentMode,
-          active: model.active
-        }
+        data: toModelInfo(model)
       };
       res.json(response);
     } catch (error) {
