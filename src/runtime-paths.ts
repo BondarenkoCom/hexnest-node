@@ -32,7 +32,8 @@ export function resolvePackageRoot(): string {
 export function resolveRuntimeBaseDir(baseEnv: NodeJS.ProcessEnv = process.env): string {
   const explicitBaseDir = String(baseEnv.HEXNEST_APP_DATA_DIR || "").trim();
   if (!explicitBaseDir) {
-    return process.cwd();
+    // Keep runtime files stable even when the app is launched from a parent folder.
+    return resolvePackageRoot();
   }
   return path.isAbsolute(explicitBaseDir) ? explicitBaseDir : path.resolve(process.cwd(), explicitBaseDir);
 }

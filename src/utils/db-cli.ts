@@ -31,6 +31,7 @@ Examples:
   }
 
   const db = new DatabaseService();
+  await db.ensureReady();
   
   try {
     switch (command) {

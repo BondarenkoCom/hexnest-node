@@ -315,12 +315,11 @@ export class NodeRuntime {
     if (modelConfig && !modelConfig.enabled) {
       throw new Error(`Agent ${agentName} is disabled`);
     }
-    if (modelConfig && modelConfig.agentMode !== "autonomous") {
-      throw new Error(`Agent ${agentName} is in ${modelConfig.agentMode} mode and cannot start an autonomous room session`);
-    }
     if (!String(joinedAgentId || "").trim()) {
-      throw new Error("joinedAgentId is required to start an autonomous room session");
+      throw new Error("joinedAgentId is required to start a room session");
     }
+
+    const autonomous = modelConfig?.agentMode === "autonomous";
 
     const alreadyRunning = this.activeRoomRuns.has(roomId);
 
@@ -332,11 +331,11 @@ export class NodeRuntime {
       lastSeenMessageId: this.database?.getRoomSession(roomId, agentName)?.lastSeenMessageId,
       lastRespondedMessageId: this.database?.getRoomSession(roomId, agentName)?.lastRespondedMessageId,
       lastRespondedAt: this.database?.getRoomSession(roomId, agentName)?.lastRespondedAt,
-      autonomous: true,
+      autonomous,
       status: "joined"
     }) || null;
 
-    const run = this.startRoomRun(roomId, () => this.runRoomSession(roomId, role, taskHint, adapter, seededState));
+    const run = this.startRoomRun(roomId, () => this.runRoomSession(roomId, role, taskHint, adapter, seededState, autonomous));
     return {
       started: Boolean(run),
       alreadyRunning
@@ -380,7 +379,7 @@ export class NodeRuntime {
       autonomous: false,
       updatedAt: this.now()
     });
-    this.recordActivity("warn", `Stopped autonomous room session for ${agentName} in room ${roomId}`);
+    this.recordActivity("warn", `Stopped room session for ${agentName} in room ${roomId}`);
     return { stopped: true, hadActiveRun };
   }
 
@@ -401,9 +400,6 @@ export class NodeRuntime {
     const modelConfig = this.database?.getModelConfig(agentName) || null;
     if (modelConfig && !modelConfig.enabled) {
       throw new Error(`Agent ${agentName} is disabled`);
-    }
-    if (modelConfig && modelConfig.agentMode !== "autonomous") {
-      throw new Error(`Agent ${agentName} is in ${modelConfig.agentMode} mode and cannot restart an autonomous room session`);
     }
     if (!String(existingSession.joinedAgentId || "").trim()) {
       throw new Error(`Room session for ${agentName} has no joined agent id`);
@@ -482,11 +478,17 @@ export class NodeRuntime {
 
     this.roomStopRequests.delete(roomId);
 
-    const run = factory().finally(() => {
-      this.activeRoomRuns.delete(roomId);
-      this.roomStopRequests.delete(roomId);
-      this.refreshStatus();
-    });
+    const run = factory()
+      .catch((error) => {
+        const message = this.err(error);
+        this.logger.error(`[node] room session failed room=${roomId}: ${message}`);
+        this.recordActivity("error", `Room session failed for ${roomId}: ${message}`);
+      })
+      .finally(() => {
+        this.activeRoomRuns.delete(roomId);
+        this.roomStopRequests.delete(roomId);
+        this.refreshStatus();
+      });
     this.activeRoomRuns.set(roomId, run);
     this.refreshStatus();
     return run;

@@ -2265,7 +2265,7 @@
       let cachedModels = [];
       let cachedProviders = [];
       let roomHeartbeatTimer = null;
-      const ROOM_HEARTBEAT_MS = 10000;
+      const ROOM_HEARTBEAT_MS = 5 * 60 * 1000;
       const ROOMS_STORAGE_KEY = 'hexnest.node.rooms.ui';
 
       function createLocalSessionId() {
@@ -3095,10 +3095,10 @@
         if (!enabled) stopReason = 'This agent is disabled.';
         else if (!canStop) stopReason = 'This room session is already stopped.';
 
-        let canRestart = enabled && mode === 'autonomous';
+        let canRestart = enabled && Boolean(session?.joinedAgentId);
         let restartReason = '';
         if (!enabled) restartReason = 'This agent is disabled.';
-        else if (mode !== 'autonomous') restartReason = 'Only autonomous agents can restart autonomous room sessions.';
+        else if (!session?.joinedAgentId) restartReason = 'This room session has no joined agent id yet.';
 
         return { model, mode, canStop, canRestart, stopReason, restartReason };
       }
@@ -3209,6 +3209,7 @@
         const pythonJobs = Array.isArray(room.pythonJobs) ? room.pythonJobs : [];
         const connectedAgents = Array.isArray(room.connectedAgents) ? room.connectedAgents : [];
         const localSessions = Array.isArray(detail.localSessions) ? detail.localSessions.map(normalizeLocalRoomSession) : [];
+        const activeSession = localSessions.find((session) => session.agentName === (joined?.name || preferredAgentName)) || null;
         const roleAssignments = room.agentRoles || {};
         const briefText = buildRoomBriefText(brief);
         const selectedAgentSecondaryText = selectedAgentIdentity && selectedAgentIdentity.secondary
@@ -3218,6 +3219,11 @@
         const joinedSecondaryText = joinedIdentity && joinedIdentity.secondary
           ? `<p class="room-detail-meta">Configured agent name: ${escapeHtml(joinedIdentity.secondary)}</p>`
           : '';
+        const roomSessionActionLabel = activeSession ? 'Restart' : 'Start';
+        const canTriggerRoomSession = Boolean(joined?.id && (joined?.name || preferredAgentName));
+        const roomSessionActionReason = canTriggerRoomSession
+          ? ''
+          : 'Join your agent to the room first.';
         const localSessionsHtml = localSessions.length
           ? localSessions.map((session) => {
               const control = getRoomSessionControlState(session);
@@ -3232,7 +3238,7 @@
                             <span class="state-pill ${mapRoomSessionPillClass(session.status)}">${escapeHtml(formatRoomSessionLabel(session))}</span>
                           </div>
                           <p class="room-detail-meta">${sessionSecondaryPrefix}role=${escapeHtml(session.role || 'unassigned')} · mode=${escapeHtml(control.mode)} · updated ${escapeHtml(session.updatedAt ? formatRelativeTime(new Date(session.updatedAt).toISOString()) : '—')}</p>
-                          <p class="room-message-copy">${session.lastRespondedAt ? `Last autonomous response ${escapeHtml(formatRelativeTime(new Date(session.lastRespondedAt).toISOString()))}` : 'No autonomous response recorded yet.'}</p>
+                          <p class="room-message-copy">${session.lastRespondedAt ? `Last response ${escapeHtml(formatRelativeTime(new Date(session.lastRespondedAt).toISOString()))}` : 'No response recorded yet.'}</p>
                           ${!control.canRestart && control.restartReason
                             ? `<p class="room-detail-meta">Restart unavailable: ${escapeHtml(control.restartReason)}</p>`
                             : ''}
@@ -3318,6 +3324,7 @@
                   </div>
                   <div class="actions">
                     <button type="button" onclick="joinSelfToRoom()" ${availableAgents.length ? '' : 'disabled'}>${joined ? 'Update My Agent In Room' : 'Send My Agent'}</button>
+                    <button type="button" class="button-ghost" onclick="startOrRestartActiveRoomSession()" ${canTriggerRoomSession ? '' : 'disabled'} title="${escapeHtml(roomSessionActionReason)}">${roomSessionActionLabel}</button>
                     <button type="button" class="button-ghost" onclick="refreshActiveRoom()">Sync Room</button>
                     ${availableAgents.length ? '' : '<button type="button" class="button-ghost" onclick="openAgentsTab()">Set Up Agents</button>'}
                   </div>
@@ -3637,6 +3644,58 @@
         }
       }
 
+      async function startOrRestartActiveRoomSession() {
+        const roomId = roomsState.activeRoomId;
+        const detail = getActiveRoomDetail();
+        const room = detail?.room || null;
+        const joined = roomId ? (roomsState.joinedAgentsByRoom[roomId] || inferJoinedLocalAgent(room) || null) : null;
+        const preferredAgentName = roomId ? getPreferredAgentName(roomId, joined) : '';
+        const agentName = String(joined?.name || preferredAgentName || '').trim();
+        const joinedAgentId = String(joined?.id || '').trim();
+        const localSessions = Array.isArray(detail?.localSessions) ? detail.localSessions.map(normalizeLocalRoomSession) : [];
+        const existingSession = localSessions.find((session) => session.agentName === agentName);
+        const role = String(document.getElementById('roomRoleInput')?.value || '').trim();
+
+        if (!roomId || !agentName) {
+          addLog('Join your agent to the room first', 'error');
+          return;
+        }
+
+        if (existingSession) {
+          await controlRoomSession(roomId, agentName, 'restart');
+          return;
+        }
+
+        if (!joinedAgentId) {
+          addLog('Joined agent id is missing. Update your agent in the room first.', 'error');
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/local-sessions/${encodeURIComponent(agentName)}/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ joinedAgentId, role })
+          });
+          if (response.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
+
+          const json = await response.json();
+          if (!json.success) {
+            throw new Error(json.error || 'Failed to start room session');
+          }
+
+          applyLocalSessionsUpdate(roomId, json.data?.localSessions);
+          renderRoomDetail();
+          addLog(`Started room session for ${agentName}`, 'success');
+        } catch (error) {
+          console.error('Room session start error:', error);
+          addLog(`Room session start error: ${error.message}`, 'error');
+        }
+      }
+
       async function copyActiveRoomBrief() {
         const detail = getActiveRoomDetail();
         const text = buildRoomBriefText(detail?.brief);
@@ -3782,11 +3841,16 @@
         rememberPreferredAgent(roomId, json.data.joinedAgent.name);
 
         if (json.data.warning) {
-          addLog(`Autonomous session warning: ${json.data.warning}`, 'warn');
-        } else if (json.data.autonomousSessionStarted) {
-          addLog(`Autonomous session started for ${json.data.joinedAgent.name}`, 'success');
-        } else if (json.data.autonomousAlreadyRunning) {
-          addLog(`Autonomous session is already running for room ${roomId}`, 'info');
+          addLog(`Room session warning: ${json.data.warning}`, 'warn');
+        } else if (json.data.roomSessionStarted) {
+          addLog(
+            json.data.roomSessionAutonomous
+              ? `Autonomous session started for ${json.data.joinedAgent.name}`
+              : `Room session started for ${json.data.joinedAgent.name}`,
+            'success'
+          );
+        } else if (json.data.roomSessionAlreadyRunning) {
+          addLog(`Room session is already running for room ${roomId}`, 'info');
         }
 
         return json.data.joinedAgent;

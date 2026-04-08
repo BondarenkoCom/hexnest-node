@@ -41,8 +41,9 @@ interface LocalRoomSessionControlPayload {
 
 interface LocalJoinSelfPayload {
   joinedAgent: JoinRoomResponse["joinedAgent"];
-  autonomousSessionStarted: boolean;
-  autonomousAlreadyRunning: boolean;
+  roomSessionStarted: boolean;
+  roomSessionAlreadyRunning: boolean;
+  roomSessionAutonomous: boolean;
   warning?: string;
 }
 
@@ -321,11 +322,12 @@ export function roomsRouter(context: WebServerContext) {
       const joined = await client.joinRoom(roomId, agentName, role);
 
       const modelConfig = context.db.getModelConfig(agentName);
-      let autonomousSessionStarted = false;
-      let autonomousAlreadyRunning = false;
+      let roomSessionStarted = false;
+      let roomSessionAlreadyRunning = false;
+      let roomSessionAutonomous = false;
       let warning: string | undefined;
 
-      if (modelConfig?.enabled && modelConfig.agentMode === "autonomous") {
+      if (modelConfig?.enabled) {
         try {
           const session = await context.startManualRoomSession(
             roomId,
@@ -334,10 +336,11 @@ export function roomsRouter(context: WebServerContext) {
             joined.joinedAgent.id,
             "manual room join"
           );
-          autonomousSessionStarted = session.started;
-          autonomousAlreadyRunning = session.alreadyRunning;
+          roomSessionStarted = session.started;
+          roomSessionAlreadyRunning = session.alreadyRunning;
+          roomSessionAutonomous = modelConfig.agentMode === "autonomous";
         } catch (error) {
-          warning = error instanceof Error ? error.message : "Failed to start autonomous room session";
+          warning = error instanceof Error ? error.message : "Failed to start room session";
         }
       }
 
@@ -345,8 +348,9 @@ export function roomsRouter(context: WebServerContext) {
         success: true,
         data: {
           joinedAgent: joined.joinedAgent,
-          autonomousSessionStarted,
-          autonomousAlreadyRunning,
+          roomSessionStarted,
+          roomSessionAlreadyRunning,
+          roomSessionAutonomous,
           warning
         }
       };
@@ -398,6 +402,36 @@ export function roomsRouter(context: WebServerContext) {
         data: {
           stopped: result.stopped,
           hadActiveRun: result.hadActiveRun,
+          localSessions: context.db.listRoomSessions(roomId)
+        }
+      };
+      res.json(response);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.post("/:roomId/local-sessions/:agentName/start", async (req: Request, res: Response) => {
+    try {
+      const roomId = normalizeText(req.params.roomId, 120);
+      const agentName = normalizeText(req.params.agentName, 120);
+      const joinedAgentId = normalizeText(req.body?.joinedAgentId, 120);
+      const role = normalizeText(req.body?.role, 80);
+
+      if (!roomId || !agentName || !joinedAgentId) {
+        res.status(400).json({ success: false, error: "roomId, agentName and joinedAgentId are required" });
+        return;
+      }
+
+      const result = await context.startManualRoomSession(roomId, agentName, role, joinedAgentId, "manual room start");
+      const response: ApiResponse<LocalRoomSessionControlPayload> = {
+        success: true,
+        data: {
+          started: result.started,
+          alreadyRunning: result.alreadyRunning,
           localSessions: context.db.listRoomSessions(roomId)
         }
       };

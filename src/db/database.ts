@@ -1,4 +1,5 @@
-import fs from "node:fs/promises";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
 import { resolveRuntimePath } from "../runtime-paths.js";
@@ -72,7 +73,7 @@ export class DatabaseService {
     // Try to load existing database from disk
     let data: Uint8Array | undefined;
     try {
-      const fileData = await fs.readFile(this.dbPath);
+      const fileData = await fsp.readFile(this.dbPath);
       data = new Uint8Array(fileData);
     } catch {
       // File doesn't exist, create new database
@@ -80,7 +81,7 @@ export class DatabaseService {
 
     this.db = new SQL.Database(data);
     this.initializeSchema();
-    await this.save();
+    this.save();
   }
 
   private initializeSchema(): void {
@@ -207,12 +208,13 @@ export class DatabaseService {
     return "starting";
   }
 
-  private async save(): Promise<void> {
+  private save(): void {
     if (!this.db) return;
     try {
       const data = this.db.export();
       const buffer = Buffer.from(data);
-      await fs.writeFile(this.dbPath, buffer);
+      fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
+      fs.writeFileSync(this.dbPath, buffer);
     } catch (error) {
       console.warn("[db] save failed:", error instanceof Error ? error.message : error);
     }
