@@ -1,4 +1,5 @@
 import express, { Express, Request, Response, NextFunction } from "express";
+import { createServer } from "node:http";
 import { AddressInfo } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,6 +28,23 @@ export interface WebServerContext {
   disconnectFromCore: () => Promise<{ coreUrl: string; coreConnected: boolean; nodeId: string | null }>;
   resetNodeIdentity: () => Promise<{ previousNodeId: string | null }>;
   removeNodeFromCore: () => Promise<{ removed: boolean; nodeId: string | null }>;
+  refreshRuntimeAdapters: () => { adaptersCount: number };
+  startManualRoomSession: (
+    roomId: string,
+    agentName: string,
+    role: string,
+    joinedAgentId: string,
+    taskHint?: string
+  ) => Promise<{ started: boolean; alreadyRunning: boolean }>;
+  stopManualRoomSession: (
+    roomId: string,
+    agentName: string
+  ) => Promise<{ stopped: boolean; hadActiveRun: boolean }>;
+  restartManualRoomSession: (
+    roomId: string,
+    agentName: string,
+    taskHint?: string
+  ) => Promise<{ started: boolean; alreadyRunning: boolean }>;
   getRecentActivity: () => RuntimeActivityItem[];
   getAvailableAgents: () => AgentDescriptor[];
   getNodeStatus: () => {
@@ -123,18 +141,28 @@ function normalizeDisplayHost(host: string): string {
 
 function listenOnce(app: Express, host: string, port: number): Promise<{ host: string; port: number }> {
   return new Promise((resolve, reject) => {
-    const server = app.listen(port, host);
+    const server = createServer(app);
 
-    server.once("listening", () => {
+    const cleanup = () => {
+      server.removeListener("listening", onListening);
+      server.removeListener("error", onError);
+    };
+
+    const onListening = () => {
+      cleanup();
       const address = server.address() as AddressInfo | null;
       const actualPort = address?.port ?? port;
-      server.removeAllListeners("error");
       resolve({ host, port: actualPort });
-    });
+    };
 
-    server.once("error", (error: NodeJS.ErrnoException) => {
+    const onError = (error: NodeJS.ErrnoException) => {
+      cleanup();
       reject(error);
-    });
+    };
+
+    server.once("listening", onListening);
+    server.once("error", onError);
+    server.listen(port, host);
   });
 }
 

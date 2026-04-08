@@ -17,6 +17,7 @@ import {
 import { CommissionMeter } from "./CommissionMeter.js";
 import { Heartbeat } from "./Heartbeat.js";
 import { DatabaseService } from "../db/database.js";
+import { RoomAgentSession } from "./RoomAgentSession.js";
 
 interface RuntimeLogger {
   info(...args: unknown[]): void;
@@ -65,6 +66,7 @@ export class NodeRuntime {
   private authedClient: HexNestClientLike | null = null;
   private usageFlushTimer: NodeJS.Timeout | null = null;
   private activeRoomRuns = new Map<string, Promise<void>>();
+  private roomStopRequests = new Set<string>();
   private usageSubmitInFlight: Promise<void> | null = null;
   private invitationAttempts = new Map<string, number>();
   private invitationRetryTimers = new Map<string, NodeJS.Timeout>();
@@ -284,15 +286,138 @@ export class NodeRuntime {
       this.logger.warn(`[node] skipping invitation room=${roomId}, node is draining`);
       return;
     }
-    if (this.activeRoomRuns.has(roomId)) return;
+    return this.startRoomRun(roomId, () => this.runRoomInvitation(roomId, role, taskHint));
+  }
 
-    const run = this.runRoomInvitation(roomId, role, taskHint).finally(() => {
-      this.activeRoomRuns.delete(roomId);
-      this.refreshStatus();
+  async startManualRoomSession(
+    roomId: string,
+    agentName: string,
+    role: string,
+    joinedAgentId: string,
+    taskHint = ""
+  ): Promise<{ started: boolean; alreadyRunning: boolean }> {
+    if (!this.isRunning) {
+      throw new Error("Node is not running");
+    }
+    if (!this.authedClient || !this.coreConnected) {
+      throw new Error("Node runtime is not connected to core");
+    }
+    if (this.stopRequested || this.status === "draining") {
+      throw new Error("Node is draining and cannot start room sessions");
+    }
+
+    const adapter = this.adapters.get(agentName);
+    if (!adapter) {
+      throw new Error(`Unknown runtime adapter: ${agentName}`);
+    }
+
+    const modelConfig = this.database?.getModelConfig(agentName) || null;
+    if (modelConfig && !modelConfig.enabled) {
+      throw new Error(`Agent ${agentName} is disabled`);
+    }
+    if (modelConfig && modelConfig.agentMode !== "autonomous") {
+      throw new Error(`Agent ${agentName} is in ${modelConfig.agentMode} mode and cannot start an autonomous room session`);
+    }
+    if (!String(joinedAgentId || "").trim()) {
+      throw new Error("joinedAgentId is required to start an autonomous room session");
+    }
+
+    const alreadyRunning = this.activeRoomRuns.has(roomId);
+
+    const seededState = this.database?.upsertRoomSession({
+      roomId,
+      agentName,
+      role,
+      joinedAgentId,
+      lastSeenMessageId: this.database?.getRoomSession(roomId, agentName)?.lastSeenMessageId,
+      lastRespondedMessageId: this.database?.getRoomSession(roomId, agentName)?.lastRespondedMessageId,
+      lastRespondedAt: this.database?.getRoomSession(roomId, agentName)?.lastRespondedAt,
+      autonomous: true,
+      status: "joined"
+    }) || null;
+
+    const run = this.startRoomRun(roomId, () => this.runRoomSession(roomId, role, taskHint, adapter, seededState));
+    return {
+      started: Boolean(run),
+      alreadyRunning
+    };
+  }
+
+  async stopManualRoomSession(
+    roomId: string,
+    agentName: string
+  ): Promise<{ stopped: boolean; hadActiveRun: boolean }> {
+    if (!this.isRunning) {
+      throw new Error("Node is not running");
+    }
+
+    const existingSession = this.database?.getRoomSession(roomId, agentName);
+    if (!existingSession) {
+      return { stopped: false, hadActiveRun: false };
+    }
+
+    const activeRun = this.activeRoomRuns.get(roomId);
+    const hadActiveRun = Boolean(activeRun);
+    this.roomStopRequests.add(roomId);
+    this.database?.upsertRoomSession({
+      ...existingSession,
+      status: "stopped",
+      autonomous: false,
+      updatedAt: this.now()
     });
-    this.activeRoomRuns.set(roomId, run);
-    this.refreshStatus();
-    return run;
+
+    if (activeRun) {
+      try {
+        await activeRun;
+      } catch {
+        // Keep stop semantics simple here; state is already persisted below.
+      }
+    }
+
+    this.database?.upsertRoomSession({
+      ...existingSession,
+      status: "stopped",
+      autonomous: false,
+      updatedAt: this.now()
+    });
+    this.recordActivity("warn", `Stopped autonomous room session for ${agentName} in room ${roomId}`);
+    return { stopped: true, hadActiveRun };
+  }
+
+  async restartManualRoomSession(
+    roomId: string,
+    agentName: string,
+    taskHint = "manual room restart"
+  ): Promise<{ started: boolean; alreadyRunning: boolean }> {
+    if (!this.isRunning) {
+      throw new Error("Node is not running");
+    }
+
+    const existingSession = this.database?.getRoomSession(roomId, agentName);
+    if (!existingSession) {
+      throw new Error(`No room session found for ${agentName} in ${roomId}`);
+    }
+
+    const modelConfig = this.database?.getModelConfig(agentName) || null;
+    if (modelConfig && !modelConfig.enabled) {
+      throw new Error(`Agent ${agentName} is disabled`);
+    }
+    if (modelConfig && modelConfig.agentMode !== "autonomous") {
+      throw new Error(`Agent ${agentName} is in ${modelConfig.agentMode} mode and cannot restart an autonomous room session`);
+    }
+    if (!String(existingSession.joinedAgentId || "").trim()) {
+      throw new Error(`Room session for ${agentName} has no joined agent id`);
+    }
+
+    await this.stopManualRoomSession(roomId, agentName);
+    const refreshed = this.database?.getRoomSession(roomId, agentName) || existingSession;
+    return this.startManualRoomSession(
+      roomId,
+      agentName,
+      refreshed.role,
+      refreshed.joinedAgentId || existingSession.joinedAgentId || "",
+      taskHint
+    );
   }
 
   getState(): {
@@ -350,51 +475,89 @@ export class NodeRuntime {
     );
   }
 
+  private startRoomRun(roomId: string, factory: () => Promise<void>): Promise<void> | undefined {
+    if (this.activeRoomRuns.has(roomId)) {
+      return undefined;
+    }
+
+    this.roomStopRequests.delete(roomId);
+
+    const run = factory().finally(() => {
+      this.activeRoomRuns.delete(roomId);
+      this.roomStopRequests.delete(roomId);
+      this.refreshStatus();
+    });
+    this.activeRoomRuns.set(roomId, run);
+    this.refreshStatus();
+    return run;
+  }
+
   private async runRoomInvitation(roomId: string, role: string, taskHint = ""): Promise<void> {
     if (!this.authedClient) {
       throw new Error("Authenticated client is not initialized");
     }
 
     const adapter = this.pickAdapterForInvitation(role, taskHint);
+    const modelConfig = this.database?.getModelConfig(adapter.name) || null;
+    const existingSession = this.database?.getRoomSession(roomId, adapter.name) || null;
+    const autonomous = modelConfig?.agentMode === "autonomous";
     this.logger.info(`[node] handling room=${roomId} role=${role} adapter=${adapter.name}`);
 
-    const joined = await this.authedClient.joinRoom(roomId, adapter.name, role);
-    const context = await this.authedClient.getRoomContext(roomId, role);
-    const response = await adapter.respond(context);
-    await this.authedClient.postRoomMessage(this.buildPostMessagePayload(context.roomId, joined.joinedAgent.id, response));
+    await this.runRoomSession(roomId, role, taskHint, adapter, existingSession, autonomous);
+  }
 
-    const usage = await this.buildUsageRecord(adapter, context, response.text, role);
-    this.meter.track(usage);
-
-    if (this.meter.getSnapshot().pendingUsageRecords >= this.config.maxUsageBatch) {
-      await this.flushUsage("threshold");
+  private async runRoomSession(
+    roomId: string,
+    role: string,
+    taskHint: string,
+    adapter: AgentAdapter,
+    existingSession = this.database?.getRoomSession(roomId, adapter.name) || null,
+    autonomous = (this.database?.getModelConfig(adapter.name)?.agentMode === "autonomous")
+  ): Promise<void> {
+    if (!this.authedClient) {
+      throw new Error("Authenticated client is not initialized");
     }
-  }
 
-  private buildPostMessagePayload(roomId: string, joinedAgentId: string, response: AgentResponse) {
-    const text = this.decorateResponseText(response);
-    return {
+    const session = new RoomAgentSession({
+      client: this.authedClient,
+      adapter,
       roomId,
-      joinedAgentId,
-      text,
-      confidence: response.confidence,
-      artifacts: response.artifacts,
-      pythonCode: response.pythonCode,
-      needHuman: response.needHuman
-    };
-  }
+      role,
+      taskHint,
+      autonomous,
+      initialState: existingSession,
+      shouldStop: () => this.stopRequested || this.status === "draining" || !this.coreConnected || this.roomStopRequests.has(roomId),
+      onStateChange: async (state) => {
+        this.database?.upsertRoomSession(state);
+      },
+      onTurn: async ({ context, response, triggeredBy, reason }) => {
+        const usage = await this.buildUsageRecord(adapter, context, response.text, role);
+        this.meter.track(usage);
+        this.recordActivity(
+          triggeredBy
+            ? "info"
+            : "success",
+          triggeredBy
+            ? `${adapter.name} answered a new room event in ${context.roomName} (${reason})`
+            : `${adapter.name} joined ${context.roomName} as ${role}`
+        );
 
-  private decorateResponseText(response: AgentResponse): string {
-    if (!response.pythonCode) return response.text;
-    return `${response.text}\n\nPython snippet:\n\`\`\`python\n${response.pythonCode}\n\`\`\``;
+        if (this.meter.getSnapshot().pendingUsageRecords >= this.config.maxUsageBatch) {
+          await this.flushUsage("threshold");
+        }
+      },
+      logger: this.logger
+    });
+
+    await session.run();
   }
 
   private pickAdapterForInvitation(role: string, taskHint: string): AgentAdapter {
     const normalizedRole = role.toLowerCase();
     const normalizedTask = taskHint.toLowerCase();
-    const adapters = [...this.adapters.values()];
+    const adapters = this.getInvitationEligibleAdapters();
     if (adapters.length === 0) {
-      throw new Error("No adapters configured");
+      throw new Error("No recruitable adapters configured");
     }
 
     let best = adapters[0];
@@ -414,6 +577,22 @@ export class NodeRuntime {
       }
     }
     return best;
+  }
+
+  private getInvitationEligibleAdapters(): AgentAdapter[] {
+    const adapters = [...this.adapters.values()];
+    if (!this.database?.isReady()) {
+      return adapters;
+    }
+
+    const eligibleNames = new Set(
+      this.database
+        .getModelConfigs()
+        .filter((model) => model.enabled && model.agentMode !== "manual")
+        .map((model) => model.name)
+    );
+
+    return adapters.filter((adapter) => eligibleNames.has(adapter.name));
   }
 
   private async processInvitations(invitations: PendingInvitation[]): Promise<void> {
@@ -769,7 +948,7 @@ export class NodeRuntime {
     return {
       nodeId: this.nodeId || undefined,
       status: this.status,
-      availableAgents: this.buildAvailableAgents(),
+      availableAgents: this.buildAdvertisedAgents(),
       activeRooms: [...this.activeRoomRuns.keys()],
       meter: {
         totalTokensUsed: meter.totalTokensUsed,
@@ -805,6 +984,18 @@ export class NodeRuntime {
     return [...this.recentActivity];
   }
 
+  reloadAdapters(adapters: AgentAdapter[]): { adaptersCount: number } {
+    this.adapters.clear();
+    for (const adapter of adapters) {
+      this.adapters.set(adapter.name, adapter);
+    }
+    this.recordActivity(
+      "info",
+      `Reloaded agent runtime with ${adapters.length} configured adapter${adapters.length === 1 ? "" : "s"}`
+    );
+    return { adaptersCount: this.adapters.size };
+  }
+
   getAvailableAgents(): AgentDescriptor[] {
     return this.buildAvailableAgents();
   }
@@ -832,6 +1023,21 @@ export class NodeRuntime {
       capabilities: adapter.capabilities,
       supportedRoles: adapter.supportedRoles
     }));
+  }
+
+  private buildAdvertisedAgents(): AgentDescriptor[] {
+    if (!this.database?.isReady()) {
+      return this.buildAvailableAgents();
+    }
+
+    const recruitableNames = new Set(
+      this.database
+        .getModelConfigs()
+        .filter((model) => model.enabled && model.agentMode !== "manual")
+        .map((model) => model.name)
+    );
+
+    return this.buildAvailableAgents().filter((agent) => recruitableNames.has(agent.name));
   }
 
   private refreshStatus(): void {

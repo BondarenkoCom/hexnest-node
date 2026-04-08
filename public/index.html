@@ -2994,6 +2994,76 @@
         };
       }
 
+      function normalizeLocalRoomSession(session) {
+        return {
+          roomId: String(session?.roomId || ''),
+          agentName: String(session?.agentName || ''),
+          role: String(session?.role || ''),
+          joinedAgentId: session?.joinedAgentId ? String(session.joinedAgentId) : '',
+          lastSeenMessageId: session?.lastSeenMessageId ? String(session.lastSeenMessageId) : '',
+          lastRespondedMessageId: session?.lastRespondedMessageId ? String(session.lastRespondedMessageId) : '',
+          lastRespondedAt: Number.isFinite(Number(session?.lastRespondedAt)) ? Number(session.lastRespondedAt) : 0,
+          autonomous: Boolean(session?.autonomous),
+          status: String(session?.status || 'starting'),
+          createdAt: Number.isFinite(Number(session?.createdAt)) ? Number(session.createdAt) : 0,
+          updatedAt: Number.isFinite(Number(session?.updatedAt)) ? Number(session.updatedAt) : 0
+        };
+      }
+
+      function mapRoomSessionPillClass(status) {
+        const normalized = String(status || '').toLowerCase();
+        if (normalized === 'idle' || normalized === 'joined') return 'ready';
+        if (normalized === 'responding' || normalized === 'starting') return 'info';
+        if (normalized === 'error') return 'error';
+        return 'warn';
+      }
+
+      function formatRoomSessionLabel(session) {
+        if (!session) return 'unknown';
+        const normalized = String(session.status || 'starting').toLowerCase();
+        if (normalized === 'idle') return 'AUTONOMOUS IDLE';
+        if (normalized === 'responding') return 'RESPONDING';
+        if (normalized === 'joined') return 'JOINED';
+        if (normalized === 'starting') return 'STARTING';
+        if (normalized === 'stopped') return 'STOPPED';
+        if (normalized === 'error') return 'ERROR';
+        return normalized.toUpperCase();
+      }
+
+      function applyLocalSessionsUpdate(roomId, sessions) {
+        if (!roomId || !roomsState.detailById[roomId]) {
+          return;
+        }
+        roomsState.detailById[roomId].localSessions = Array.isArray(sessions)
+          ? sessions.map(normalizeLocalRoomSession)
+          : [];
+      }
+
+      function getCachedModelByName(name) {
+        return Array.isArray(cachedModels)
+          ? cachedModels.find((model) => model && model.name === name) || null
+          : null;
+      }
+
+      function getRoomSessionControlState(session) {
+        const model = getCachedModelByName(session?.agentName || '');
+        const mode = String(model?.agentMode || (session?.autonomous ? 'autonomous' : 'manual'));
+        const status = String(session?.status || '').toLowerCase();
+        const enabled = model ? Boolean(model.enabled) : true;
+
+        const canStop = enabled && !['stopped', 'error'].includes(status);
+        let stopReason = '';
+        if (!enabled) stopReason = 'This agent is disabled.';
+        else if (!canStop) stopReason = 'This room session is already stopped.';
+
+        let canRestart = enabled && mode === 'autonomous';
+        let restartReason = '';
+        if (!enabled) restartReason = 'This agent is disabled.';
+        else if (mode !== 'autonomous') restartReason = 'Only autonomous agents can restart autonomous room sessions.';
+
+        return { model, mode, canStop, canRestart, stopReason, restartReason };
+      }
+
       function buildRoomBriefText(brief) {
         if (!brief) return '';
         const hasRoles = Array.isArray(brief.availableRoles) && brief.availableRoles.length > 0;
@@ -3092,6 +3162,7 @@
         const artifacts = Array.isArray(room.artifacts) ? room.artifacts : [];
         const pythonJobs = Array.isArray(room.pythonJobs) ? room.pythonJobs : [];
         const connectedAgents = Array.isArray(room.connectedAgents) ? room.connectedAgents : [];
+        const localSessions = Array.isArray(detail.localSessions) ? detail.localSessions.map(normalizeLocalRoomSession) : [];
         const roleAssignments = room.agentRoles || {};
         const briefText = buildRoomBriefText(brief);
         const statBadge = stats
@@ -3147,6 +3218,34 @@
                     ${availableAgents.length ? '' : '<button type="button" class="button-ghost" onclick="openAgentsTab()">Set Up Agents</button>'}
                   </div>
                   <p class="room-meta">${joined ? `Your node is already in this room as ${escapeHtml(joined.name)}.` : 'Your node has not joined this room yet.'}</p>
+
+                  <div style="margin-top: 14px; display: grid; gap: 10px;">
+                    ${localSessions.length
+                      ? localSessions.map((session) => {
+                        const control = getRoomSessionControlState(session);
+                        return `
+                        <div class="room-connected-card">
+                          <div class="room-message-head">
+                            <span class="room-message-author">${escapeHtml(session.agentName || 'Unknown agent')}</span>
+                            <span class="state-pill ${mapRoomSessionPillClass(session.status)}">${escapeHtml(formatRoomSessionLabel(session))}</span>
+                          </div>
+                          <p class="room-detail-meta">role=${escapeHtml(session.role || 'unassigned')} · mode=${escapeHtml(control.mode)} · updated ${escapeHtml(session.updatedAt ? formatRelativeTime(new Date(session.updatedAt).toISOString()) : '—')}</p>
+                          <p class="room-message-copy">${session.lastRespondedAt ? `Last autonomous response ${escapeHtml(formatRelativeTime(new Date(session.lastRespondedAt).toISOString()))}` : 'No autonomous response recorded yet.'}</p>
+                          ${!control.canRestart && control.restartReason
+                            ? `<p class="room-detail-meta">Restart unavailable: ${escapeHtml(control.restartReason)}</p>`
+                            : ''}
+                          ${!control.canStop && control.stopReason
+                            ? `<p class="room-detail-meta">Stop unavailable: ${escapeHtml(control.stopReason)}</p>`
+                            : ''}
+                          <div class="actions" style="margin-top: 10px;">
+                            <button type="button" class="button-ghost" onclick="controlRoomSession('${escapeHtml(session.roomId)}', '${escapeHtml(session.agentName)}', 'restart')" ${control.canRestart ? '' : 'disabled'} title="${escapeHtml(control.restartReason)}">Restart</button>
+                            <button type="button" class="button-ghost" onclick="controlRoomSession('${escapeHtml(session.roomId)}', '${escapeHtml(session.agentName)}', 'stop')" ${control.canStop ? '' : 'disabled'} title="${escapeHtml(control.stopReason)}">Stop</button>
+                          </div>
+                        </div>
+                      `;
+                      }).join('')
+                      : '<div class="empty-state"><p>No local room sessions yet.</p></div>'}
+                  </div>
 
                   <div class="form-group" style="margin-top: 14px;">
                     <label for="roomMessageText">Question or instruction</label>
@@ -3311,6 +3410,9 @@
           if (roomsState.detailById[roomId]?.room) {
             roomsState.detailById[roomId].room.viewers = Number(json.data?.viewers || 0);
           }
+          if (roomsState.detailById[roomId]) {
+            applyLocalSessionsUpdate(roomId, json.data?.localSessions);
+          }
           const roomSummary = roomsState.rooms.find((room) => room.id === roomId);
           if (roomSummary) {
             roomSummary.viewers = Number(json.data?.viewers || 0);
@@ -3390,6 +3492,7 @@
           const json = await response.json();
           if (!json.success) throw new Error(json.error || 'Failed to load room detail');
           roomsState.detailById[roomId] = json.data;
+          applyLocalSessionsUpdate(roomId, json.data?.localSessions);
           syncJoinedAgentsFromRooms();
           renderRoomDetail();
           startRoomHeartbeat();
@@ -3429,6 +3532,36 @@
           addLog('Room refreshed', 'info', true);
         } catch (error) {
           addLog(`Room refresh error: ${error.message}`, 'error');
+        }
+      }
+
+      async function controlRoomSession(roomId, agentName, action) {
+        if (!roomId || !agentName || !action) {
+          addLog('Room session action is incomplete', 'error');
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/local-sessions/${encodeURIComponent(agentName)}/${encodeURIComponent(action)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (response.status === 401) {
+            showLoggedOutLayout('Session expired. Sign in again to manage this node.');
+            return;
+          }
+
+          const json = await response.json();
+          if (!json.success) {
+            throw new Error(json.error || `Failed to ${action} room session`);
+          }
+
+          applyLocalSessionsUpdate(roomId, json.data?.localSessions);
+          renderRoomDetail();
+          addLog(`${action === 'stop' ? 'Stopped' : 'Restarted'} room session for ${agentName}`, 'success');
+        } catch (error) {
+          console.error('Room session control error:', error);
+          addLog(`Room session ${action} error: ${error.message}`, 'error');
         }
       }
 
@@ -3575,6 +3708,15 @@
 
         roomsState.joinedAgentsByRoom[roomId] = json.data.joinedAgent;
         rememberPreferredAgent(roomId, json.data.joinedAgent.name);
+
+        if (json.data.warning) {
+          addLog(`Autonomous session warning: ${json.data.warning}`, 'warn');
+        } else if (json.data.autonomousSessionStarted) {
+          addLog(`Autonomous session started for ${json.data.joinedAgent.name}`, 'success');
+        } else if (json.data.autonomousAlreadyRunning) {
+          addLog(`Autonomous session is already running for room ${roomId}`, 'info');
+        }
+
         return json.data.joinedAgent;
       }
 
@@ -4079,6 +4221,8 @@
           const modelsList = document.getElementById('modelsList');
           const activeModel = models.find(model => model.active);
           const enabledCount = models.filter(model => model.enabled).length;
+          const recruitableCount = models.filter(model => model.enabled && model.agentMode !== 'manual').length;
+          const autonomousCount = models.filter(model => model.enabled && model.agentMode === 'autonomous').length;
           const coreConnected = (document.getElementById('coreStatus')?.textContent || '').includes('NETWORK READY');
           const offerHeadline = document.getElementById('agentOfferHeadline');
           const offerCopy = document.getElementById('agentOfferCopy');
@@ -4097,7 +4241,7 @@
             offerMode.textContent = `Mode: ${coreConnected ? 'network connected' : 'local only'}`;
           }
           if (offerEnabled) {
-            offerEnabled.textContent = `Enabled: ${enabledCount}`;
+            offerEnabled.textContent = `Enabled: ${enabledCount} · recruitable: ${recruitableCount}`;
           }
           if (offerDefault) {
             offerDefault.textContent = `Default: ${activeModel ? activeModel.name : 'none'}`;
@@ -4110,12 +4254,17 @@
             } else if (enabledCount === 0) {
               offerHeadline.textContent = 'Agents exist, but none are enabled';
               offerCopy.textContent = 'You already added models, but they are disabled. Enable at least one if you want to use it in rooms or let other rooms recruit it.';
+            } else if (recruitableCount === 0) {
+              offerHeadline.textContent = `${enabledCount} enabled agent${enabledCount === 1 ? '' : 's'} set to manual only`;
+              offerCopy.textContent = 'Your agents can work in your own rooms, but none are currently advertised to the network. Switch at least one to recruitable or autonomous mode if you want outside rooms to invite it.';
             } else if (coreConnected) {
-              offerHeadline.textContent = `${enabledCount} agent${enabledCount === 1 ? '' : 's'} available to network`;
-              offerCopy.textContent = 'This node is connected to core, so enabled agents are being advertised automatically. Other rooms can now discover and recruit them.';
+              offerHeadline.textContent = `${recruitableCount} agent${recruitableCount === 1 ? '' : 's'} available to network`;
+              offerCopy.textContent = autonomousCount > 0
+                ? `This node is connected to core, so ${recruitableCount} enabled agent${recruitableCount === 1 ? '' : 's'} are being advertised automatically, including ${autonomousCount} autonomous one${autonomousCount === 1 ? '' : 's'}.`
+                : 'This node is connected to core, so enabled recruitable agents are being advertised automatically. Other rooms can now discover and recruit them.';
             } else {
-              offerHeadline.textContent = `${enabledCount} agent${enabledCount === 1 ? '' : 's'} ready only on this node`;
-              offerCopy.textContent = 'Your agents can already work in your own rooms, but the node is offline from core. Reconnect the node if you want other rooms to recruit them.';
+              offerHeadline.textContent = `${recruitableCount} agent${recruitableCount === 1 ? '' : 's'} waiting for network access`;
+              offerCopy.textContent = 'Recruitable agents are ready, but the node is offline from core. Reconnect the node if you want other rooms to recruit them.';
             }
           }
 
@@ -4131,11 +4280,31 @@
                 <p>${model.type || 'Unknown'} model · ${model.enabled ? '✓ Enabled' : '○ Disabled'}</p>
                 <p>${model.enabled
                   ? (coreConnected
-                    ? 'This agent can join your rooms and is currently being offered to the network.'
-                    : 'This agent can join your rooms now. Connect the node to core if you also want other rooms to recruit it.')
+                    ? (model.agentMode === 'manual'
+                      ? 'This agent can join your rooms, but it is not advertised to the network.'
+                      : model.agentMode === 'autonomous'
+                        ? 'This agent can join your rooms and is advertised to the network as autonomous after join.'
+                        : 'This agent can join your rooms and is currently being offered to the network.')
+                    : (model.agentMode === 'manual'
+                      ? 'This agent can join your rooms now. It is intentionally local-only.'
+                      : 'This agent can join your rooms now. Connect the node to core if you also want other rooms to recruit it.'))
                   : 'Disabled agents are stored locally but cannot join rooms and are not offered to the network.'}</p>
+                <div class="chips" style="margin-top: 10px;">
+                  <span class="chip">Mode: ${model.agentMode}</span>
+                  ${model.agentMode === 'manual' ? '<span class="chip">Local only</span>' : ''}
+                  ${model.agentMode === 'recruitable' ? '<span class="chip">Invitable</span>' : ''}
+                  ${model.agentMode === 'autonomous' ? '<span class="chip">Auto after join</span>' : ''}
+                </div>
               </div>
               <div class="model-actions">
+                <select onchange="updateAgentMode('${model.name}', this.value)" style="min-width: 180px;">
+                  <option value="manual" ${model.agentMode === 'manual' ? 'selected' : ''}>Manual only</option>
+                  <option value="recruitable" ${model.agentMode === 'recruitable' ? 'selected' : ''}>Recruitable</option>
+                  <option value="autonomous" ${model.agentMode === 'autonomous' ? 'selected' : ''}>Autonomous after join</option>
+                </select>
+                <button onclick="toggleAgentEnabled('${model.name}', ${model.enabled ? 'false' : 'true'})" style="background: rgba(6, 15, 24, 0.8); border-color: rgba(22, 210, 255, 0.35);">
+                  ${model.enabled ? 'Disable Agent' : 'Enable Agent'}
+                </button>
                 ${!model.active ? `<button onclick="activateModel('${model.name}')" style="background: rgba(61, 176, 255, 0.15); border-color: rgba(61, 176, 255, 0.35); color: #8fe7ff;">Set As Default Agent</button>` : ''}
                 <button onclick="deleteModel('${model.name}')" style="background: rgba(159, 18, 48, 0.22); border-color: rgba(255, 110, 139, 0.5); color: #ffaec0;">Remove Agent</button>
               </div>
@@ -4159,6 +4328,40 @@
         } catch (err) {
           console.error('Activate model error:', err);
           addLog(`Error activating model: ${err.message}`, 'error');
+        }
+      }
+
+      async function updateAgentMode(name, mode) {
+        try {
+          const res = await fetch(`/api/models/${encodeURIComponent(name)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentMode: mode })
+          });
+          const json = await res.json();
+          if (!json.success) throw new Error(json.error || 'Failed to update agent mode');
+          addLog(`Updated ${name} mode to ${mode}`, 'info');
+          await fetchModels();
+        } catch (err) {
+          console.error('Update agent mode error:', err);
+          addLog(`Agent mode error: ${err.message}`, 'error');
+        }
+      }
+
+      async function toggleAgentEnabled(name, enabled) {
+        try {
+          const res = await fetch(`/api/models/${encodeURIComponent(name)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled })
+          });
+          const json = await res.json();
+          if (!json.success) throw new Error(json.error || 'Failed to update agent state');
+          addLog(`${enabled ? 'Enabled' : 'Disabled'} agent ${name}`, 'info');
+          await fetchModels();
+        } catch (err) {
+          console.error('Toggle agent enabled error:', err);
+          addLog(`Agent toggle error: ${err.message}`, 'error');
         }
       }
 

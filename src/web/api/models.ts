@@ -21,6 +21,7 @@ export function modelsRouter(context: WebServerContext) {
           roles: m.roles,
           capabilities: m.capabilities,
           enabled: m.enabled,
+          agentMode: m.agentMode,
           active: m.active
         }))
       };
@@ -55,6 +56,7 @@ export function modelsRouter(context: WebServerContext) {
           roles: model.roles,
           capabilities: model.capabilities,
           enabled: model.enabled,
+          agentMode: model.agentMode,
           active: model.active
         }
       };
@@ -366,7 +368,7 @@ export function modelsRouter(context: WebServerContext) {
   router.post("/", (req: Request, res: Response) => {
     try {
       // Support both new format { name, adapter, config } and old format { type, name, model, ... }
-      const { type, adapter, name, model, config, baseUrl, apiKey, apiKeyEnv, roles, capabilities } = req.body;
+      const { type, adapter, name, model, config, baseUrl, apiKey, apiKeyEnv, roles, capabilities, agentMode } = req.body;
       
       // Extract values from new format if provided
       const adapterType = adapter || type;
@@ -402,6 +404,7 @@ export function modelsRouter(context: WebServerContext) {
         roles,
         capabilities,
         enabled: true,
+        agentMode: agentMode === "manual" || agentMode === "autonomous" ? agentMode : "recruitable",
         active: false // Will be set to true if it's the first one
       });
 
@@ -410,6 +413,7 @@ export function modelsRouter(context: WebServerContext) {
       if (allModels.length === 1) {
         context.db.setActiveModel(newModel.name, adapterType);
       }
+      context.refreshRuntimeAdapters();
 
       const response: ApiResponse<ModelInfo> = {
         success: true,
@@ -422,6 +426,7 @@ export function modelsRouter(context: WebServerContext) {
           roles: newModel.roles,
           capabilities: newModel.capabilities,
           enabled: newModel.enabled,
+          agentMode: newModel.agentMode,
           active: newModel.active || allModels.length === 1
         }
       };
@@ -454,6 +459,7 @@ export function modelsRouter(context: WebServerContext) {
         });
         return;
       }
+      context.refreshRuntimeAdapters();
 
       const response: ApiResponse<ModelInfo> = {
         success: true,
@@ -466,6 +472,7 @@ export function modelsRouter(context: WebServerContext) {
           roles: updated.roles,
           capabilities: updated.capabilities,
           enabled: updated.enabled,
+          agentMode: updated.agentMode,
           active: updated.active
         }
       };
@@ -489,6 +496,7 @@ export function modelsRouter(context: WebServerContext) {
         });
         return;
       }
+      context.refreshRuntimeAdapters();
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({
@@ -518,6 +526,7 @@ export function modelsRouter(context: WebServerContext) {
         });
         return;
       }
+      context.refreshRuntimeAdapters();
 
       res.json({ success: true });
     } catch (error) {

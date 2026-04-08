@@ -479,4 +479,88 @@ describe("NodeRuntime", () => {
 
     await runtime.stop();
   });
+
+  it("rejects autonomous room restart for manual-mode agents", async () => {
+    const client = {
+      registerNode: async () => ({ nodeId: "node-1", nodeToken: "token-1", status: "approved" as const }),
+      getNodeStatus: async () => ({
+        nodeId: "node-1",
+        approvalStatus: "approved" as const,
+        status: "online" as const,
+        lastHeartbeatAt: null,
+        lastHeartbeatStatus: "online" as const
+      }),
+      heartbeat: async () => ({ ok: true, pendingInvitations: [] }),
+      submitUsage: async () => ({ accepted: 0, totalOwed: 0 }),
+      markOffline: async () => undefined,
+      joinRoom: async () => ({ roomId: "room-1", joinedAgent: { id: "joined-1", name: "fake-agent" } }),
+      postRoomMessage: async () => undefined,
+      getRoomContext: async (_roomId: string, role: string) => ({
+        roomId: "room-1",
+        roomName: "Room 1",
+        task: "Research market dynamics",
+        role,
+        phase: "independent_answers",
+        timeline: [],
+        artifacts: [],
+        rules: "Cite sources."
+      })
+    };
+
+    const database = {
+      isReady: () => true,
+      getNodeConfig: () => null,
+      setNodeIdentity: () => undefined,
+      getModelConfigs: () => [],
+      getModelConfig: (name: string) => ({
+        id: "model-1",
+        type: "OllamaAdapter",
+        name,
+        model: "fake-model",
+        enabled: true,
+        agentMode: "manual" as const,
+        active: true,
+        createdAt: 1,
+        updatedAt: 1
+      }),
+      getRoomSession: () => ({
+        roomId: "room-1",
+        agentName: "fake-agent",
+        role: "researcher",
+        joinedAgentId: "joined-1",
+        autonomous: false,
+        status: "stopped" as const,
+        createdAt: 1,
+        updatedAt: 1
+      }),
+      upsertRoomSession: (state: unknown) => state
+    };
+
+    const config: NodeConfig = {
+      coreUrl: "https://hex-nest.com",
+      nodeName: "node-test",
+      operatorName: "operator",
+      heartbeatIntervalMs: 60_000,
+      approvalPollIntervalMs: 1_000,
+      usageFlushIntervalMs: 60_000,
+      maxUsageBatch: 1,
+      shutdownGraceMs: 3_000,
+      autoAcceptInvites: true,
+      httpTimeoutMs: 5_000
+    };
+
+    const runtime = new NodeRuntime(config, [new FakeAdapter()], {
+      clientFactory: () => client as any,
+      uuidFactory: () => "usage-1",
+      database: database as any
+    });
+
+    await runtime.start();
+
+    await expect(runtime.restartManualRoomSession("room-1", "fake-agent")).rejects.toThrow(
+      "Agent fake-agent is in manual mode and cannot restart an autonomous room session"
+    );
+
+    await runtime.stop();
+  });
 });

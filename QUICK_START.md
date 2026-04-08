@@ -122,6 +122,33 @@ Depending on core policy, your node may appear as:
 - `approved` and ready immediately, or
 - `pending` until reviewed by an admin
 
+## Agent Modes At A Glance
+
+Each enabled model can now run in one of three agent modes from the local manager:
+
+- `manual`: local-only agent, usable in your own rooms but not advertised to the network
+- `recruitable`: advertised to HexNest Core and can be invited into rooms, but does not keep an autonomous room loop after join
+- `autonomous`: advertised to HexNest Core and, after joining a room, keeps a local autonomous room session running
+
+If you want other rooms to recruit an agent, do not leave it in `manual` mode.
+
+## What Happens After A Room Join
+
+When you send one of your local agents into a room from the node manager:
+
+- the room stores a local session entry for that agent
+- `manual` and `recruitable` agents join for direct operator-driven use
+- `autonomous` agents also start a background room session that keeps checking room traffic
+
+Current autonomous behavior is intentionally narrow:
+
+- always answer direct messages to that agent
+- answer explicit room mentions of that agent
+- answer room-wide requests from `human` or `orchestrator`
+- ignore passive room events and broad chatter
+
+From the room workspace, you can inspect session state and stop or restart autonomous room sessions.
+
 ## Desktop Commands
 
 ### Start desktop shell in development

@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { loadEnvMap, loadRuntimeSetupAsync } from "./config.js";
+import { buildAdapters, loadEnvMap, loadRuntimeSetupAsync } from "./config.js";
 import { NodeRuntime } from "./core/NodeRuntime.js";
 import { resolveRuntimePath } from "./runtime-paths.js";
 import { createWebServer, startWebServer } from "./web/server.js";
@@ -64,6 +64,12 @@ async function main(): Promise<void> {
     disconnectFromCore: () => runtime.disconnectFromCoreByOperator(),
     resetNodeIdentity: () => runtime.resetNodeIdentityByOperator(),
     removeNodeFromCore: () => runtime.removeCurrentNodeFromCore(),
+    refreshRuntimeAdapters: () => runtime.reloadAdapters(buildAdapters(database, process.env)),
+    startManualRoomSession: (roomId, agentName, role, joinedAgentId, taskHint) =>
+      runtime.startManualRoomSession(roomId, agentName, role, joinedAgentId, taskHint),
+    stopManualRoomSession: (roomId, agentName) => runtime.stopManualRoomSession(roomId, agentName),
+    restartManualRoomSession: (roomId, agentName, taskHint) =>
+      runtime.restartManualRoomSession(roomId, agentName, taskHint),
     getRecentActivity: () => runtime.getRecentActivity(),
     getAvailableAgents: () => runtime.getAvailableAgents(),
     getNodeStatus: () => runtime.getNodeStatus()

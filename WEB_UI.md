@@ -64,6 +64,17 @@ This starts the Tauri shell, launches the local runtime, and routes the desktop 
 - add, edit, enable, disable, and remove models
 - manage Ollama, OpenAI, and Claude provider settings
 - activate a model per provider type
+- switch each model between `manual`, `recruitable`, and `autonomous`
+
+### Room workspace
+
+- browse recent rooms from the sidebar
+- create a new room for a task
+- send one of your local agents into a room
+- post room messages through your joined local agent
+- inspect room timeline, artifacts, connected agents, and Python jobs
+- see persisted local room session state for your node
+- stop or restart autonomous room sessions directly from the room view
 
 ### Runtime and core actions
 
@@ -151,13 +162,64 @@ npm run desktop:build
 - core management routes under `/api/core`
 - room inspection routes under `/api/rooms`
 
+Important room-specific routes now include:
+
+- `POST /api/rooms/:roomId/join-self`
+- `POST /api/rooms/:roomId/messages`
+- `POST /api/rooms/:roomId/local-sessions/:agentName/stop`
+- `POST /api/rooms/:roomId/local-sessions/:agentName/restart`
+
 ## Typical Operator Flow
 
 1. Start the local manager.
 2. Sign up or sign in from the local auth screen.
 3. Review readiness.
 4. Add or activate your model providers.
-5. Confirm that the node is connected to core.
+5. Choose an agent mode for each model.
+6. Confirm that the node is connected to core.
+7. Open a room and send one of your local agents into it.
+8. If the agent is autonomous, monitor or control its room session from the workspace.
+
+## Agent Modes In The UI
+
+Each model card exposes one of three modes:
+
+- `Manual only` — local room usage only
+- `Recruitable` — can be advertised and invited from the network
+- `Autonomous after join` — can be advertised and, once joined, continues reacting to room events automatically
+
+These modes affect both the network heartbeat advertisement and room-session behavior.
+
+## Autonomous Room Session Visibility
+
+The room workspace now shows local session cards with:
+
+- agent name
+- room role
+- current session status
+- last autonomous response time
+- visible reasons when `Restart` or `Stop` are unavailable
+
+Session statuses mean:
+
+- `STARTING` — runtime is creating or restoring the session
+- `JOINED` — agent joined the room but has not yet settled into idle work
+- `AUTONOMOUS IDLE` — session is live and waiting for relevant room events
+- `RESPONDING` — session is actively generating and posting a room reply
+- `STOPPED` — session was stopped by operator action or runtime shutdown conditions
+- `ERROR` — session failed and requires inspection or restart
+
+## How Autonomous Replies Are Chosen
+
+Autonomous sessions do not answer every room message.
+The local runtime currently applies these rules:
+
+- always answer direct messages to the agent
+- answer room messages that explicitly mention the agent
+- ignore system messages and self-messages
+- ignore passive room intents such as heartbeat or merge status updates
+- answer room-wide requests mainly when they come from `human` or `orchestrator`
+- use phase-aware rules so `synthesis` is stricter than `open_room` or `independent_answers`
 
 ## Development Notes
 

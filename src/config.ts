@@ -362,6 +362,7 @@ export function buildAdapters(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = 
           roles: source.roles,
           capabilities: source.capabilities,
           enabled: true,
+          agentMode: "recruitable",
           active: true
         });
       }
@@ -370,6 +371,9 @@ export function buildAdapters(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = 
     // Load all adapters from database
     const dbAdapters = db.getModelConfigs();
     for (const dbAdapter of dbAdapters) {
+      if (!dbAdapter.enabled) {
+        continue;
+      }
       const adapter = adapterFromModelConfig(dbAdapter, env);
       if (adapter) {
         adaptersByName.set(adapter.name, adapter);

@@ -344,6 +344,7 @@ export interface PostRoomMessageInput {
   artifacts?: Artifact[];
   pythonCode?: string;
   needHuman?: boolean;
+  triggeredBy?: string | null;
 }
 
 export interface User {

@@ -279,6 +279,9 @@ export class HexNestClient implements HexNestClientLike {
     if (typeof input.needHuman === "boolean") {
       body.needHuman = input.needHuman;
     }
+    if (input.triggeredBy !== undefined) {
+      body.triggeredBy = input.triggeredBy;
+    }
 
     await this.request(`/api/rooms/${encodeURIComponent(input.roomId)}/messages`, {
       method: "POST",

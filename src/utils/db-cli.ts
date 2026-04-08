@@ -83,6 +83,7 @@ Examples:
           name,
           model,
           enabled: true,
+          agentMode: "recruitable",
           active: true
         });
 

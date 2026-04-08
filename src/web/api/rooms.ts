@@ -10,7 +10,7 @@ import type {
   JoinRoomResponse
 } from "../../protocol/types.js";
 import type { WebServerContext } from "../server.js";
-import { ApiResponse } from "../types.js";
+import { ApiResponse, RoomSessionInfo } from "../types.js";
 import { resolveCoreUrl } from "../resolve-core-url.js";
 
 interface LocalRoomsPayload {
@@ -23,6 +23,27 @@ interface LocalRoomDetailPayload {
   stats: CoreRoomStats | null;
   brief: CoreRoomConnectBrief | null;
   availableAgents: AgentDescriptor[];
+  localSessions: RoomSessionInfo[];
+}
+interface LocalRoomHeartbeatPayload {
+  viewers?: number;
+  localSessions: RoomSessionInfo[];
+}
+
+interface LocalRoomSessionControlPayload {
+  stopped?: boolean;
+  hadActiveRun?: boolean;
+  started?: boolean;
+  alreadyRunning?: boolean;
+  localSessions: RoomSessionInfo[];
+}
+
+
+interface LocalJoinSelfPayload {
+  joinedAgent: JoinRoomResponse["joinedAgent"];
+  autonomousSessionStarted: boolean;
+  autonomousAlreadyRunning: boolean;
+  warning?: string;
 }
 
 function normalizeText(value: unknown, maxLength: number): string {
@@ -56,7 +77,8 @@ async function loadRoomDetail(context: WebServerContext, roomId: string): Promis
     room,
     stats,
     brief,
-    availableAgents: context.getAvailableAgents()
+    availableAgents: context.getAvailableAgents(),
+    localSessions: context.db.listRoomSessions(roomId)
   };
 }
 
@@ -205,7 +227,15 @@ export function roomsRouter(context: WebServerContext) {
       }
 
       const client = createClient(context);
-      res.json({ success: true, data: await client.heartbeatRoom(roomId, sessionId) });
+      const heartbeat = await client.heartbeatRoom(roomId, sessionId);
+      const response: ApiResponse<LocalRoomHeartbeatPayload> = {
+        success: true,
+        data: {
+          viewers: heartbeat?.viewers,
+          localSessions: context.db.listRoomSessions(roomId)
+        }
+      };
+      res.json(response);
     } catch (error) {
       res.status(500).json({
         success: false,
@@ -290,9 +320,35 @@ export function roomsRouter(context: WebServerContext) {
       const client = createClient(context);
       const joined = await client.joinRoom(roomId, agentName, role);
 
-      const response: ApiResponse<JoinRoomResponse> = {
+      const modelConfig = context.db.getModelConfig(agentName);
+      let autonomousSessionStarted = false;
+      let autonomousAlreadyRunning = false;
+      let warning: string | undefined;
+
+      if (modelConfig?.enabled && modelConfig.agentMode === "autonomous") {
+        try {
+          const session = await context.startManualRoomSession(
+            roomId,
+            agentName,
+            role,
+            joined.joinedAgent.id,
+            "manual room join"
+          );
+          autonomousSessionStarted = session.started;
+          autonomousAlreadyRunning = session.alreadyRunning;
+        } catch (error) {
+          warning = error instanceof Error ? error.message : "Failed to start autonomous room session";
+        }
+      }
+
+      const response: ApiResponse<LocalJoinSelfPayload> = {
         success: true,
-        data: joined
+        data: {
+          joinedAgent: joined.joinedAgent,
+          autonomousSessionStarted,
+          autonomousAlreadyRunning,
+          warning
+        }
       };
       res.json(response);
     } catch (error) {
@@ -318,6 +374,62 @@ export function roomsRouter(context: WebServerContext) {
       const client = createClient(context);
       await client.postRoomMessage({ roomId, joinedAgentId, text, confidence });
       res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.post("/:roomId/local-sessions/:agentName/stop", async (req: Request, res: Response) => {
+    try {
+      const roomId = normalizeText(req.params.roomId, 120);
+      const agentName = normalizeText(req.params.agentName, 120);
+
+      if (!roomId || !agentName) {
+        res.status(400).json({ success: false, error: "roomId and agentName are required" });
+        return;
+      }
+
+      const result = await context.stopManualRoomSession(roomId, agentName);
+      const response: ApiResponse<LocalRoomSessionControlPayload> = {
+        success: true,
+        data: {
+          stopped: result.stopped,
+          hadActiveRun: result.hadActiveRun,
+          localSessions: context.db.listRoomSessions(roomId)
+        }
+      };
+      res.json(response);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.post("/:roomId/local-sessions/:agentName/restart", async (req: Request, res: Response) => {
+    try {
+      const roomId = normalizeText(req.params.roomId, 120);
+      const agentName = normalizeText(req.params.agentName, 120);
+
+      if (!roomId || !agentName) {
+        res.status(400).json({ success: false, error: "roomId and agentName are required" });
+        return;
+      }
+
+      const result = await context.restartManualRoomSession(roomId, agentName, "manual room restart");
+      const response: ApiResponse<LocalRoomSessionControlPayload> = {
+        success: true,
+        data: {
+          started: result.started,
+          alreadyRunning: result.alreadyRunning,
+          localSessions: context.db.listRoomSessions(roomId)
+        }
+      };
+      res.json(response);
     } catch (error) {
       res.status(500).json({
         success: false,

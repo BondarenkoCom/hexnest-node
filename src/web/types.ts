@@ -37,6 +37,20 @@ export interface RuntimeActivityItem {
   timestamp: string;
 }
 
+export interface RoomSessionInfo {
+  roomId: string;
+  agentName: string;
+  role: string;
+  joinedAgentId?: string;
+  lastSeenMessageId?: string;
+  lastRespondedMessageId?: string;
+  lastRespondedAt?: number;
+  autonomous: boolean;
+  status: "starting" | "joined" | "idle" | "responding" | "stopped" | "error";
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface NodeReadiness {
   state: ReadinessState;
   summary: string;
@@ -67,6 +81,7 @@ export interface ModelInfo {
   roles?: string[];
   capabilities?: string[];
   enabled: boolean;
+  agentMode: "manual" | "recruitable" | "autonomous";
   active: boolean;
 }
 
