@@ -22,6 +22,7 @@ interface LocalRoomDetailPayload {
   room: CoreRoomSnapshot;
   stats: CoreRoomStats | null;
   brief: CoreRoomConnectBrief | null;
+  messages: any[];
   availableAgents: AgentDescriptor[];
   localSessions: RoomSessionInfo[];
 }
@@ -68,16 +69,18 @@ function createClient(context: WebServerContext): HexNestClient {
 
 async function loadRoomDetail(context: WebServerContext, roomId: string): Promise<LocalRoomDetailPayload> {
   const client = createClient(context);
-  const [room, stats, brief] = await Promise.all([
+  const [room, stats, brief, messageResponse] = await Promise.all([
     client.getRoom(roomId),
     client.getRoomStats(roomId).catch(() => null),
-    client.getRoomConnectBrief(roomId).catch(() => null)
+    client.getRoomConnectBrief(roomId).catch(() => null),
+    client.getRoomMessages(roomId, 100).catch(() => ({ messages: [] }))
   ]);
 
   return {
     room,
     stats,
     brief,
+    messages: messageResponse.messages,
     availableAgents: context.getAvailableAgents(),
     localSessions: context.db.listRoomSessions(roomId)
   };

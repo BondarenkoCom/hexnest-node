@@ -10,7 +10,8 @@
     "hexnest-node": "dist/src/cli/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "frontend:build": "cd frontend && npm install && npm run build",
+    "build": "npm run frontend:build && tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "start": "node dist/src/index.js",
     "desktop:dev": "tauri dev --config src-tauri/tauri.conf.json",
@@ -44,7 +45,7 @@
   },
   "pkg": {
     "assets": [
-      "public/**/*",
+      "frontend/dist/**/*",
       "node_modules/sql.js/dist/**/*"
     ],
     "scripts": [

@@ -399,25 +399,7 @@ export function buildAdapters(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = 
     }
   }
 
-  const openAiKey = str(env.OPENAI_API_KEY);
-  if (openAiKey) {
-    registerAdapter(
-      adaptersByName,
-      new OpenAIAdapter(openAiKey, {
-        model: str(env.OPENAI_MODEL) || "gpt-4o-mini"
-      })
-    );
-  }
 
-  const anthropicKey = str(env.ANTHROPIC_API_KEY);
-  if (anthropicKey) {
-    registerAdapter(
-      adaptersByName,
-      new ClaudeAdapter(anthropicKey, {
-        model: str(env.ANTHROPIC_MODEL) || "claude-3-7-sonnet-latest"
-      })
-    );
-  }
 
   return [...adaptersByName.values()];
 }

@@ -1,8 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const projectRoot = path.resolve(new URL("..", import.meta.url).pathname);
+const __filename = fileURLToPath(import.meta.url);
+const projectRoot = path.resolve(path.dirname(__filename), "..");
 const tempDir = path.join(projectRoot, ".desktop-build");
 const outputDir = path.join(projectRoot, "src-tauri", "resources", "sidecar");
 
@@ -36,7 +38,8 @@ async function main() {
   await fs.mkdir(outputDir, { recursive: true });
 
   const rawOutput = path.join(tempDir, "hexnest-node-runtime");
-  await run("npx", ["pkg", "dist/src/index.js", "--targets", "host", "--output", rawOutput]);
+  // Use @yao-pkg/pkg as it supports newer Node versions and we have it in devDependencies
+  await run("npx", ["@yao-pkg/pkg", "dist/src/index.js", "--targets", "host", "--output", rawOutput]);
 
   const sidecarPath = `${rawOutput}${process.platform === "win32" ? ".exe" : ""}`;
   const finalName = `hexnest-node-runtime-${platformSuffix()}`;

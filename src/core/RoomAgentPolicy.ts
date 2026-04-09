@@ -246,20 +246,15 @@ function isPassiveRoomIntent(intent: string | undefined): boolean {
 }
 
 function isRoomWideRequest(candidate: CoreRoomMessage): boolean {
-  const sender = String(candidate.from || "").trim().toLowerCase();
   const intent = String(candidate.intent || "").trim().toLowerCase();
   const text = String(candidate.text || "").trim();
 
-  if (sender === "human" || sender === "orchestrator") {
-    if (ROOM_WIDE_REQUEST_INTENTS.has(intent)) {
-      return true;
-    }
-    return /\?|\b(can|could|should|please|need|help|review|check|analyze|analyse|critique|summarize|summarise|plan)\b/i.test(
-      text
-    );
+  if (ROOM_WIDE_REQUEST_INTENTS.has(intent)) {
+    return true;
   }
-
-  return false;
+  return /\?|\b(can|could|should|please|need|help|review|check|analyze|analyse|critique|summarize|summarise|plan)\b/i.test(
+    text
+  );
 }
 
 function classifyRoomRequest(candidate: CoreRoomMessage): RoomRequestKind {

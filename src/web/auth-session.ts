@@ -41,7 +41,7 @@ export function hasValidNodeWebSession(req: Request, db: DatabaseService): boole
 export function setNodeWebSession(res: Response, token: string): void {
   res.cookie(NODE_WEB_SESSION_COOKIE, token, {
     httpOnly: true,
-    sameSite: "strict",
+    sameSite: "lax",
     secure: false,
     path: "/"
   });
@@ -50,7 +50,7 @@ export function setNodeWebSession(res: Response, token: string): void {
 export function clearNodeWebSession(res: Response): void {
   res.clearCookie(NODE_WEB_SESSION_COOKIE, {
     httpOnly: true,
-    sameSite: "strict",
+    sameSite: "lax",
     secure: false,
     path: "/"
   });

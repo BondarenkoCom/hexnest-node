@@ -27,7 +27,7 @@
   "bundle": {
     "active": true,
     "resources": [
-      "../public",
+      "../frontend/dist",
       "resources/sidecar"
     ]
   }

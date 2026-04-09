@@ -86,10 +86,18 @@ export function resolvePublicDir(baseEnv: NodeJS.ProcessEnv = process.env): stri
     return resolveFromRuntimeBase(explicitPublicDir, baseEnv);
   }
 
-  const packagePublicDir = path.resolve(resolvePackageRoot(), "public");
+  const packageRoot = resolvePackageRoot();
+
+  // Prefer frontend/dist if it exists (for the new Vite-based UI)
+  const vitePublicDir = path.resolve(packageRoot, "frontend", "dist");
+  if (fs.existsSync(vitePublicDir)) {
+    return vitePublicDir;
+  }
+
+  const packagePublicDir = path.resolve(packageRoot, "public");
   if (fs.existsSync(packagePublicDir)) {
     return packagePublicDir;
   }
 
   return path.resolve(process.cwd(), "public");
-}
+}
