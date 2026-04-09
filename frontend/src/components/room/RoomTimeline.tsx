@@ -19,9 +19,12 @@ export const RoomTimeline: React.FC<RoomTimelineProps> = ({ events }) => {
     return event.envelope.message_type === 'system' || event.envelope.from_agent === 'system';
   };
 
-  const sortedEvents = [...events].sort((a, b) => 
-    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
+  const sortedEvents = [...events]
+    .filter(event => !isSystem(event))
+    .sort((a, b) => 
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
 
   return (
     <div className="flex flex-col gap-4">
