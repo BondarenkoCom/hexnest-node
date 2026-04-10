@@ -66,12 +66,12 @@ export const NodeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     activities.forEach((activity) => {
       // Simple heuristic: if it's the first run, just mark the latest as seen
       if (!lastActivityIdRef.current) {
-        lastActivityIdRef.current = activity.timestamp + activity.message; // Use combination as ID if no UUID
-        activities.forEach(a => seenActivityIdsRef.current.add(a.timestamp + a.message));
+        lastActivityIdRef.current = activity.id;
+        activities.forEach(a => seenActivityIdsRef.current.add(a.id));
         return;
       }
 
-      const activityId = activity.timestamp + activity.message;
+      const activityId = activity.id;
       if (!seenActivityIdsRef.current.has(activityId)) {
         seenActivityIdsRef.current.add(activityId);
         // Only show if it's "fresh" (e.g. within last 30 seconds of the poll cycle)
@@ -81,7 +81,7 @@ export const NodeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (activities.length > 0) {
-      lastActivityIdRef.current = activities[0].timestamp + activities[0].message;
+      lastActivityIdRef.current = activities[0].id;
     }
   }, [readiness?.recentActivity, addNotification]);
 

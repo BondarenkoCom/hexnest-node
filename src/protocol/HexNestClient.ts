@@ -201,7 +201,9 @@ export class HexNestClient implements HexNestClientLike {
       params.set("limit", String(normalizedLimit));
     }
     const suffix = params.size > 0 ? `?${params.toString()}` : "";
-    return this.request<CoreRoomsListResponse>(`/api/rooms${suffix}`);
+    return this.request<CoreRoomsListResponse>(`/api/rooms${suffix}`, {
+      authRequired: true
+    });
   }
 
   async createRoom(payload: CreateCoreRoomInput): Promise<CoreRoomDetails> {
@@ -212,15 +214,21 @@ export class HexNestClient implements HexNestClientLike {
   }
 
   async getRoom(roomId: string): Promise<CoreRoomSnapshot> {
-    return this.request<CoreRoomSnapshot>(`/api/rooms/${encodeURIComponent(roomId)}`);
+    return this.request<CoreRoomSnapshot>(`/api/rooms/${encodeURIComponent(roomId)}`, {
+      authRequired: true
+    });
   }
 
   async getRoomStats(roomId: string): Promise<CoreRoomStats> {
-    return this.request<CoreRoomStats>(`/api/rooms/${encodeURIComponent(roomId)}/stats`);
+    return this.request<CoreRoomStats>(`/api/rooms/${encodeURIComponent(roomId)}/stats`, {
+      authRequired: true
+    });
   }
 
   async getRoomConnectBrief(roomId: string): Promise<CoreRoomConnectBrief> {
-    return this.request<CoreRoomConnectBrief>(`/api/rooms/${encodeURIComponent(roomId)}/connect`);
+    return this.request<CoreRoomConnectBrief>(`/api/rooms/${encodeURIComponent(roomId)}/connect`, {
+      authRequired: true
+    });
   }
 
   async heartbeatRoom(roomId: string, sessionId: string): Promise<CoreRoomHeartbeatResponse> {
@@ -252,7 +260,9 @@ export class HexNestClient implements HexNestClientLike {
       params.set("limit", String(limit));
     }
     const suffix = params.size > 0 ? `?${params.toString()}` : "";
-    return this.request<CoreRoomMessagesResponse>(`/api/rooms/${encodeURIComponent(roomId)}/messages${suffix}`);
+    return this.request<CoreRoomMessagesResponse>(`/api/rooms/${encodeURIComponent(roomId)}/messages${suffix}`, {
+      authRequired: true
+    });
   }
 
   async joinRoom(roomId: string, agentName: string, role: string): Promise<JoinRoomResponse> {
@@ -382,6 +392,9 @@ export class HexNestClient implements HexNestClientLike {
         const body = await response.text();
         const contentType = response.headers.get("content-type");
         const summary = summarizeErrorBody(body, contentType);
+        
+        console.error(`[HexNestClient] Core API Error ${response.status}:`, body);
+        
         throw new CoreApiError(
           `Core API failed ${response.status} ${response.statusText}: ${summary}`,
           "http",

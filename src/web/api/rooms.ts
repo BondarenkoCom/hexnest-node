@@ -61,8 +61,10 @@ function requireCoreUrl(context: WebServerContext): string {
 }
 
 function createClient(context: WebServerContext): HexNestClient {
+  const nodeIdentity = context.db.getNodeIdentity();
   return new HexNestClient(requireCoreUrl(context), {
     userToken: context.db.getNodeConfig("user_token") || undefined,
+    nodeToken: nodeIdentity?.token,
     timeoutMs: context.nodeConfig.httpTimeoutMs
   });
 }
@@ -107,26 +109,78 @@ export function roomsRouter(context: WebServerContext) {
 
   router.get("/", async (_req: Request, res: Response) => {
     try {
-      const client = createClient(context);
-      const list = await client.listRooms(200);
-      const roomIds = list.value
-        .slice()
-        .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
-        .map((room) => room.id);
-      const rooms = await Promise.all(roomIds.map((roomId) => loadRoomSummary(context, roomId)));
+      let coreUrl: string;
+      try {
+        coreUrl = requireCoreUrl(context);
+      } catch (err: any) {
+        // Return success with empty list if core not configured
+        res.json({
+          success: true,
+          data: { rooms: [], availableAgents: context.getAvailableAgents() },
+          message: err.message
+        });
+        return;
+      }
 
-      const response: ApiResponse<LocalRoomsPayload> = {
+      const nodeIdentity = context.db.getNodeIdentity();
+      if (nodeIdentity) {
+        console.log(`[web] Sending nodeToken: ${nodeIdentity.token.slice(0, 15)}...`);
+      }
+      const client = new HexNestClient(coreUrl, {
+        userToken: context.db.getNodeConfig("user_token") || undefined,
+        nodeToken: nodeIdentity?.token,
+        timeoutMs: context.nodeConfig.httpTimeoutMs
+      });
+
+      const list = await client.listRooms(200);
+      const sortedSummaries = list.value
+        .slice()
+        .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+      
+      // Map basic info immediately
+      const rooms: CoreRoomDetails[] = sortedSummaries.map(s => ({
+        id: s.id,
+        name: s.name,
+        task: s.task,
+        subnest: s.subnest,
+        status: s.status,
+        phase: s.phase,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+        connectedAgents: [], // Details not needed for list
+        viewers: 0
+      }));
+
+      // Enrich top 25 rooms with latest messages (optional optimization)
+      const enrichCount = Math.min(rooms.length, 25);
+      if (enrichCount > 0) {
+        await Promise.all(rooms.slice(0, enrichCount).map(async (room, idx) => {
+          try {
+            const messageResponse = await client.getRoomMessages(room.id, 1);
+            const latest = messageResponse.messages[0];
+            if (latest) {
+               room.latestMessageText = latest.text;
+               room.latestMessageAt = latest.timestamp;
+               room.latestMessageFrom = latest.from;
+            }
+          } catch (e) {
+            console.warn(`[web] Failed to enrich room ${room.id}:`, e instanceof Error ? e.message : e);
+          }
+        }));
+      }
+
+      res.json({
         success: true,
         data: {
           rooms,
           availableAgents: context.getAvailableAgents()
         }
-      };
-      res.json(response);
+      });
     } catch (error) {
+      console.error("[web] rooms list error:", error);
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error"
+        error: error instanceof Error ? error.message : "Internal server error"
       });
     }
   });

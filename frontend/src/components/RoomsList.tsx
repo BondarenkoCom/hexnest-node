@@ -1,22 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Users } from 'lucide-react';
+import { useNode } from '../context/NodeContext';
 import type { RoomSummary, ApiResponse } from '../types';
 
 export const RoomsList: React.FC = () => {
+  const { status } = useNode();
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [filter, setFilter] = useState<'all' | 'mine'>('all');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchRooms = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/rooms');
       const json: ApiResponse<{ rooms: RoomSummary[] }> = await res.json();
       if (json.success) {
         setRooms(json.data?.rooms || []);
+      } else {
+        setError(json.error || 'Failed to load rooms');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching rooms:', error);
+      setError(error.message || 'Connection error');
     } finally {
       setLoading(false);
     }
@@ -51,8 +59,27 @@ export const RoomsList: React.FC = () => {
       </div>
       
       <div className="room-list flex flex-col gap-2 max-h-[40vh] overflow-y-auto pr-1">
-        {loading && rooms.length === 0 ? (
-          <div className="room-empty text-xs text-muted">Syncing rooms...</div>
+        {!status?.coreConnected ? (
+           <div className="room-empty p-4 bg-warn/5 rounded-xl border border-warn/20">
+              <p className="text-[10px] text-warn font-bold uppercase tracking-wider mb-1">Local Only Mode</p>
+              <p className="text-xs text-muted leading-relaxed">Connect to HexNest Core cluster in Status settings to see active rooms.</p>
+           </div>
+        ) : loading && rooms.length === 0 ? (
+          <div className="room-empty text-xs text-muted flex items-center gap-2 px-2 py-4">
+             <div className="w-3 h-3 border-2 border-cyan/30 border-t-cyan rounded-full animate-spin" />
+             Syncing rooms...
+          </div>
+        ) : error ? (
+           <div className="room-empty p-4 bg-error/5 rounded-xl border border-error/20">
+              <p className="text-[10px] text-error font-bold uppercase tracking-wider mb-1">Sync Error</p>
+              <p className="text-xs text-muted leading-relaxed mb-3">{error}</p>
+              <button 
+                onClick={fetchRooms}
+                className="text-[10px] font-bold text-cyan hover:text-cyan-soft transition-colors"
+              >
+                TRY AGAIN
+              </button>
+           </div>
         ) : filteredRooms.length > 0 ? (
           filteredRooms.map((room) => (
             <NavLink
@@ -76,7 +103,7 @@ export const RoomsList: React.FC = () => {
             </NavLink>
           ))
         ) : (
-          <div className="room-empty text-xs text-muted">No rooms found.</div>
+          <div className="room-empty text-xs text-muted p-4 italic">No rooms found in the swarm.</div>
         )}
       </div>
     </div>

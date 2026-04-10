@@ -1,8 +1,45 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNode } from '../context/NodeContext';
 
 export const StatusPage: React.FC = () => {
-  const { status, readiness } = useNode();
+  const { status, readiness, addNotification, refresh } = useNode();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+
+  const handleReconnect = async () => {
+    setIsConnecting(true);
+    try {
+      const res = await fetch('/api/core/reconnect', { method: 'POST' });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        addNotification(json.message || 'Core reconnected successfully', 'success');
+        refresh();
+      } else {
+        addNotification(json.error || 'Reconnect failed', 'error');
+      }
+    } catch (err: any) {
+      addNotification('Connection error: ' + err.message, 'error');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    try {
+      const res = await fetch('/api/core/test', { method: 'POST' });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        addNotification(json.message || 'Core connection test passed', 'success');
+      } else {
+        addNotification(json.error || json.message || 'Core test failed', 'error');
+      }
+    } catch (err: any) {
+      addNotification('Test error: ' + err.message, 'error');
+    } finally {
+      setIsTesting(false);
+    }
+  };
 
   const formatUptime = (ms: number) => {
     const mins = Math.floor(ms / 1000 / 60);
@@ -91,11 +128,19 @@ export const StatusPage: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-2 gap-2 mt-2">
-              <button className="px-3 py-2 bg-green-500/10 border border-green-500/30 text-green-400 rounded-lg text-sm hover:bg-green-500/20 transition-colors">
-                Reconnect Node
+              <button 
+                onClick={handleReconnect}
+                disabled={isConnecting}
+                className="px-3 py-2 bg-green-500/10 border border-green-500/30 text-green-400 rounded-lg text-sm hover:bg-green-500/20 transition-colors disabled:opacity-50"
+              >
+                {isConnecting ? 'Reconnecting...' : 'Reconnect Node'}
               </button>
-              <button className="px-3 py-2 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-lg text-sm hover:bg-blue-500/20 transition-colors">
-                Test Connection
+              <button 
+                onClick={handleTestConnection}
+                disabled={isTesting}
+                className="px-3 py-2 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-lg text-sm hover:bg-blue-500/20 transition-colors disabled:opacity-50"
+              >
+                {isTesting ? 'Testing...' : 'Test Connection'}
               </button>
               <button className="px-3 py-2 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 rounded-lg text-sm hover:bg-yellow-500/20 transition-colors">
                 Pause Network

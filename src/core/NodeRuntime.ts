@@ -26,6 +26,7 @@ interface RuntimeLogger {
 }
 
 export interface RuntimeActivityItem {
+  id: string;
   type: "info" | "success" | "warn" | "error";
   message: string;
   timestamp: string;
@@ -903,6 +904,7 @@ export class NodeRuntime {
 
   private recordActivity(type: RuntimeActivityItem["type"], message: string): void {
     this.recentActivity.unshift({
+      id: this.makeUuid(),
       type,
       message,
       timestamp: new Date(this.now()).toISOString()
