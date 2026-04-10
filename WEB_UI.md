@@ -225,7 +225,7 @@ The local runtime currently applies these rules:
 
 ### Frontend assets
 
-- `public/index.html`
+- `frontend/src/`
 
 ### Local web server
 
