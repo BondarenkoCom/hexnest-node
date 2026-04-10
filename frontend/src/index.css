@@ -1958,3 +1958,38 @@
         background: rgba(255, 46, 157, 0.2);
         box-shadow: 0 0 12px rgba(255, 46, 157, 0.3);
       }
+      /* Load More / History Folding */
+      .load-more-btn {
+        width: 100%;
+        margin-bottom: 24px;
+        padding: 12px;
+        background: rgba(74, 217, 255, 0.04);
+        border: 1px dashed var(--line-soft);
+        border-radius: 12px;
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: var(--fs-xs);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        outline: none;
+      }
+
+      .load-more-btn:hover {
+        background: rgba(74, 217, 255, 0.08);
+        border-color: var(--line);
+        color: var(--cyan);
+        border-style: solid;
+        box-shadow: 0 0 15px rgba(74, 217, 255, 0.12);
+        transform: translateY(-1px);
+      }
+
+      .load-more-btn:active {
+        transform: translateY(0);
+        background: rgba(74, 217, 255, 0.12);
+      }
