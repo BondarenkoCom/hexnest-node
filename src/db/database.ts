@@ -603,12 +603,36 @@ export class DatabaseService {
   }
 
   // Adapter Config operations
+  getAdapterConfigs(): AdapterConfig[] {
+    if (!this.db) return [];
+    try {
+      const results = this.db.exec(
+        `SELECT id, type, api_key, base_url, created_at, updated_at FROM adapter_configs`
+      );
+      if (results.length === 0 || results[0].values.length === 0) return [];
+
+      return results[0].values.map((row) => {
+        const [id, type, apiKey, baseUrl, createdAt, updatedAt] = row;
+        return {
+          id: String(id),
+          type: String(type),
+          apiKey: apiKey ? String(apiKey) : undefined,
+          baseUrl: baseUrl ? String(baseUrl) : undefined,
+          createdAt: Number(createdAt),
+          updatedAt: Number(updatedAt)
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
   getAdapterConfig(type: string): AdapterConfig | null {
     if (!this.db) return null;
     try {
       const results = this.db.exec(
         `SELECT id, type, api_key, base_url, created_at, updated_at 
-         FROM adapter_configs WHERE type = ?`,
+         FROM adapter_configs WHERE LOWER(type) = LOWER(?)`,
         [type]
       );
       if (results.length === 0 || results[0].values.length === 0) return null;

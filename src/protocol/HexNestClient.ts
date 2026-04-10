@@ -209,6 +209,7 @@ export class HexNestClient implements HexNestClientLike {
   async createRoom(payload: CreateCoreRoomInput): Promise<CoreRoomDetails> {
     return this.request<CoreRoomDetails>("/api/rooms", {
       method: "POST",
+      authRequired: true,
       body: payload
     });
   }
@@ -234,24 +235,29 @@ export class HexNestClient implements HexNestClientLike {
   async heartbeatRoom(roomId: string, sessionId: string): Promise<CoreRoomHeartbeatResponse> {
     return this.request<CoreRoomHeartbeatResponse>(`/api/rooms/${encodeURIComponent(roomId)}/heartbeat`, {
       method: "POST",
+      authRequired: true,
       body: { sessionId }
     });
   }
 
   async forkRoom(roomId: string): Promise<CoreRoomSnapshot> {
     return this.request<CoreRoomSnapshot>(`/api/rooms/${encodeURIComponent(roomId)}/fork`, {
-      method: "POST"
+      method: "POST",
+      authRequired: true
     });
   }
 
   async downloadRoomSummary(roomId: string): Promise<string> {
     return this.requestText(`/api/rooms/${encodeURIComponent(roomId)}/summary`, {
-      method: "POST"
+      method: "POST",
+      authRequired: true
     });
   }
 
   async exportRoom(roomId: string): Promise<unknown> {
-    return this.request(`/api/rooms/${encodeURIComponent(roomId)}/export`);
+    return this.request(`/api/rooms/${encodeURIComponent(roomId)}/export`, {
+      authRequired: true
+    });
   }
 
   async getRoomMessages(roomId: string, limit = 50): Promise<CoreRoomMessagesResponse> {
@@ -268,6 +274,7 @@ export class HexNestClient implements HexNestClientLike {
   async joinRoom(roomId: string, agentName: string, role: string): Promise<JoinRoomResponse> {
     return this.request<JoinRoomResponse>(`/api/rooms/${encodeURIComponent(roomId)}/agents`, {
       method: "POST",
+      authRequired: true,
       body: {
         name: agentName,
         role
@@ -278,6 +285,7 @@ export class HexNestClient implements HexNestClientLike {
   async postRoomMessage(input: PostRoomMessageInput): Promise<void> {
     const body: Record<string, unknown> = {
       agentId: input.joinedAgentId,
+      joinedAgentId: input.joinedAgentId,
       text: input.text,
       confidence: input.confidence ?? 0.75
     };
@@ -296,6 +304,7 @@ export class HexNestClient implements HexNestClientLike {
 
     await this.request(`/api/rooms/${encodeURIComponent(input.roomId)}/messages`, {
       method: "POST",
+      authRequired: true,
       body
     });
   }
@@ -303,8 +312,8 @@ export class HexNestClient implements HexNestClientLike {
   async getRoomContext(roomId: string, role: string): Promise<RoomContext> {
     const encodedRoomId = encodeURIComponent(roomId);
     const [room, messages] = await Promise.all([
-      this.request<Record<string, unknown>>(`/api/rooms/${encodedRoomId}`),
-      this.request<Record<string, unknown>>(`/api/rooms/${encodedRoomId}/messages`)
+      this.request<Record<string, unknown>>(`/api/rooms/${encodedRoomId}`, { authRequired: true }),
+      this.request<Record<string, unknown>>(`/api/rooms/${encodedRoomId}/messages?limit=30`, { authRequired: true })
     ]);
 
     const rawTimeline = Array.isArray(messages.messages) ? messages.messages : [];
@@ -387,6 +396,8 @@ export class HexNestClient implements HexNestClientLike {
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
         signal: controller.signal
       });
+
+      console.log(`[HexNestClient] ${options.method || "GET"} ${path} auth=${options.authRequired ? "YES" : "NO"}`);
 
       if (!response.ok) {
         const body = await response.text();
@@ -495,6 +506,8 @@ export class HexNestClient implements HexNestClientLike {
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
         signal: controller.signal
       });
+
+      console.log(`[HexNestClient] ${options.method || "GET"} ${path} auth=${options.authRequired ? "YES" : "NO"} status=${response.status}`);
 
       if (!response.ok) {
         const body = await response.text();

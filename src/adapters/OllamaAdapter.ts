@@ -38,7 +38,7 @@ export class OllamaAdapter implements AgentAdapter {
     this.name = options.name || "ollama-local";
     this.model = options.model || "qwen2.5:14b";
     this.modelId = this.model;
-    this.baseUrl = options.baseUrl || "http://localhost:11434";
+    this.baseUrl = options.baseUrl || "http://127.0.0.1:11434";
     this.timeoutMs = Math.max(1_000, Number(options.timeoutMs ?? process.env.OLLAMA_TIMEOUT_MS ?? 45_000));
     this.maxOutputTokens = Math.max(64, Number(options.maxOutputTokens ?? process.env.OLLAMA_NUM_PREDICT ?? 900));
     this.capabilities = options.capabilities || ["general", "code", "research"];
@@ -50,7 +50,7 @@ export class OllamaAdapter implements AgentAdapter {
   }
 
   private readonly model: string;
-  private readonly baseUrl: string;
+  public readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly maxOutputTokens: number;
   private readonly responseCache: Map<string, CachedResponse>;
@@ -143,9 +143,12 @@ export class OllamaAdapter implements AgentAdapter {
           ]
         })
       });
-    } catch (error) {
-      if ((error as Error).name === "AbortError") {
+    } catch (error: any) {
+      if (error.name === "AbortError") {
         throw new Error(`Ollama request timed out after ${this.timeoutMs}ms`);
+      }
+      if (error.code === "ECONNREFUSED" || error.message.includes("fetch failed")) {
+        throw new Error(`Ollama is NOT responding at ${this.baseUrl}. Please ensure Ollama is running and accessible.`);
       }
       throw error;
     } finally {

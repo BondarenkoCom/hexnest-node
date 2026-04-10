@@ -50,6 +50,10 @@ async function clearRuntimeInfo(runtimeInfoPath: string | null): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  console.log("-----------------------------------------");
+  console.log("[HexNest Node] VERSION 1.1.0 (Fix Applied)");
+  console.log("-----------------------------------------");
+  
   const env = loadEnvMap();
   const { config, adapters, database } = await loadRuntimeSetupAsync(env);
   const runtime = new NodeRuntime(config, adapters, { database });

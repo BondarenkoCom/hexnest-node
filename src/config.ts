@@ -194,7 +194,7 @@ function adapterFromSource(source: AdapterConfigSource, env: Record<string, stri
     return new OllamaAdapter({
       name,
       model: model || "qwen2.5:14b",
-      baseUrl: baseUrl || "http://localhost:11434",
+      baseUrl: baseUrl || "http://127.0.0.1:11434",
       capabilities: capabilities.length ? capabilities : undefined,
       supportedRoles: supportedRoles.length ? supportedRoles : undefined
     });
@@ -229,19 +229,37 @@ function adapterFromSource(source: AdapterConfigSource, env: Record<string, stri
   return null;
 }
 
-function adapterFromModelConfig(config: ModelConfig, env: Record<string, string>): AgentAdapter | null {
+function adapterFromModelConfig(config: ModelConfig, env: Record<string, string>, db?: DatabaseService): AgentAdapter | null {
   const type = normalizeAdapterKind(config.type);
   const name = config.name;
   const model = config.model;
-  const baseUrl = config.baseUrl;
   const capabilities = config.capabilities || [];
   const supportedRoles = config.roles || [];
+
+  // Fallback chain for baseUrl: Model Config -> Adapter Config -> Default
+  let baseUrl = config.baseUrl;
+  if (!baseUrl && db) {
+    // Try exact match, then case-insensitive lookup, then with "Adapter" suffix
+    let globalAdapter = db.getAdapterConfig(type);
+    if (!globalAdapter) {
+      // Fallback: look for "OllamaAdapter" style if searching for "ollama"
+      const allConfigs = db.getAdapterConfigs?.() || []; 
+      globalAdapter = allConfigs.find(c => 
+        c.type.toLowerCase() === type.toLowerCase() || 
+        c.type.toLowerCase() === `${type.toLowerCase()}adapter`
+      ) || null;
+    }
+    
+    if (globalAdapter?.baseUrl) {
+      baseUrl = globalAdapter.baseUrl;
+    }
+  }
 
   if (type === "ollama") {
     return new OllamaAdapter({
       name,
       model: model || "qwen2.5:14b",
-      baseUrl: baseUrl || "http://localhost:11434",
+      baseUrl: baseUrl || "http://127.0.0.1:11434",
       capabilities: capabilities.length ? capabilities : undefined,
       supportedRoles: supportedRoles.length ? supportedRoles : undefined
     });
@@ -388,7 +406,7 @@ export function buildAdapters(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = 
       if (!dbAdapter.enabled) {
         continue;
       }
-      const adapter = adapterFromModelConfig(dbAdapter, env);
+      const adapter = adapterFromModelConfig(dbAdapter, env, db);
       if (adapter) {
         adaptersByName.set(adapter.name, adapter);
       }

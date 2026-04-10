@@ -41,7 +41,7 @@ interface LocalRoomSessionControlPayload {
 
 
 interface LocalJoinSelfPayload {
-  joinedAgent: JoinRoomResponse["joinedAgent"];
+  joinedAgent: JoinRoomResponse["agent"];
   roomSessionStarted: boolean;
   roomSessionAlreadyRunning: boolean;
   roomSessionAutonomous: boolean;
@@ -75,7 +75,7 @@ async function loadRoomDetail(context: WebServerContext, roomId: string): Promis
     client.getRoom(roomId),
     client.getRoomStats(roomId).catch(() => null),
     client.getRoomConnectBrief(roomId).catch(() => null),
-    client.getRoomMessages(roomId, 100).catch(() => ({ messages: [] }))
+    client.getRoomMessages(roomId, 30).catch(() => ({ messages: [] }))
   ]);
 
   return {
@@ -390,7 +390,7 @@ export function roomsRouter(context: WebServerContext) {
             roomId,
             agentName,
             role,
-            joined.joinedAgent.id,
+            joined.agent.id,
             "manual room join"
           );
           roomSessionStarted = session.started;
@@ -404,7 +404,7 @@ export function roomsRouter(context: WebServerContext) {
       const response: ApiResponse<LocalJoinSelfPayload> = {
         success: true,
         data: {
-          joinedAgent: joined.joinedAgent,
+          joinedAgent: joined.agent,
           roomSessionStarted,
           roomSessionAlreadyRunning,
           roomSessionAutonomous,
@@ -423,12 +423,12 @@ export function roomsRouter(context: WebServerContext) {
   router.post("/:roomId/messages", async (req: Request, res: Response) => {
     try {
       const roomId = normalizeText(req.params.roomId, 120);
-      const joinedAgentId = normalizeText(req.body?.joinedAgentId, 120);
+      const joinedAgentId = normalizeText(req.body?.joinedAgentId || req.body?.agentId, 120);
       const text = normalizeText(req.body?.text, 4000);
       const confidence = typeof req.body?.confidence === "number" ? req.body.confidence : undefined;
 
       if (!roomId || !joinedAgentId || !text) {
-        res.status(400).json({ success: false, error: "roomId, joinedAgentId and text are required" });
+        res.status(400).json({ success: false, error: "roomId, agentId/joinedAgentId and text are required" });
         return;
       }
 

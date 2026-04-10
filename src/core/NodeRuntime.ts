@@ -99,9 +99,35 @@ export class NodeRuntime {
     }
   }
 
-  async start(): Promise<void> {
-    if (this.isRunning) return;
-    if (this.adapters.size === 0) {
+  public async start(): Promise<void> {
+    this.logger.info(`[node] starting runtime node=${this.config.nodeName}...`);
+    
+    // Quick health check for model adapters (e.g. Ollama)
+    void (async () => {
+      const urlsToCheck = new Set<string>();
+      for (const adapter of this.adapters.values()) {
+        if (adapter.baseUrl) {
+          urlsToCheck.add(adapter.baseUrl);
+        }
+      }
+
+      for (const baseUrl of urlsToCheck) {
+        try {
+          // Use /api/tags for Ollama providers, otherwise check base URL
+          const healthUrl = baseUrl.includes("11434") ? `${baseUrl}/api/tags` : baseUrl;
+          const response = await fetch(healthUrl).catch(() => null);
+          if (!response || !response.ok) {
+            this.logger.warn(`[node] WARNING: Model service at ${baseUrl} appears to be offline or unreachable.`);
+          } else {
+            this.logger.info(`[node] Model service at ${baseUrl} is online and responsive.`);
+          }
+        } catch (e) {
+          // Ignore check failure
+        }
+      }
+    })();
+
+    if (this.config.manualRegistrationOnly) {
       throw new Error("No adapters configured");
     }
     this.isRunning = true;
@@ -407,12 +433,31 @@ export class NodeRuntime {
     }
 
     await this.stopManualRoomSession(roomId, agentName);
+    
     const refreshed = this.database?.getRoomSession(roomId, agentName) || existingSession;
+    this.logger.info(`[node] requesting fresh join for restart room=${roomId} agent=${agentName}`);
+    
+    if (!this.authedClient) throw new Error("Client not connected");
+    const joined = await this.authedClient.joinRoom(roomId, agentName, refreshed.role);
+    
+    // prominent logging
+    console.log("====================================================================");
+    this.logger.info(`[DIAGNOSTIC] Join Response for ${agentName}: ${JSON.stringify(joined)}`);
+    console.log("====================================================================");
+    
+    // Try to find the agent object in common locations
+    const agentData = (joined as any)?.agent || (joined as any)?.joinedAgent || (joined as any)?.data?.agent || (joined as any)?.data?.joinedAgent;
+    const agentId = agentData?.id || (joined as any)?.id || (joined as any)?.data?.id;
+
+    if (!agentId) {
+      throw new Error(`Failed to join room: Core API response missing agent ID. Response: ${JSON.stringify(joined)}`);
+    }
+    
     return this.startManualRoomSession(
       roomId,
       agentName,
       refreshed.role,
-      refreshed.joinedAgentId || existingSession.joinedAgentId || "",
+      agentId,
       taskHint
     );
   }
@@ -531,6 +576,7 @@ export class NodeRuntime {
       initialState: existingSession,
       shouldStop: () => this.stopRequested || this.status === "draining" || !this.coreConnected || this.roomStopRequests.has(roomId),
       onStateChange: async (state) => {
+        this.logger.info(`[database] updating session state for ${state.agentName} to ${state.status} in room ${state.roomId}`);
         this.database?.upsertRoomSession(state);
       },
       onTurn: async ({ context, response, triggeredBy, reason }) => {

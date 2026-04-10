@@ -59,9 +59,11 @@ export class RoomAgentSession {
     await this.emitState("starting");
     try {
       await this.ensureJoined();
+      this.lastRespondedAt = Date.now();
+      this.options.logger?.info(`[session] Agent ${this.options.adapter.name} is joined and ready in room ${this.options.roomId}`);
+      await this.emitState("idle");
 
       if (this.shouldResumeAutonomousSession()) {
-        await this.emitState("idle");
         await this.runAutonomousLoop();
         await this.emitState("stopped");
         return;
@@ -76,7 +78,13 @@ export class RoomAgentSession {
 
       await this.runAutonomousLoop();
       await this.emitState("stopped");
-    } catch (error) {
+    } catch (error: any) {
+      const msg = error.message || String(error);
+      this.options.logger?.error(`[session] critical failure room=${this.options.roomId} agent=${this.options.adapter.name}: ${msg}`);
+      if (msg.includes("401") || error?.status === 401) {
+        this.joinedAgentId = null;
+        this.joinedAgentName = null;
+      }
       await this.emitState("error");
       throw error;
     }
@@ -92,8 +100,8 @@ export class RoomAgentSession {
       this.options.adapter.name,
       this.options.role
     );
-    this.joinedAgentId = joined.joinedAgent.id;
-    this.joinedAgentName = joined.joinedAgent.name;
+    this.joinedAgentId = joined.agent.id;
+    this.joinedAgentName = joined.agent.name;
     await this.emitState("joined");
   }
 
@@ -109,7 +117,7 @@ export class RoomAgentSession {
     const pollIntervalMs = Math.max(1_000, this.options.pollIntervalMs ?? DEFAULT_POLL_MS);
 
     while (!this.options.shouldStop?.()) {
-      const messages = await this.options.client.getRoomMessages(this.options.roomId, 100);
+      const messages = await this.options.client.getRoomMessages(this.options.roomId, 30);
       const ordered = [...messages.messages].sort(
         (left, right) => Date.parse(left.timestamp || "") - Date.parse(right.timestamp || "")
       );
@@ -126,7 +134,9 @@ export class RoomAgentSession {
 
       if (nextDecision) {
         await this.emitState("responding");
+        this.options.logger?.info(`[session] Agent ${this.options.adapter.name} is generating response for room ${this.options.roomId}...`);
         const response = await this.options.adapter.respond(context);
+        this.options.logger?.info(`[session] Agent ${this.options.adapter.name} response generated, posting to room...`);
         await this.postTurn(context, response, nextDecision.triggeredBy, nextDecision.reason);
         await this.refreshCursor();
         await this.emitState("idle");

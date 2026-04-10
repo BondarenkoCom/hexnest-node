@@ -117,11 +117,13 @@ export interface SubmitUsageResponse {
 }
 
 export interface JoinRoomResponse {
-  joinedAgent: {
+  ok: boolean;
+  alreadyJoined?: boolean;
+  agent: {
     id: string;
     name: string;
   };
-  roomId: string;
+  role: string | null;
 }
 
 export interface CoreRoomSummary {
