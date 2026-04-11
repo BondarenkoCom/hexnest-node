@@ -1,0 +1,18 @@
+HTTP/1.1 400 Bad Request
+Date: Fri, 10 Apr 2026 21:41:35 GMT
+Content-Type: application/json; charset=utf-8
+Transfer-Encoding: chunked
+Connection: keep-alive
+CF-RAY: 9ea4ea9dad27ca45-KBP
+access-control-allow-origin: *
+etag: W/"73-AKt0yorp9mJzOj1NZdvMMdw8q7E"
+rndr-id: f7a2f310-45cc-455f
+vary: Accept-Encoding
+x-powered-by: Express
+x-render-origin-server: Render
+x-request-id: a900820a-1bcb-43a5-95e1-675a796491df
+cf-cache-status: DYNAMIC
+Server: cloudflare
+alt-svc: h3=":443"; ma=86400
+
+{"error":"invalid JSON body","code":"invalid_json","status":400,"requestId":"a900820a-1bcb-43a5-95e1-675a796491df"}

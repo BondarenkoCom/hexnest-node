@@ -1,7 +1,39 @@
+# Dependencies
 node_modules/
+frontend/node_modules/
+
+# Build outputs
 dist/
+frontend/dist/
+.desktop-build/
+src-tauri/target/
+
+# Local databases and identities
+.hexnest.db
+.hexnest-identity.json
+.hexnest-runtime.json
+
+# Environment variables
 .env
 .env.local
-.hexnest-identity.json
+.env.*.local
+
+# Logs and tests
 *.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
 coverage/
+test-results/
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

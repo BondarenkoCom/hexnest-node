@@ -43,7 +43,7 @@ export class ClaudeAdapter implements AgentAdapter {
   }
 
   private readonly model: string;
-  private readonly baseUrl: string;
+  public readonly baseUrl: string;
   private lastUsage: { input: number; output: number } = { input: 0, output: 0 };
 
   async respond(context: RoomContext): Promise<AgentResponse> {

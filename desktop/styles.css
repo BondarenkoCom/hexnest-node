@@ -1,0 +1,145 @@
+:root {
+  --bg: #07131d;
+  --bg-2: #0b2130;
+  --line: rgba(127, 231, 255, 0.28);
+  --line-strong: rgba(127, 231, 255, 0.5);
+  --text: #f4fbff;
+  --muted: #a4c0cf;
+  --danger: #ff7b9c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: "Space Grotesk", sans-serif;
+  color: var(--text);
+}
+
+body {
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at top left, rgba(255, 123, 156, 0.18), transparent 35%),
+    radial-gradient(circle at bottom right, rgba(127, 231, 255, 0.15), transparent 40%),
+    linear-gradient(160deg, var(--bg) 0%, var(--bg-2) 100%);
+}
+
+.shell {
+  width: min(100%, 720px);
+  padding: 24px;
+}
+
+.panel {
+  padding: 32px;
+  border-radius: 28px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(5, 13, 20, 0.9), rgba(8, 24, 36, 0.95));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  font: 500 0.82rem "IBM Plex Mono", monospace;
+  letter-spacing: 0.16em;
+  color: #7fe7ff;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 1;
+}
+
+.status {
+  margin: 0;
+  max-width: 42ch;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.status[data-state="error"] {
+  color: var(--danger);
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.meta-card {
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(127, 231, 255, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.meta-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font: 500 0.76rem "IBM Plex Mono", monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.hint {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.pulse {
+  display: flex;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.pulse span {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #7fe7ff;
+  box-shadow: 0 0 18px var(--line-strong);
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+.pulse span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.pulse span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes pulse {
+  0%,
+  80%,
+  100% {
+    transform: scale(0.75);
+    opacity: 0.4;
+  }
+
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 24px;
+    border-radius: 22px;
+  }
+
+  .meta {
+    grid-template-columns: 1fr;
+  }
+}

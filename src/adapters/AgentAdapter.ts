@@ -11,6 +11,7 @@ export interface AgentResponse {
 export interface AgentAdapter {
   name: string;
   modelId?: string;
+  baseUrl?: string;
   capabilities: string[];
   supportedRoles: string[];
   respond(context: RoomContext): Promise<AgentResponse>;

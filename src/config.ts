@@ -2,10 +2,18 @@ import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
 import { parse as parseYaml } from "yaml";
+import { randomUUID } from "node:crypto";
 import { AgentAdapter } from "./adapters/AgentAdapter.js";
 import { ClaudeAdapter } from "./adapters/ClaudeAdapter.js";
 import { OllamaAdapter } from "./adapters/OllamaAdapter.js";
 import { OpenAIAdapter } from "./adapters/OpenAIAdapter.js";
+import { DatabaseService } from "./db/database.js";
+import type { ModelConfig } from "./db/database.js";
+import {
+  resolveDefaultEnvFile,
+  resolveDefaultYamlConfigPath,
+  resolveRuntimePath
+} from "./runtime-paths.js";
 
 export interface NodeConfig {
   coreUrl: string;
@@ -16,6 +24,8 @@ export interface NodeConfig {
   nodeId?: string;
   nodeToken?: string;
   identityPath?: string;
+  userEmail?: string;
+  userToken?: string;
   heartbeatIntervalMs: number;
   approvalPollIntervalMs: number;
   usageFlushIntervalMs: number;
@@ -23,6 +33,7 @@ export interface NodeConfig {
   shutdownGraceMs: number;
   autoAcceptInvites: boolean;
   httpTimeoutMs: number;
+  manualRegistrationOnly?: boolean;
 }
 
 interface YamlNodeConfig {
@@ -59,6 +70,7 @@ interface AdapterConfigSource {
 export interface RuntimeSetup {
   config: NodeConfig;
   adapters: AgentAdapter[];
+  database: DatabaseService;
 }
 
 function parseBoolean(value: unknown, fallback: boolean): boolean {
@@ -81,6 +93,20 @@ function str(value: unknown): string | undefined {
   return s.length > 0 ? s : undefined;
 }
 
+function normalizeAdapterKind(value: unknown): string {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "ollama" || normalized === "ollamaadapter") {
+    return "ollama";
+  }
+  if (normalized === "openai" || normalized === "openaiadapter") {
+    return "openai";
+  }
+  if (normalized === "claude" || normalized === "claudeadapter" || normalized === "anthropic") {
+    return "claude";
+  }
+  return normalized;
+}
+
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item ?? "").trim()).filter(Boolean);
@@ -89,18 +115,16 @@ function stringArray(value: unknown): string[] {
 function resolveOptionalPath(rawPath: string | undefined): string | null {
   const input = str(rawPath);
   if (!input) return null;
-  return path.isAbsolute(input) ? input : path.resolve(process.cwd(), input);
+  return resolveRuntimePath(input);
 }
 
-function loadEnvMap(baseEnv: NodeJS.ProcessEnv = process.env): Record<string, string> {
+export function loadEnvMap(baseEnv: NodeJS.ProcessEnv = process.env): Record<string, string> {
   const envMap: Record<string, string> = {};
   for (const [key, value] of Object.entries(baseEnv)) {
     if (typeof value === "string") envMap[key] = value;
   }
 
-  const explicitEnvFile = resolveOptionalPath(envMap.HEXNEST_ENV_FILE);
-  const defaultEnvFile = path.resolve(process.cwd(), ".env");
-  const envPath = explicitEnvFile || (fs.existsSync(defaultEnvFile) ? defaultEnvFile : null);
+  const envPath = resolveDefaultEnvFile(baseEnv);
   if (!envPath || !fs.existsSync(envPath)) {
     return envMap;
   }
@@ -115,9 +139,7 @@ function loadEnvMap(baseEnv: NodeJS.ProcessEnv = process.env): Record<string, st
 }
 
 function loadYamlConfig(env: Record<string, string>): YamlNodeConfig {
-  const explicitPath = resolveOptionalPath(env.HEXNEST_CONFIG_PATH);
-  const defaultPath = path.resolve(process.cwd(), "node-config.yaml");
-  const yamlPath = explicitPath || (fs.existsSync(defaultPath) ? defaultPath : null);
+  const yamlPath = resolveDefaultYamlConfigPath(env);
   if (!yamlPath || !fs.existsSync(yamlPath)) {
     return {};
   }
@@ -146,8 +168,21 @@ function loadIdentity(pathname: string | null): { nodeId?: string; nodeToken?: s
   }
 }
 
+function migrateIdentityToDatabase(db: DatabaseService, identityPath: string | null): void {
+  if (!db.isReady()) {
+    return;
+  }
+  const identity = loadIdentity(identityPath);
+  if (identity.nodeId && identity.nodeToken) {
+    const existing = db.getNodeIdentity();
+    if (!existing) {
+      db.setNodeIdentity(identity.nodeId, identity.nodeToken);
+    }
+  }
+}
+
 function adapterFromSource(source: AdapterConfigSource, env: Record<string, string>): AgentAdapter | null {
-  const type = str(source.type)?.toLowerCase();
+  const type = normalizeAdapterKind(str(source.type));
   const name = str(source.name);
   const model = str(source.model);
   const baseUrl = str(source.baseUrl);
@@ -160,7 +195,7 @@ function adapterFromSource(source: AdapterConfigSource, env: Record<string, stri
     return new OllamaAdapter({
       name,
       model: model || "qwen2.5:14b",
-      baseUrl: baseUrl || "http://localhost:11434",
+      baseUrl: baseUrl || "http://127.0.0.1:11434",
       capabilities: capabilities.length ? capabilities : undefined,
       supportedRoles: supportedRoles.length ? supportedRoles : undefined
     });
@@ -195,6 +230,71 @@ function adapterFromSource(source: AdapterConfigSource, env: Record<string, stri
   return null;
 }
 
+function adapterFromModelConfig(config: ModelConfig, env: Record<string, string>, db?: DatabaseService): AgentAdapter | null {
+  const type = normalizeAdapterKind(config.type);
+  const name = config.name;
+  const model = config.model;
+  const capabilities = config.capabilities || [];
+  const supportedRoles = config.roles || [];
+
+  // Fallback chain for baseUrl: Model Config -> Adapter Config -> Default
+  let baseUrl = config.baseUrl;
+  if (!baseUrl && db) {
+    // Try exact match, then case-insensitive lookup, then with "Adapter" suffix
+    let globalAdapter = db.getAdapterConfig(type);
+    if (!globalAdapter) {
+      // Fallback: look for "OllamaAdapter" style if searching for "ollama"
+      const allConfigs = db.getAdapterConfigs?.() || []; 
+      globalAdapter = allConfigs.find(c => 
+        c.type.toLowerCase() === type.toLowerCase() || 
+        c.type.toLowerCase() === `${type.toLowerCase()}adapter`
+      ) || null;
+    }
+    
+    if (globalAdapter?.baseUrl) {
+      baseUrl = globalAdapter.baseUrl;
+    }
+  }
+
+  if (type === "ollama") {
+    return new OllamaAdapter({
+      name,
+      model: model || "qwen2.5:14b",
+      baseUrl: baseUrl || "http://127.0.0.1:11434",
+      capabilities: capabilities.length ? capabilities : undefined,
+      supportedRoles: supportedRoles.length ? supportedRoles : undefined
+    });
+  }
+
+  if (type === "openai") {
+    const keyVar = config.apiKeyEnv || "OPENAI_API_KEY";
+    const apiKey = config.apiKey || str(env[keyVar]);
+    if (!apiKey) return null;
+    return new OpenAIAdapter(apiKey, {
+      name,
+      model: model || str(env.OPENAI_MODEL) || "gpt-4o-mini",
+      baseUrl,
+      capabilities: capabilities.length ? capabilities : undefined,
+      supportedRoles: supportedRoles.length ? supportedRoles : undefined
+    });
+  }
+
+  if (type === "claude" || type === "anthropic") {
+    const keyVar = config.apiKeyEnv || "ANTHROPIC_API_KEY";
+    const apiKey = config.apiKey || str(env[keyVar]);
+    if (!apiKey) return null;
+    return new ClaudeAdapter(apiKey, {
+      name,
+      model: model || str(env.ANTHROPIC_MODEL) || "claude-3-7-sonnet-latest",
+      baseUrl,
+      capabilities: capabilities.length ? capabilities : undefined,
+      supportedRoles: supportedRoles.length ? supportedRoles : undefined
+    });
+  }
+
+  return null;
+}
+
 function registerAdapter(
   adaptersByName: Map<string, AgentAdapter>,
   adapter: AgentAdapter | null
@@ -203,18 +303,34 @@ function registerAdapter(
   adaptersByName.set(adapter.name, adapter);
 }
 
-export function loadConfig(baseEnv: NodeJS.ProcessEnv = process.env): NodeConfig {
+export function loadConfig(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = process.env): NodeConfig {
   const env = loadEnvMap(baseEnv);
   const yaml = loadYamlConfig(env);
   const identityPath = resolveOptionalPath(env.HEXNEST_IDENTITY_PATH || ".hexnest-identity.json");
-  const identity = loadIdentity(identityPath);
+  
+  // Migrate legacy identity file to database
+  migrateIdentityToDatabase(db, identityPath);
 
-  const coreUrl = str(env.HEXNEST_CORE_URL) || str(yaml.core?.url);
-  const nodeName = str(env.HEXNEST_NODE_NAME) || str(yaml.node?.name);
-  const operatorName = str(env.HEXNEST_OPERATOR_NAME) || str(yaml.node?.operatorName);
-  if (!coreUrl) throw new Error("HEXNEST_CORE_URL is required");
-  if (!nodeName) throw new Error("HEXNEST_NODE_NAME is required");
-  if (!operatorName) throw new Error("HEXNEST_OPERATOR_NAME is required");
+  // Try to get identity from database first, fallback to env/yaml
+  const dbIdentity = db.getNodeIdentity();
+  const nodeIdDb = dbIdentity?.id;
+  const nodeTokenDb = dbIdentity?.token;
+
+  const userEmailDb = db.getNodeConfig("user_email");
+  const userTokenDb = db.getNodeConfig("user_token");
+  const coreUrlDb = db.getNodeConfig("core_url");
+
+  const coreUrl = coreUrlDb || str(env.HEXNEST_CORE_URL) || str(yaml.core?.url);
+  if (!coreUrl) throw new Error("Core URL is required via settings, environment, or yaml config");
+
+  // Try to load node name and operator name from database first
+  // If not in database, fallback to env/yaml
+  // If not specified anywhere, use defaults (for first-run)
+  const nodeNameDb = db.getNodeConfig("node_name");
+  const operatorNameDb = db.getNodeConfig("operator_name");
+
+  const nodeName = nodeNameDb || str(env.HEXNEST_NODE_NAME) || str(yaml.node?.name) || "node-default";
+  const operatorName = operatorNameDb || str(env.HEXNEST_OPERATOR_NAME) || str(yaml.node?.operatorName) || "Operator";
 
   return {
     coreUrl,
@@ -222,9 +338,11 @@ export function loadConfig(baseEnv: NodeJS.ProcessEnv = process.env): NodeConfig
     operatorName,
     operatorEmail: str(env.HEXNEST_OPERATOR_EMAIL) || str(yaml.node?.operatorEmail),
     callbackUrl: str(env.HEXNEST_CALLBACK_URL) || str(yaml.node?.callbackUrl),
-    nodeId: str(env.HEXNEST_NODE_ID) || identity.nodeId,
-    nodeToken: str(env.HEXNEST_NODE_TOKEN) || identity.nodeToken,
+    nodeId: str(env.HEXNEST_NODE_ID) || nodeIdDb,
+    nodeToken: str(env.HEXNEST_NODE_TOKEN) || nodeTokenDb,
     identityPath: identityPath || undefined,
+    userEmail: userEmailDb || str(env.HEXNEST_USER_EMAIL),
+    userToken: userTokenDb || str(env.HEXNEST_USER_TOKEN),
     heartbeatIntervalMs: parseNumber(
       env.HEXNEST_HEARTBEAT_INTERVAL_MS ?? yaml.core?.heartbeatIntervalMs,
       60_000
@@ -253,48 +371,71 @@ export function loadConfig(baseEnv: NodeJS.ProcessEnv = process.env): NodeConfig
   };
 }
 
-export function buildAdapters(baseEnv: NodeJS.ProcessEnv = process.env): AgentAdapter[] {
+export function buildAdapters(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = process.env): AgentAdapter[] {
   const env = loadEnvMap(baseEnv);
   const yaml = loadYamlConfig(env);
   const adaptersByName = new Map<string, AgentAdapter>();
+  const dbReady = db.isReady();
 
-  for (const source of yaml.adapters || []) {
-    registerAdapter(adaptersByName, adapterFromSource(source, env));
+  // First, migrate YAML adapters to database if not already there
+  if (dbReady) {
+    for (const source of yaml.adapters || []) {
+      const name = str(source.name);
+      if (name && !db.getModelConfig(name)) {
+        const id = randomUUID();
+        const type = str(source.type)?.toLowerCase() || "ollama";
+        db.addModelConfig({
+          id,
+          type,
+          name,
+          model: str(source.model) || "",
+          baseUrl: str(source.baseUrl),
+          apiKey: str(source.apiKey),
+          apiKeyEnv: str(source.apiKeyEnv),
+          roles: source.roles,
+          capabilities: source.capabilities,
+          enabled: true,
+          agentMode: "recruitable",
+          active: true
+        });
+      }
+    }
+
+    // Load all adapters from database
+    const dbAdapters = db.getModelConfigs();
+    for (const dbAdapter of dbAdapters) {
+      if (!dbAdapter.enabled) {
+        continue;
+      }
+      const adapter = adapterFromModelConfig(dbAdapter, env, db);
+      if (adapter) {
+        adaptersByName.set(adapter.name, adapter);
+      }
+    }
+  } else {
+    for (const source of yaml.adapters || []) {
+      registerAdapter(adaptersByName, adapterFromSource(source, env));
+    }
   }
 
-  registerAdapter(
-    adaptersByName,
-    new OllamaAdapter({
-      model: str(env.OLLAMA_MODEL) || "qwen2.5:14b",
-      baseUrl: str(env.OLLAMA_BASE_URL) || "http://localhost:11434"
-    })
-  );
 
-  const openAiKey = str(env.OPENAI_API_KEY);
-  if (openAiKey) {
-    registerAdapter(
-      adaptersByName,
-      new OpenAIAdapter(openAiKey, {
-        model: str(env.OPENAI_MODEL) || "gpt-4o-mini"
-      })
-    );
-  }
-
-  const anthropicKey = str(env.ANTHROPIC_API_KEY);
-  if (anthropicKey) {
-    registerAdapter(
-      adaptersByName,
-      new ClaudeAdapter(anthropicKey, {
-        model: str(env.ANTHROPIC_MODEL) || "claude-3-7-sonnet-latest"
-      })
-    );
-  }
 
   return [...adaptersByName.values()];
 }
 
 export function loadRuntimeSetup(baseEnv: NodeJS.ProcessEnv = process.env): RuntimeSetup {
-  const config = loadConfig(baseEnv);
-  const adapters = buildAdapters(baseEnv);
-  return { config, adapters };
+  const dbPath = resolveRuntimePath(str(baseEnv.HEXNEST_DB_PATH) || ".hexnest.db", baseEnv);
+  const database = new DatabaseService(dbPath);
+  const config = loadConfig(database, baseEnv);
+  const adapters = buildAdapters(database, baseEnv);
+  return { config, adapters, database };
+}
+
+export async function loadRuntimeSetupAsync(baseEnv: NodeJS.ProcessEnv = process.env): Promise<RuntimeSetup> {
+  const dbPath = resolveRuntimePath(str(baseEnv.HEXNEST_DB_PATH) || ".hexnest.db", baseEnv);
+  const database = new DatabaseService(dbPath);
+  await database.ensureReady();
+  const config = loadConfig(database, baseEnv);
+  const adapters = buildAdapters(database, baseEnv);
+  return { config, adapters, database };
 }

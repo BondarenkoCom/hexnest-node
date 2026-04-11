@@ -10,25 +10,48 @@
     "hexnest-node": "dist/src/cli/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "frontend:build": "cd frontend && npm install && npm run build",
+    "build": "npm run frontend:build && tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "start": "node dist/src/index.js",
+    "desktop:dev": "npx tauri dev --config src-tauri/tauri.conf.json",
+    "desktop:sidecar": "npm run build && node scripts/build-desktop-sidecar.mjs",
+    "desktop:build": "npm run desktop:sidecar && npx tauri build --config src-tauri/tauri.conf.json",
+    "tauri:dev": "npm run desktop:dev",
+    "tauri:build": "npm run desktop:build",
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "setup": "tsx src/cli/setup.ts"
+    "db": "tsx src/utils/db-cli.ts",
+    "setup": "tsx src/cli/setup.ts",
+    "config:test": "tsx src/cli/config-test.ts",
+    "auth:login": "tsx src/cli/auth-login.ts"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "sql.js": "^1.14.1",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.10.1",
+    "@types/express": "^4.17.21",
     "@types/node": "^24.7.2",
+    "@yao-pkg/pkg": "^6.5.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^4.1.1"
+  },
+  "pkg": {
+    "assets": [
+      "frontend/dist/**/*",
+      "node_modules/sql.js/dist/**/*"
+    ],
+    "scripts": [
+      "dist/src/**/*.js"
+    ]
   }
 }
