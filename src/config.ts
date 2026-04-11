@@ -33,6 +33,7 @@ export interface NodeConfig {
   shutdownGraceMs: number;
   autoAcceptInvites: boolean;
   httpTimeoutMs: number;
+  manualRegistrationOnly?: boolean;
 }
 
 interface YamlNodeConfig {
