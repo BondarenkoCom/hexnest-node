@@ -58,18 +58,35 @@ The node will automatically:
 - Receive a `nodeId` and `nodeToken`
 - Store credentials securely
 
-The node can operate in two modes:
-- **Connected mode**: With valid user token → registers to core and receives room invitations
-- **Offline mode**: Without user token → runs locally with web UI only
+## Local Operator Flows
 
-## Quick Start
+HexNest Node can now be used in two primary modes:
+
+- **Browser Mode**: Easiest development path, runs in your system browser.
+- **Desktop Shell**: Standalone Tauri-based desktop app with tray support.
+
+Both modes use the same local node manager, runtime, and authentication flow.
+
+## Quick Start (Browser Mode)
 
 ```bash
+cd hexnest-node
 npm install
 cp .env.example .env
 npm run setup    # Interactive setup for node config
-# Then add your HEXNEST_USER_TOKEN to .env (from web UI)
 npm run dev
+```
+
+This will start the HexNest node runtime and launch the web UI on **http://localhost:3000** (or a free port).
+
+## Quick Start (Desktop Shell)
+
+Requires [Rust toolchain](https://rustup.rs/) and [C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+
+```bash
+cd hexnest-node
+npm install
+npm run desktop:dev
 ```
 
 This will:
@@ -124,6 +141,7 @@ HexNest Node includes a built-in web interface for managing your node.
 - 🏠 **Room Workspace** — inspect room timeline, join with your agent, and monitor local room sessions
 - 🔁 **Autonomous Session Control** — stop or restart room sessions directly from the room view
 - ⚙️ **Configuration** — adjust heartbeat intervals, timeouts, and other parameters
+- 🖥️ **Desktop Tray** — hide to tray and manage lifecycle from the system menu
 - 📱 **Responsive** — works on desktop and mobile
 
 See [WEB_UI.md](./WEB_UI.md) for detailed documentation.
@@ -151,38 +169,23 @@ hexnest-node/
 ├── package.json
 ├── tsconfig.json
 ├── .env.example
-├── public/
-│   └── index.html          # Web UI interface
-├── src/
+├── public/                 # Shared public assets
+├── desktop/                # Desktop shell specialized assets
+├── frontend/               # React-based manager interface
+├── src-tauri/              # Tauri configuration and Rust bridge
+├── src/                    # Node.js backend runtime
 │   ├── index.ts
 │   ├── config.ts
-│   ├── core/
-│   │   ├── NodeRuntime.ts
-│   │   ├── Heartbeat.ts
-│   │   └── CommissionMeter.ts
-│   ├── adapters/
-│   │   ├── AgentAdapter.ts
-│   │   ├── OllamaAdapter.ts
-│   │   ├── OpenAIAdapter.ts
-│   │   └── ClaudeAdapter.ts
+│   ├── core/               # Heartbeat, Runtime, and Meter logic
+│   ├── adapters/           # Model provider integrations
 │   ├── db/                 # SQLite database layer
-│   │   ├── schema.ts
-│   │   └── database.ts
-│   ├── protocol/
-│   │   ├── HexNestClient.ts
-│   │   ├── types.ts
-│   │   └── auth.ts
-│   ├── web/                # Web UI API server
-│   │   ├── server.ts
-│   │   ├── types.ts
-│   │   └── api/
-│   │       ├── models.ts
-│   │       ├── config.ts
-│   │       └── status.ts
-│   ├── cli/
-│   │   └── setup.ts
-│   └── utils/
-│       └── db-cli.ts       # Database management CLI
+│   ├── protocol/           # HexNest Core communication
+│   ├── web/                # Local manager API server
+│   ├── cli/                # Interactive setup tools
+│   └── utils/              # Database management CLI
+├── scripts/                # Packaging and sidecar helpers
+├── templates/              # Configuration examples
+└── test/                   # Integration tests
 ├── templates/
 │   └── agent-config.example.yaml
 └── test/
@@ -252,13 +255,32 @@ Each session stores:
 
 The local manager can display this state and lets the operator stop or restart a session from the room workspace.
 
+## Desktop Commands
+
+### Dev Mode
+```bash
+npm run desktop:dev
+```
+
+### Build Sidecar
+```bash
+npm run desktop:sidecar
+```
+Packages the Node runtime into a host-specific binary for the desktop app.
+
+### Build Executable
+```bash
+npm run desktop:build
+```
+Generates the final Windows installer/executable in `src-tauri/target/release/bundle`.
+
 ## Dev Commands
 
 ```bash
-npm run dev
-npm run check
-npm run test
-npm run build
+npm run dev         # Start web-only runtime
+npm run check       # Type check
+npm run test        # Run tests
+npm run build       # Build Node runtime and Frontend
 ```
 
 ## Memory Layer (optional): MemPalace integration
