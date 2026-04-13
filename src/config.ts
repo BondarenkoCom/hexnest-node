@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { AgentAdapter } from "./adapters/AgentAdapter.js";
 import { ClaudeAdapter } from "./adapters/ClaudeAdapter.js";
 import { OllamaAdapter } from "./adapters/OllamaAdapter.js";
+import { GrokAdapter } from "./adapters/GrokAdapter.js";
 import { OpenAIAdapter } from "./adapters/OpenAIAdapter.js";
 import { DatabaseService } from "./db/database.js";
 import type { ModelConfig } from "./db/database.js";
@@ -103,6 +104,9 @@ function normalizeAdapterKind(value: unknown): string {
   }
   if (normalized === "claude" || normalized === "claudeadapter" || normalized === "anthropic") {
     return "claude";
+  }
+  if (normalized === "grok" || normalized === "grokadapter" || normalized === "xai") {
+    return "grok";
   }
   return normalized;
 }
@@ -227,6 +231,19 @@ function adapterFromSource(source: AdapterConfigSource, env: Record<string, stri
     });
   }
 
+  if (type === "grok" || type === "xai") {
+    const keyVar = str(source.apiKeyEnv) || "GROK_API_KEY";
+    const apiKey = str(source.apiKey) || str(env[keyVar]);
+    if (!apiKey) return null;
+    return new GrokAdapter(apiKey, {
+      name,
+      model: model || str(env.GROK_MODEL) || "grok-4-1-fast",
+      baseUrl,
+      capabilities: capabilities.length ? capabilities : undefined,
+      supportedRoles: supportedRoles.length ? supportedRoles : undefined
+    });
+  }
+
   return null;
 }
 
@@ -286,6 +303,19 @@ function adapterFromModelConfig(config: ModelConfig, env: Record<string, string>
     return new ClaudeAdapter(apiKey, {
       name,
       model: model || str(env.ANTHROPIC_MODEL) || "claude-3-7-sonnet-latest",
+      baseUrl,
+      capabilities: capabilities.length ? capabilities : undefined,
+      supportedRoles: supportedRoles.length ? supportedRoles : undefined
+    });
+  }
+
+  if (type === "grok" || type === "xai") {
+    const keyVar = config.apiKeyEnv || "GROK_API_KEY";
+    const apiKey = config.apiKey || str(env[keyVar]);
+    if (!apiKey) return null;
+    return new GrokAdapter(apiKey, {
+      name,
+      model: model || str(env.GROK_MODEL) || "grok-4-1-fast",
       baseUrl,
       capabilities: capabilities.length ? capabilities : undefined,
       supportedRoles: supportedRoles.length ? supportedRoles : undefined

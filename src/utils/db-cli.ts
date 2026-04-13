@@ -66,7 +66,7 @@ Examples:
           process.exit(1);
         }
 
-        const validTypes = ["ollama", "openai", "claude", "anthropic"];
+        const validTypes = ["ollama", "openai", "claude", "anthropic", "grok", "xai"];
         if (!validTypes.includes(type.toLowerCase())) {
           console.error(`Invalid type. Supported types: ${validTypes.join(", ")}`);
           process.exit(1);
