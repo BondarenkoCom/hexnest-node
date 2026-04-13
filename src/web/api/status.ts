@@ -7,7 +7,8 @@ import { resolveCoreUrl } from "../resolve-core-url.js";
 const PROVIDERS = [
   { type: "ClaudeAdapter", label: "Claude" },
   { type: "OpenAIAdapter", label: "OpenAI" },
-  { type: "OllamaAdapter", label: "Ollama" }
+  { type: "OllamaAdapter", label: "Ollama" },
+  { type: "GoogleAdapter", label: "Google" }
 ] as const;
 
 interface LoopAlertCheck {

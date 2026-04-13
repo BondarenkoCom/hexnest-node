@@ -39,6 +39,24 @@ export const AgentsPage: React.FC = () => {
     onConfirm: () => {}
   });
 
+  const providerLabel = (type: string): string => {
+    if (type === 'ClaudeAdapter') return 'Claude';
+    if (type === 'OpenAIAdapter') return 'OpenAI';
+    if (type === 'OllamaAdapter') return 'Ollama';
+    if (type === 'GrokAdapter') return 'Grok';
+    if (type === 'GoogleAdapter') return 'Google Gemini';
+    return type.replace('Adapter', '');
+  };
+
+  const providerIcon = (type: string): string => {
+    if (type === 'ClaudeAdapter') return '🔮';
+    if (type === 'OpenAIAdapter') return '🚀';
+    if (type === 'OllamaAdapter') return '🦙';
+    if (type === 'GrokAdapter') return '⚡';
+    if (type === 'GoogleAdapter') return '🧠';
+    return '🤖';
+  };
+
   const fetchAgents = useCallback(async () => {
     try {
       const [providersRes, modelsRes] = await Promise.all([
@@ -235,7 +253,7 @@ export const AgentsPage: React.FC = () => {
             <div key={p.type} className="model-item flex justify-between items-center p-4 bg-deep-2/30 border border-line-soft rounded-xl">
               <div className="model-info">
                 <h4 className="text-cyan-soft font-bold flex items-center gap-2">
-                  {p.type === 'ClaudeAdapter' ? '🔮 Claude' : p.type === 'OpenAIAdapter' ? '🚀 OpenAI' : '🦙 Ollama'}
+                  {providerIcon(p.type)} {providerLabel(p.type)}
                 </h4>
                 <p className="text-xs text-muted mb-1">{p.type}</p>
                 {p.baseUrl && <p className="text-xs font-mono text-muted/60">Base: {p.baseUrl}</p>}
@@ -349,6 +367,8 @@ export const AgentsPage: React.FC = () => {
                     <option value="OpenAIAdapter">OpenAI</option>
                     <option value="ClaudeAdapter">Claude (Anthropic)</option>
                     <option value="OllamaAdapter">Ollama (Local)</option>
+                    <option value="GrokAdapter">Grok (xAI)</option>
+                    <option value="GoogleAdapter">Google (Gemini)</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -360,7 +380,7 @@ export const AgentsPage: React.FC = () => {
                     value={apiKey}
                     onChange={e => setApiKey(e.target.value)}
                   />
-                  <p className="text-[10px] text-muted mt-2">Required for OpenAI and Claude. Optional for Ollama.</p>
+                  <p className="text-[10px] text-muted mt-2">Required for OpenAI, Claude, Grok, and Google. Optional for Ollama.</p>
                 </div>
                 <div className="form-group">
                   <label>Base URL (Optional)</label>
@@ -420,7 +440,7 @@ export const AgentsPage: React.FC = () => {
                   >
                     <option value="">— Select provider —</option>
                     {providers.map(p => (
-                      <option key={p.type} value={p.type}>{p.type.replace('Adapter', '')}</option>
+                      <option key={p.type} value={p.type}>{providerLabel(p.type)}</option>
                     ))}
                   </select>
                 </div>

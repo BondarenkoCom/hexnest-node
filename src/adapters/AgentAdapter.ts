@@ -25,7 +25,9 @@ const MODEL_PRICING_PER_1M: Record<string, { inputPer1M: number; outputPer1M: nu
   "claude-3-7-sonnet-latest": { inputPer1M: 3, outputPer1M: 15 },
   "claude-3-5-sonnet-latest": { inputPer1M: 3, outputPer1M: 15 },
   "grok-4-1-fast": { inputPer1M: 2, outputPer1M: 10 },
-  "grok-3": { inputPer1M: 3, outputPer1M: 15 }
+  "grok-3": { inputPer1M: 3, outputPer1M: 15 },
+  "gemini-2.5-flash": { inputPer1M: 0.3, outputPer1M: 2.5 },
+  "gemini-2.5-pro": { inputPer1M: 1.25, outputPer1M: 10 }
 };
 
 export function estimateTokensFromText(text: string): number {

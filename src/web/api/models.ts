@@ -87,6 +87,20 @@ function getRuntimeOnlyModels(context: WebServerContext): ModelInfo[] {
     });
   }
 
+  if (String(env.GOOGLE_API_KEY || "").trim()) {
+    pushRuntimeModel({
+      id: "runtime:google",
+      name: "google",
+      type: "GoogleAdapter",
+      model: String(env.GOOGLE_MODEL || "").trim() || "gemini-2.5-flash",
+      baseUrl: String(env.GOOGLE_BASE_URL || "").trim() || "https://generativelanguage.googleapis.com/v1beta",
+      enabled: true,
+      agentMode: "manual",
+      active: !hasPersistedActive && runtimeOnly.length === 0,
+      runtimeOnly: true
+    });
+  }
+
   return runtimeOnly;
 }
 
@@ -246,6 +260,49 @@ export function modelsRouter(context: WebServerContext) {
             res.json({
               success: false,
               error: `Ollama server not accessible at ${url}`
+            });
+          }
+        } catch (err) {
+          res.json({
+            success: false,
+            error: `Connection failed: ${err instanceof Error ? err.message : "Unknown error"}`
+          });
+        }
+      } else if (adapter === "GoogleAdapter") {
+        if (!apiKey) {
+          res.status(400).json({ success: false, error: "API key is required for Google" });
+          return;
+        }
+
+        try {
+          const url = (baseUrl || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
+          const endpoint = `${url}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: "user",
+                  parts: [{ text: "ping" }]
+                }
+              ],
+              generationConfig: {
+                maxOutputTokens: 8,
+                temperature: 0
+              }
+            })
+          });
+
+          if (response.ok) {
+            res.json({ success: true });
+          } else {
+            const error = await response.json().catch(() => ({}));
+            res.json({
+              success: false,
+              error: error.error?.message || "API key invalid or model not found"
             });
           }
         } catch (err) {
@@ -417,6 +474,58 @@ export function modelsRouter(context: WebServerContext) {
           res.json({
             success: false,
             error: error instanceof Error ? error.message : "Ollama connection failed"
+          });
+        }
+      } else if (adapter === "GoogleAdapter") {
+        if (!apiKey) {
+          res.status(400).json({ success: false, error: "API key is required for Google" });
+          return;
+        }
+
+        try {
+          const url = (baseUrl || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
+          const response = await fetch(`${url}/models?key=${encodeURIComponent(apiKey)}`, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json"
+            }
+          });
+
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            res.json({
+              success: false,
+              error: error.error?.message || `Google API error: ${response.status}`
+            });
+            return;
+          }
+
+          const data: any = await response.json();
+          const models = (data.models || [])
+            .filter((modelItem: any) =>
+              Array.isArray(modelItem.supportedGenerationMethods)
+              && modelItem.supportedGenerationMethods.includes("generateContent")
+            )
+            .map((modelItem: any) => String(modelItem.name || "").replace(/^models\//, ""))
+            .filter(Boolean)
+            .sort();
+
+          if (models.length === 0) {
+            res.json({
+              success: false,
+              error: "No generation-capable Gemini models returned by Google API"
+            });
+            return;
+          }
+
+          res.json({
+            success: true,
+            models: models.slice(0, 30)
+          });
+        } catch (error) {
+          res.json({
+            success: false,
+            error: error instanceof Error ? error.message : "Google API test failed"
           });
         }
       } else {

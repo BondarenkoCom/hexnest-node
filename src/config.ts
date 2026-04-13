@@ -8,6 +8,7 @@ import { ClaudeAdapter } from "./adapters/ClaudeAdapter.js";
 import { OllamaAdapter } from "./adapters/OllamaAdapter.js";
 import { GrokAdapter } from "./adapters/GrokAdapter.js";
 import { OpenAIAdapter } from "./adapters/OpenAIAdapter.js";
+import { GoogleAdapter } from "./adapters/GoogleAdapter.js";
 import { DatabaseService } from "./db/database.js";
 import type { ModelConfig } from "./db/database.js";
 import {
@@ -120,6 +121,9 @@ function normalizeAdapterKind(value: unknown): string {
   }
   if (normalized === "grok" || normalized === "grokadapter" || normalized === "xai") {
     return "grok";
+  }
+  if (normalized === "google" || normalized === "googleadapter" || normalized === "gemini") {
+    return "google";
   }
   return normalized;
 }
@@ -257,6 +261,19 @@ function adapterFromSource(source: AdapterConfigSource, env: Record<string, stri
     });
   }
 
+  if (type === "google" || type === "gemini") {
+    const keyVar = str(source.apiKeyEnv) || "GOOGLE_API_KEY";
+    const apiKey = str(source.apiKey) || str(env[keyVar]);
+    if (!apiKey) return null;
+    return new GoogleAdapter(apiKey, {
+      name,
+      model: model || str(env.GOOGLE_MODEL) || "gemini-2.5-flash",
+      baseUrl,
+      capabilities: capabilities.length ? capabilities : undefined,
+      supportedRoles: supportedRoles.length ? supportedRoles : undefined
+    });
+  }
+
   return null;
 }
 
@@ -329,6 +346,19 @@ function adapterFromModelConfig(config: ModelConfig, env: Record<string, string>
     return new GrokAdapter(apiKey, {
       name,
       model: model || str(env.GROK_MODEL) || "grok-4-1-fast",
+      baseUrl,
+      capabilities: capabilities.length ? capabilities : undefined,
+      supportedRoles: supportedRoles.length ? supportedRoles : undefined
+    });
+  }
+
+  if (type === "google" || type === "gemini") {
+    const keyVar = config.apiKeyEnv || "GOOGLE_API_KEY";
+    const apiKey = config.apiKey || str(env[keyVar]);
+    if (!apiKey) return null;
+    return new GoogleAdapter(apiKey, {
+      name,
+      model: model || str(env.GOOGLE_MODEL) || "gemini-2.5-flash",
       baseUrl,
       capabilities: capabilities.length ? capabilities : undefined,
       supportedRoles: supportedRoles.length ? supportedRoles : undefined

@@ -31,6 +31,28 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function makeNodeConfig(overrides: Partial<NodeConfig> = {}): NodeConfig {
+  return {
+    coreUrl: "https://hex-nest.com",
+    nodeName: "node-test",
+    operatorName: "operator",
+    heartbeatIntervalMs: 60_000,
+    approvalPollIntervalMs: 1_000,
+    usageFlushIntervalMs: 60_000,
+    maxUsageBatch: 1,
+    shutdownGraceMs: 3_000,
+    autoAcceptInvites: true,
+    httpTimeoutMs: 5_000,
+    agentLoopGuardEnabled: true,
+    agentLoopGuardRolloutPercent: 100,
+    agentLoopGuardNoActionStreak: 3,
+    agentAlertsMinCycles: 10,
+    agentAlertsMaxNoActionRate: 0.75,
+    agentAlertsMaxReentryRate: 0.35,
+    ...overrides
+  };
+}
+
 describe("NodeRuntime", () => {
   it("registers node, handles invitation, submits usage, and marks offline", async () => {
     const calls = {
@@ -92,18 +114,7 @@ describe("NodeRuntime", () => {
       }
     };
 
-    const config: NodeConfig = {
-      coreUrl: "https://hex-nest.com",
-      nodeName: "node-test",
-      operatorName: "operator",
-      heartbeatIntervalMs: 60_000,
-      approvalPollIntervalMs: 1_000,
-      usageFlushIntervalMs: 60_000,
-      maxUsageBatch: 1,
-      shutdownGraceMs: 3_000,
-      autoAcceptInvites: true,
-      httpTimeoutMs: 5_000
-    };
+    const config = makeNodeConfig();
 
     const runtime = new NodeRuntime(config, [new FakeAdapter()], {
       clientFactory: () => client as any,
@@ -159,19 +170,9 @@ describe("NodeRuntime", () => {
       })
     };
 
-    const config: NodeConfig = {
-      coreUrl: "https://hex-nest.com",
-      nodeName: "node-test",
-      operatorName: "operator",
-      userToken: "user-token",
-      heartbeatIntervalMs: 60_000,
-      approvalPollIntervalMs: 1_000,
-      usageFlushIntervalMs: 60_000,
-      maxUsageBatch: 1,
-      shutdownGraceMs: 3_000,
-      autoAcceptInvites: true,
-      httpTimeoutMs: 5_000
-    };
+    const config = makeNodeConfig({
+      userToken: "user-token"
+    });
 
     const runtime = new NodeRuntime(config, [new FakeAdapter()], {
       clientFactory: () => client as any,
@@ -194,18 +195,7 @@ describe("NodeRuntime", () => {
       }
     };
 
-    const config: NodeConfig = {
-      coreUrl: "https://hex-nest.com",
-      nodeName: "node-test",
-      operatorName: "operator",
-      heartbeatIntervalMs: 60_000,
-      approvalPollIntervalMs: 1_000,
-      usageFlushIntervalMs: 60_000,
-      maxUsageBatch: 1,
-      shutdownGraceMs: 3_000,
-      autoAcceptInvites: true,
-      httpTimeoutMs: 5_000
-    };
+    const config = makeNodeConfig();
 
     const runtime = new NodeRuntime(config, [new FakeAdapter()], {
       clientFactory: () => client as any
@@ -257,19 +247,10 @@ describe("NodeRuntime", () => {
       })
     };
 
-    const config: NodeConfig = {
-      coreUrl: "https://hex-nest.com",
-      nodeName: "node-test",
-      operatorName: "operator",
+    const config = makeNodeConfig({
       userToken: "user-token",
-      heartbeatIntervalMs: 60_000,
-      approvalPollIntervalMs: 1_000,
-      usageFlushIntervalMs: 60_000,
-      maxUsageBatch: 10,
-      shutdownGraceMs: 3_000,
-      autoAcceptInvites: true,
-      httpTimeoutMs: 5_000
-    };
+      maxUsageBatch: 10
+    });
 
     const runtime = new NodeRuntime(config, [new FakeAdapter()], {
       clientFactory: () => client as any,
@@ -300,21 +281,13 @@ describe("NodeRuntime", () => {
       markOffline: 0
     };
 
-    const config: NodeConfig = {
+    const config = makeNodeConfig({
       coreUrl: "http://127.0.0.1:11000",
-      nodeName: "node-test",
-      operatorName: "operator",
       userToken: "user-token",
       nodeId: "stale-node",
       nodeToken: "stale-token",
-      heartbeatIntervalMs: 60_000,
-      approvalPollIntervalMs: 1_000,
-      usageFlushIntervalMs: 60_000,
-      maxUsageBatch: 10,
-      shutdownGraceMs: 3_000,
-      autoAcceptInvites: true,
-      httpTimeoutMs: 5_000
-    };
+      maxUsageBatch: 10
+    });
 
     const runtime = new NodeRuntime(config, [new FakeAdapter()], {
       clientFactory: (_coreUrl, options) => {
@@ -388,20 +361,13 @@ describe("NodeRuntime", () => {
       markOffline: 0
     };
 
-    const config: NodeConfig = {
+    const config = makeNodeConfig({
       coreUrl: "http://127.0.0.1:10000",
-      nodeName: "node-test",
-      operatorName: "operator",
       nodeId: "pending-node",
       nodeToken: "pending-token",
-      heartbeatIntervalMs: 60_000,
       approvalPollIntervalMs: 10,
-      usageFlushIntervalMs: 60_000,
-      maxUsageBatch: 10,
-      shutdownGraceMs: 3_000,
-      autoAcceptInvites: true,
-      httpTimeoutMs: 5_000
-    };
+      maxUsageBatch: 10
+    });
 
     const runtime = new NodeRuntime(config, [new FakeAdapter()], {
       clientFactory: (_coreUrl, options) => {
@@ -536,18 +502,7 @@ describe("NodeRuntime", () => {
       upsertRoomSession: (state: unknown) => state
     };
 
-    const config: NodeConfig = {
-      coreUrl: "https://hex-nest.com",
-      nodeName: "node-test",
-      operatorName: "operator",
-      heartbeatIntervalMs: 60_000,
-      approvalPollIntervalMs: 1_000,
-      usageFlushIntervalMs: 60_000,
-      maxUsageBatch: 1,
-      shutdownGraceMs: 3_000,
-      autoAcceptInvites: true,
-      httpTimeoutMs: 5_000
-    };
+    const config = makeNodeConfig();
 
     const runtime = new NodeRuntime(config, [new FakeAdapter()], {
       clientFactory: () => client as any,
