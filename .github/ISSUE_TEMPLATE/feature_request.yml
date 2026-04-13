@@ -1,0 +1,39 @@
+name: Feature Request
+description: Suggest an improvement for the Node SDK
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Agent adapters (Ollama / OpenAI / Claude / new)
+        - Room sessions / autonomous mode
+        - Protocol / core communication
+        - Web dashboard UI
+        - Desktop app (Tauri)
+        - CLI / setup
+        - Config / YAML
+        - MCP / A2A integration
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context

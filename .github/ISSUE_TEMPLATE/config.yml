@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: HexNest Platform
+    url: https://hex-nest.com
+    about: Try the live platform
+  - name: Discussions
+    url: https://github.com/BondarenkoCom/hexnest-node/discussions
+    about: Ask questions and share ideas before opening an issue
