@@ -374,6 +374,126 @@
         font-size: 2.5rem;
       }
 
+      .node-pulse-hex {
+        width: 120px;
+        height: 120px;
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .pulse-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 1px solid rgba(22, 210, 255, 0.25);
+        animation: pulseExpand 2.5s ease-out infinite;
+      }
+
+      .pulse-ring.ring-2 {
+        animation-delay: 1.25s;
+      }
+
+      .node-pulse-hex.offline .pulse-ring {
+        border-color: rgba(255, 110, 139, 0.2);
+        animation: pulseExpandSlow 4s ease-out infinite;
+      }
+
+      .node-pulse-hex.offline .pulse-ring.ring-2 {
+        animation-delay: 2s;
+      }
+
+      @keyframes pulseExpand {
+        0% {
+          transform: scale(0.5);
+          opacity: 0.8;
+        }
+        100% {
+          transform: scale(1.2);
+          opacity: 0;
+        }
+      }
+
+      @keyframes pulseExpandSlow {
+        0% {
+          transform: scale(0.6);
+          opacity: 0.5;
+        }
+        100% {
+          transform: scale(1.1);
+          opacity: 0;
+        }
+      }
+
+      .hex-icon {
+        width: 72px;
+        height: 72px;
+        position: relative;
+        z-index: 1;
+        filter: drop-shadow(0 0 12px rgba(22, 210, 255, 0.4));
+      }
+
+      .hex-icon polygon {
+        fill: none;
+        stroke: rgba(22, 210, 255, 0.35);
+        stroke-width: 1.5;
+      }
+
+      .hex-icon .hex-inner {
+        fill: rgba(22, 210, 255, 0.04);
+        stroke: rgba(22, 210, 255, 0.5);
+        stroke-width: 1;
+        animation: hexBreathe 3s ease-in-out infinite;
+      }
+
+      .hex-icon .hex-core {
+        fill: rgba(22, 210, 255, 0.9);
+        animation: corePulse 2s ease-in-out infinite;
+        filter: drop-shadow(0 0 6px rgba(22, 210, 255, 0.8));
+      }
+
+      @keyframes hexBreathe {
+        0%, 100% { fill: rgba(22, 210, 255, 0.04); stroke: rgba(22, 210, 255, 0.5); }
+        50% { fill: rgba(22, 210, 255, 0.1); stroke: rgba(22, 210, 255, 0.7); }
+      }
+
+      @keyframes corePulse {
+        0%, 100% { r: 8; fill: rgba(22, 210, 255, 0.9); }
+        50% { r: 10; fill: rgba(22, 210, 255, 1); }
+      }
+
+      /* Offline state */
+      .node-pulse-hex.offline .hex-icon {
+        filter: drop-shadow(0 0 8px rgba(255, 110, 139, 0.3));
+      }
+
+      .node-pulse-hex.offline .hex-icon polygon {
+        stroke: rgba(255, 110, 139, 0.25);
+      }
+
+      .node-pulse-hex.offline .hex-icon .hex-inner {
+        fill: rgba(255, 110, 139, 0.03);
+        stroke: rgba(255, 110, 139, 0.35);
+        animation: hexBreatheOff 4s ease-in-out infinite;
+      }
+
+      .node-pulse-hex.offline .hex-icon .hex-core {
+        fill: rgba(255, 110, 139, 0.6);
+        animation: corePulseOff 3s ease-in-out infinite;
+        filter: drop-shadow(0 0 4px rgba(255, 110, 139, 0.5));
+      }
+
+      @keyframes hexBreatheOff {
+        0%, 100% { fill: rgba(255, 110, 139, 0.03); }
+        50% { fill: rgba(255, 110, 139, 0.06); }
+      }
+
+      @keyframes corePulseOff {
+        0%, 100% { r: 7; fill: rgba(255, 110, 139, 0.5); }
+        50% { r: 8; fill: rgba(255, 110, 139, 0.7); }
+      }
+
       h1 {
         margin: 4px 0 6px;
         font-size: clamp(1.5rem, 3vw, 2.5rem);
