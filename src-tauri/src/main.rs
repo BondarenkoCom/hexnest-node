@@ -119,7 +119,7 @@ fn spawn_runtime(app: &AppHandle) -> io::Result<PathBuf> {
       command
     }
   } else if let Some(sidecar_binary) = resolve_packaged_runtime_binary(app) {
-    let mut command = Command::new(sidecar_binary);
+    let command = Command::new(sidecar_binary);
     command
   } else {
     let mut command = Command::new("node");
@@ -180,7 +180,7 @@ fn hide_main_window(app: &AppHandle) {
 
 fn emit_script(app: &AppHandle, script: String) {
   let app_handle = app.clone();
-  let _ = app_handle.run_on_main_thread(move || {
+  let _ = app_handle.clone().run_on_main_thread(move || {
     if let Some(window) = app_handle.get_webview_window("main") {
       let _ = window.eval(&script);
     }
@@ -262,7 +262,7 @@ fn create_tray(app: &AppHandle) -> tauri::Result<()> {
     .icon(icon)
     .tooltip("HexNest Node")
     .menu(&menu)
-    .menu_on_left_click(false)
+    .show_menu_on_left_click(false)
     .on_menu_event(|app, event| match event.id().as_ref() {
       "show" => show_main_window(app),
       "hide" => hide_main_window(app),
