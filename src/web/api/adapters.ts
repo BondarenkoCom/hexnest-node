@@ -3,7 +3,7 @@ import { WebServerContext } from "../server.js";
 import { ApiResponse, AdapterInfo } from "../types.js";
 import { loadEnvMap } from "../../config.js";
 
-const KNOWN_ADAPTER_TYPES = ["ClaudeAdapter", "OpenAIAdapter", "OllamaAdapter", "GrokAdapter", "GoogleAdapter"] as const;
+const KNOWN_ADAPTER_TYPES = ["ClaudeAdapter", "OpenAIAdapter", "OllamaAdapter", "GrokAdapter", "GoogleAdapter", "CodexAdapter"] as const;
 
 
 

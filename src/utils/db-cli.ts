@@ -15,7 +15,7 @@ Commands:
   list                    List all model configurations
   add <type> <name> <model>
                           Add a new model configuration
-                          Types: ollama, openai, claude
+                          Types: ollama, openai, claude, grok, google, codex
   delete <name>          Delete a model configuration
   disable <name>         Disable a model configuration
   enable <name>          Enable a model configuration
@@ -66,7 +66,7 @@ Examples:
           process.exit(1);
         }
 
-        const validTypes = ["ollama", "openai", "claude", "anthropic", "grok", "xai"];
+        const validTypes = ["ollama", "openai", "claude", "anthropic", "grok", "xai", "google", "gemini", "codex"];
         if (!validTypes.includes(type.toLowerCase())) {
           console.error(`Invalid type. Supported types: ${validTypes.join(", ")}`);
           process.exit(1);
