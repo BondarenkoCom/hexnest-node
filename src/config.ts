@@ -35,6 +35,12 @@ export interface NodeConfig {
   autoAcceptInvites: boolean;
   httpTimeoutMs: number;
   manualRegistrationOnly?: boolean;
+  agentLoopGuardEnabled: boolean;
+  agentLoopGuardRolloutPercent: number;
+  agentLoopGuardNoActionStreak: number;
+  agentAlertsMinCycles: number;
+  agentAlertsMaxNoActionRate: number;
+  agentAlertsMaxReentryRate: number;
 }
 
 interface YamlNodeConfig {
@@ -87,6 +93,13 @@ function parseNumber(value: unknown, fallback: number, min = 1): number {
   if (!Number.isFinite(parsed)) return fallback;
   if (parsed < min) return fallback;
   return Math.round(parsed);
+}
+
+function parseRatio(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (parsed < 0 || parsed > 1) return fallback;
+  return parsed;
 }
 
 function str(value: unknown): string | undefined {
@@ -349,6 +362,12 @@ export function loadConfig(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = pro
   const userEmailDb = db.getNodeConfig("user_email");
   const userTokenDb = db.getNodeConfig("user_token");
   const coreUrlDb = db.getNodeConfig("core_url");
+  const agentLoopGuardEnabledDb = db.getNodeConfig("agent_loop_guard_enabled");
+  const agentLoopGuardRolloutPercentDb = db.getNodeConfig("agent_loop_guard_rollout_percent");
+  const agentLoopGuardNoActionStreakDb = db.getNodeConfig("agent_loop_guard_no_action_streak");
+  const agentAlertsMinCyclesDb = db.getNodeConfig("agent_alerts_min_cycles");
+  const agentAlertsMaxNoActionRateDb = db.getNodeConfig("agent_alerts_max_no_action_rate");
+  const agentAlertsMaxReentryRateDb = db.getNodeConfig("agent_alerts_max_reentry_rate");
 
   const coreUrl = coreUrlDb || str(env.HEXNEST_CORE_URL) || str(yaml.core?.url);
   if (!coreUrl) throw new Error("Core URL is required via settings, environment, or yaml config");
@@ -397,6 +416,33 @@ export function loadConfig(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = pro
     httpTimeoutMs: parseNumber(
       env.HEXNEST_HTTP_TIMEOUT_MS ?? yaml.core?.httpTimeoutMs,
       20_000
+    ),
+    agentLoopGuardEnabled: parseBoolean(
+      agentLoopGuardEnabledDb ?? env.HEXNEST_AGENT_LOOP_GUARD_ENABLED,
+      true
+    ),
+    agentLoopGuardRolloutPercent: parseNumber(
+      agentLoopGuardRolloutPercentDb ?? env.HEXNEST_AGENT_LOOP_GUARD_ROLLOUT_PERCENT,
+      100,
+      0
+    ),
+    agentLoopGuardNoActionStreak: parseNumber(
+      agentLoopGuardNoActionStreakDb ?? env.HEXNEST_AGENT_LOOP_GUARD_NO_ACTION_STREAK,
+      3,
+      1
+    ),
+    agentAlertsMinCycles: parseNumber(
+      agentAlertsMinCyclesDb ?? env.HEXNEST_AGENT_ALERTS_MIN_CYCLES,
+      10,
+      1
+    ),
+    agentAlertsMaxNoActionRate: parseRatio(
+      agentAlertsMaxNoActionRateDb ?? env.HEXNEST_AGENT_ALERTS_MAX_NO_ACTION_RATE,
+      0.75
+    ),
+    agentAlertsMaxReentryRate: parseRatio(
+      agentAlertsMaxReentryRateDb ?? env.HEXNEST_AGENT_ALERTS_MAX_REENTRY_RATE,
+      0.35
     )
   };
 }

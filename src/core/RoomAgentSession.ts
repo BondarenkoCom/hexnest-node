@@ -1,5 +1,5 @@
 import { AgentAdapter, AgentResponse } from "../adapters/AgentAdapter.js";
-import type { RoomSessionState, RoomSessionStatus } from "../db/database.js";
+import type { RoomCycleOutcome, RoomSessionState, RoomSessionStatus } from "../db/database.js";
 import { HexNestClientLike } from "../protocol/HexNestClient.js";
 import { CoreRoomMessage, RoomContext } from "../protocol/types.js";
 import { evaluateRoomAgentPolicy } from "./RoomAgentPolicy.js";
@@ -25,6 +25,8 @@ export interface RoomAgentSessionOptions {
   role: string;
   taskHint?: string;
   autonomous?: boolean;
+  loopGuardEnabled?: boolean;
+  maxNoActionStreak?: number;
   pollIntervalMs?: number;
   shouldStop?: () => boolean;
   initialState?: RoomSessionState | null;
@@ -35,6 +37,7 @@ export interface RoomAgentSessionOptions {
 
 const DEFAULT_POLL_MS = 8_000;
 const DEFAULT_AUTONOMOUS_COOLDOWN_MS = 15_000;
+const DEFAULT_MAX_NO_ACTION_STREAK = 3;
 
 export class RoomAgentSession {
   private joinedAgentId: string | null = null;
@@ -42,6 +45,10 @@ export class RoomAgentSession {
   private lastSeenMessageId: string | null = null;
   private lastRespondedMessageId: string | null = null;
   private lastRespondedAt: number | null = null;
+  private lastRoomFingerprint: string | null = null;
+  private lastCycleOutcome: RoomCycleOutcome | null = null;
+  private lastNoActionReason: string | null = null;
+  private noActionStreak = 0;
   private status: RoomSessionStatus = "starting";
 
   constructor(private readonly options: RoomAgentSessionOptions) {
@@ -51,6 +58,10 @@ export class RoomAgentSession {
       this.lastSeenMessageId = initial.lastSeenMessageId || null;
       this.lastRespondedMessageId = initial.lastRespondedMessageId || null;
       this.lastRespondedAt = initial.lastRespondedAt || null;
+      this.lastRoomFingerprint = initial.lastRoomFingerprint || null;
+      this.lastCycleOutcome = initial.lastCycleOutcome || null;
+      this.lastNoActionReason = initial.lastNoActionReason || null;
+      this.noActionStreak = Math.max(0, Number(initial.noActionStreak || 0));
       this.status = initial.status || "starting";
     }
   }
@@ -100,8 +111,17 @@ export class RoomAgentSession {
       this.options.adapter.name,
       this.options.role
     );
-    this.joinedAgentId = joined.agent.id;
-    this.joinedAgentName = joined.agent.name;
+    const joinedAny = joined as unknown as {
+      agent?: { id?: string; name?: string };
+      joinedAgent?: { id?: string; name?: string };
+    };
+    const resolvedAgent = joinedAny.agent || joinedAny.joinedAgent;
+    const resolvedId = String(resolvedAgent?.id || "").trim();
+    if (!resolvedId) {
+      throw new Error("joinRoom response does not include agent id");
+    }
+    this.joinedAgentId = resolvedId;
+    this.joinedAgentName = String(resolvedAgent?.name || this.options.adapter.name).trim() || this.options.adapter.name;
     await this.emitState("joined");
   }
 
@@ -115,6 +135,8 @@ export class RoomAgentSession {
 
   private async runAutonomousLoop(): Promise<void> {
     const pollIntervalMs = Math.max(1_000, this.options.pollIntervalMs ?? DEFAULT_POLL_MS);
+    const loopGuardEnabled = this.options.loopGuardEnabled !== false;
+    const maxNoActionStreak = Math.max(1, this.options.maxNoActionStreak ?? DEFAULT_MAX_NO_ACTION_STREAK);
 
     while (!this.options.shouldStop?.()) {
       const messages = await this.options.client.getRoomMessages(this.options.roomId, 30);
@@ -123,8 +145,22 @@ export class RoomAgentSession {
       );
       const unseen = this.getUnseenMessages(ordered);
       this.lastSeenMessageId = ordered.at(-1)?.id || this.lastSeenMessageId;
+      const roomFingerprint = this.buildRoomFingerprint(ordered);
 
       if (unseen.length === 0) {
+        await this.recordNoAction("no_unseen_messages", roomFingerprint);
+        await this.sleep(pollIntervalMs);
+        continue;
+      }
+
+      if (
+        loopGuardEnabled
+        &&
+        this.lastCycleOutcome === "no_action"
+        && roomFingerprint === this.lastRoomFingerprint
+        && this.noActionStreak >= maxNoActionStreak
+      ) {
+        await this.recordNoAction("unchanged_room_fingerprint", roomFingerprint);
         await this.sleep(pollIntervalMs);
         continue;
       }
@@ -138,10 +174,16 @@ export class RoomAgentSession {
         const response = await this.options.adapter.respond(context);
         this.options.logger?.info(`[session] Agent ${this.options.adapter.name} response generated, posting to room...`);
         await this.postTurn(context, response, nextDecision.triggeredBy, nextDecision.reason);
+        this.lastCycleOutcome = "acted";
+        this.lastNoActionReason = null;
+        this.noActionStreak = 0;
+        this.lastRoomFingerprint = roomFingerprint;
         await this.refreshCursor();
         await this.emitState("idle");
         continue;
       }
+
+      await this.recordNoAction("policy_rejected_unseen_messages", roomFingerprint);
 
       await this.sleep(pollIntervalMs);
     }
@@ -251,9 +293,26 @@ export class RoomAgentSession {
       lastSeenMessageId: this.lastSeenMessageId || undefined,
       lastRespondedMessageId: this.lastRespondedMessageId || undefined,
       lastRespondedAt: this.lastRespondedAt || undefined,
+      lastRoomFingerprint: this.lastRoomFingerprint || undefined,
+      lastCycleOutcome: this.lastCycleOutcome || undefined,
+      lastNoActionReason: this.lastNoActionReason || undefined,
+      noActionStreak: this.noActionStreak,
       autonomous: Boolean(this.options.autonomous),
       status
     });
+  }
+
+  private async recordNoAction(reason: string, roomFingerprint: string): Promise<void> {
+    this.lastCycleOutcome = "no_action";
+    this.lastNoActionReason = reason;
+    this.lastRoomFingerprint = roomFingerprint;
+    this.noActionStreak += 1;
+    await this.emitState("idle");
+  }
+
+  private buildRoomFingerprint(messages: CoreRoomMessage[]): string {
+    const recent = messages.slice(-8).map((message) => `${message.id}:${message.from}:${message.scope}`);
+    return `${messages.length}|${recent.join("|")}`;
   }
 
   private sleep(ms: number): Promise<void> {

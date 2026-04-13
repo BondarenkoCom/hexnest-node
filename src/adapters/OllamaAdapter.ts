@@ -112,12 +112,30 @@ export class OllamaAdapter implements AgentAdapter {
       `Task: ${context.task}`,
       `Phase: ${context.phase}`,
       `Rules: ${context.rules}`,
-      "Respond with direct, evidence-focused, concise output."
+      "Respond with direct, evidence-focused, concise output.",
+      "Follow DECIDE -> ACT -> REPORT. If there is no actionable trigger, return a short NO_ACTION reason."
     ].join("\n");
-    const latest = context.timeline.slice(-8).map((event) => `${event.from}: ${event.text}`).join("\n");
+    const latest = context.timeline
+      .slice(-8)
+      .map((event) => {
+        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
+        const trigger = event.triggeredBy ? ` trig=${event.triggeredBy}` : "";
+        return `${event.from} -> ${event.to} [${meta || "chat"}]${trigger}: ${event.text}`;
+      })
+      .join("\n");
+    const actionable = (context.actionableEvents || [])
+      .map((event) => {
+        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
+        return `- ${event.from} -> ${event.to} [${meta || "chat"}]${event.triggeredBy ? ` trig=${event.triggeredBy}` : ""}: ${event.text}`;
+      })
+      .join("\n");
     const prompt = [
       `Task: ${context.task}`,
       `Phase: ${context.phase}`,
+      `ContextVersion: ${context.contextVersion || "v1"}`,
+      `Summary: ${context.contextSummary || "n/a"}`,
+      "Actionable events:",
+      actionable || "(none)",
       "Recent timeline:",
       latest || "(empty)"
     ].join("\n\n");

@@ -16,6 +16,9 @@ export interface RoomEvent {
   from: string;
   to: string;
   scope: "room" | "direct";
+  type?: string;
+  intent?: string;
+  triggeredBy?: string | null;
   text: string;
   confidence?: number;
 }
@@ -26,7 +29,10 @@ export interface RoomContext {
   task: string;
   role: string;
   phase: string;
+  contextVersion?: "v1" | "v2";
   timeline: RoomEvent[];
+  actionableEvents?: RoomEvent[];
+  contextSummary?: string;
   artifacts: Artifact[];
   rules: string;
 }
