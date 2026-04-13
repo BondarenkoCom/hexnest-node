@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { HexNestClient } from "../../protocol/HexNestClient.js";
 import { WebServerContext } from "../server.js";
 import { ApiResponse, NodeReadiness, NodeStatus, ReadinessCheck, ReadinessState } from "../types.js";
 import { resolveCoreUrl } from "../resolve-core-url.js";
@@ -6,8 +7,24 @@ import { resolveCoreUrl } from "../resolve-core-url.js";
 const PROVIDERS = [
   { type: "ClaudeAdapter", label: "Claude" },
   { type: "OpenAIAdapter", label: "OpenAI" },
-  { type: "OllamaAdapter", label: "Ollama" }
+  { type: "OllamaAdapter", label: "Ollama" },
+  { type: "GoogleAdapter", label: "Google" }
 ] as const;
+
+interface LoopAlertCheck {
+  id: string;
+  state: ReadinessState;
+  summary: string;
+  value: number;
+  threshold: number;
+}
+
+interface LoopAlertsPayload {
+  state: ReadinessState;
+  summary: string;
+  totalCycles: number;
+  checks: LoopAlertCheck[];
+}
 
 function rankState(state: ReadinessState): number {
   switch (state) {
@@ -166,6 +183,19 @@ async function buildReadiness(context: WebServerContext): Promise<NodeReadiness>
 export function statusRouter(context: WebServerContext) {
   const router = Router();
 
+  function normalizeText(value: unknown, maxLength: number): string {
+    return String(value || "").trim().slice(0, maxLength);
+  }
+
+  function createClient(): HexNestClient {
+    const nodeIdentity = context.db.getNodeIdentity();
+    return new HexNestClient(resolveCoreUrl(context), {
+      userToken: context.db.getNodeConfig("user_token") || undefined,
+      nodeToken: nodeIdentity?.token,
+      timeoutMs: context.nodeConfig.httpTimeoutMs
+    });
+  }
+
   router.get("/readiness", async (_req: Request, res: Response) => {
     try {
       const readiness = await buildReadiness(context);
@@ -202,7 +232,18 @@ export function statusRouter(context: WebServerContext) {
         heartbeatIntervalMs: nodeStatus.heartbeatIntervalMs,
         lastHeartbeatAt: nodeStatus.lastHeartbeatAt,
         activeRoomsCount: nodeStatus.activeRoomsCount,
-        pendingUsageRecords: nodeStatus.pendingUsageRecords
+        pendingUsageRecords: nodeStatus.pendingUsageRecords,
+        actedCycles: nodeStatus.actedCycles,
+        noActionCycles: nodeStatus.noActionCycles,
+        reentryWithoutProgress: nodeStatus.reentryWithoutProgress,
+        actedRate: nodeStatus.actedRate,
+        noActionRate: nodeStatus.noActionRate,
+        loopGuardEnabled: nodeStatus.loopGuardEnabled,
+        loopGuardRolloutPercent: nodeStatus.loopGuardRolloutPercent,
+        loopGuardNoActionStreak: nodeStatus.loopGuardNoActionStreak,
+        alertsMinCycles: nodeStatus.alertsMinCycles,
+        alertsMaxNoActionRate: nodeStatus.alertsMaxNoActionRate,
+        alertsMaxReentryRate: nodeStatus.alertsMaxReentryRate
       };
 
       const response: ApiResponse<NodeStatus> = {
@@ -210,6 +251,105 @@ export function statusRouter(context: WebServerContext) {
         data: status
       };
       res.json(response);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.get("/loop-alerts", (_req: Request, res: Response) => {
+    try {
+      const nodeStatus = context.getNodeStatus();
+      const totalCycles = nodeStatus.actedCycles + nodeStatus.noActionCycles;
+
+      if (totalCycles < nodeStatus.alertsMinCycles) {
+        res.json({
+          success: true,
+          data: {
+            state: "info",
+            summary: `Insufficient loop sample size (${totalCycles}/${nodeStatus.alertsMinCycles})`,
+            totalCycles,
+            checks: []
+          }
+        } satisfies ApiResponse<LoopAlertsPayload>);
+        return;
+      }
+
+      const reentryRate = nodeStatus.noActionCycles > 0
+        ? nodeStatus.reentryWithoutProgress / nodeStatus.noActionCycles
+        : 0;
+      const checks: LoopAlertCheck[] = [
+        {
+          id: "no-action-rate",
+          state: nodeStatus.noActionRate > nodeStatus.alertsMaxNoActionRate ? "warn" : "ready",
+          summary: `No-action rate ${nodeStatus.noActionRate.toFixed(3)} (limit ${nodeStatus.alertsMaxNoActionRate.toFixed(3)})`,
+          value: nodeStatus.noActionRate,
+          threshold: nodeStatus.alertsMaxNoActionRate
+        },
+        {
+          id: "reentry-rate",
+          state: reentryRate > nodeStatus.alertsMaxReentryRate ? "warn" : "ready",
+          summary: `Re-entry without progress rate ${reentryRate.toFixed(3)} (limit ${nodeStatus.alertsMaxReentryRate.toFixed(3)})`,
+          value: reentryRate,
+          threshold: nodeStatus.alertsMaxReentryRate
+        }
+      ];
+
+      const state = checks.some((check) => check.state === "warn") ? "warn" : "ready";
+      const summary = state === "warn"
+        ? "Loop stability alerts detected"
+        : "Loop stability is within configured thresholds";
+
+      res.json({
+        success: true,
+        data: {
+          state,
+          summary,
+          totalCycles,
+          checks
+        }
+      } satisfies ApiResponse<LoopAlertsPayload>);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.get("/context-debug", async (req: Request, res: Response) => {
+    try {
+      const roomId = normalizeText(req.query.roomId, 120);
+      const role = normalizeText(req.query.role, 60) || "researcher";
+
+      if (!roomId) {
+        res.status(400).json({
+          success: false,
+          error: "roomId query parameter is required"
+        });
+        return;
+      }
+
+      const client = createClient();
+      const roomContext = await client.getRoomContext(roomId, role);
+      const localSessions = context.db.listRoomSessions(roomId);
+
+      res.json({
+        success: true,
+        data: {
+          roomId,
+          role,
+          contextVersion: roomContext.contextVersion || "v1",
+          contextSummary: roomContext.contextSummary || null,
+          timelineCount: roomContext.timeline.length,
+          actionableCount: roomContext.actionableEvents?.length || 0,
+          recentTimeline: roomContext.timeline.slice(-12),
+          actionableEvents: roomContext.actionableEvents || [],
+          localSessions
+        }
+      } satisfies ApiResponse<Record<string, unknown>>);
     } catch (error) {
       res.status(500).json({
         success: false,

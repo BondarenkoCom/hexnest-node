@@ -32,6 +32,12 @@ export interface RuntimeActivityItem {
   timestamp: string;
 }
 
+interface RuntimeLoopMetrics {
+  actedCycles: number;
+  noActionCycles: number;
+  reentryWithoutProgress: number;
+}
+
 class CoreConnectionSupersededError extends Error {
   constructor() {
     super("core connection attempt was superseded");
@@ -79,6 +85,11 @@ export class NodeRuntime {
   private lastCoreError: string | null = null;
   private coreConnectionGeneration = 0;
   private readonly recentActivity: RuntimeActivityItem[] = [];
+  private readonly loopMetrics: RuntimeLoopMetrics = {
+    actedCycles: 0,
+    noActionCycles: 0,
+    reentryWithoutProgress: 0
+  };
 
   constructor(
     private readonly config: NodeConfig,
@@ -428,6 +439,9 @@ export class NodeRuntime {
     if (modelConfig && !modelConfig.enabled) {
       throw new Error(`Agent ${agentName} is disabled`);
     }
+    if (modelConfig?.agentMode === "manual") {
+      throw new Error(`Agent ${agentName} is in manual mode and cannot restart an autonomous room session`);
+    }
     if (!String(existingSession.joinedAgentId || "").trim()) {
       throw new Error(`Room session for ${agentName} has no joined agent id`);
     }
@@ -566,6 +580,8 @@ export class NodeRuntime {
       throw new Error("Authenticated client is not initialized");
     }
 
+    const loopGuardEnabled = this.isLoopGuardEnabledForRoom(roomId);
+
     const session = new RoomAgentSession({
       client: this.authedClient,
       adapter,
@@ -573,9 +589,21 @@ export class NodeRuntime {
       role,
       taskHint,
       autonomous,
+      loopGuardEnabled,
+      maxNoActionStreak: this.config.agentLoopGuardNoActionStreak,
       initialState: existingSession,
       shouldStop: () => this.stopRequested || this.status === "draining" || !this.coreConnected || this.roomStopRequests.has(roomId),
       onStateChange: async (state) => {
+        if (state.status === "idle") {
+          if (state.lastCycleOutcome === "acted") {
+            this.loopMetrics.actedCycles += 1;
+          } else if (state.lastCycleOutcome === "no_action") {
+            this.loopMetrics.noActionCycles += 1;
+            if (state.lastNoActionReason === "unchanged_room_fingerprint") {
+              this.loopMetrics.reentryWithoutProgress += 1;
+            }
+          }
+        }
         this.logger.info(`[database] updating session state for ${state.agentName} to ${state.status} in room ${state.roomId}`);
         this.database?.upsertRoomSession(state);
       },
@@ -1052,6 +1080,16 @@ export class NodeRuntime {
 
   getNodeStatus() {
     const meter = this.meter.getSnapshot();
+    const totalCycles = this.loopMetrics.actedCycles + this.loopMetrics.noActionCycles;
+    const actedRate = totalCycles > 0 ? this.loopMetrics.actedCycles / totalCycles : 0;
+    const noActionRate = totalCycles > 0 ? this.loopMetrics.noActionCycles / totalCycles : 0;
+    const loopGuardEnabled = this.config.agentLoopGuardEnabled !== false;
+    const loopGuardRolloutPercent = Math.max(0, Math.min(100, Number(this.config.agentLoopGuardRolloutPercent ?? 100)));
+    const loopGuardNoActionStreak = Math.max(1, Number(this.config.agentLoopGuardNoActionStreak ?? 3));
+    const alertsMinCycles = Math.max(1, Number(this.config.agentAlertsMinCycles ?? 10));
+    const alertsMaxNoActionRate = Math.max(0, Math.min(1, Number(this.config.agentAlertsMaxNoActionRate ?? 0.75)));
+    const alertsMaxReentryRate = Math.max(0, Math.min(1, Number(this.config.agentAlertsMaxReentryRate ?? 0.35)));
+
     return {
       id: this.nodeId,
       isRunning: this.isRunning,
@@ -1063,8 +1101,40 @@ export class NodeRuntime {
       heartbeatIntervalMs: this.config.heartbeatIntervalMs,
       lastHeartbeatAt: this.lastHeartbeatAt ? new Date(this.lastHeartbeatAt).toISOString() : null,
       activeRoomsCount: this.activeRoomRuns.size,
-      pendingUsageRecords: meter.pendingUsageRecords
+      pendingUsageRecords: meter.pendingUsageRecords,
+      actedCycles: this.loopMetrics.actedCycles,
+      noActionCycles: this.loopMetrics.noActionCycles,
+      reentryWithoutProgress: this.loopMetrics.reentryWithoutProgress,
+      actedRate,
+      noActionRate,
+      loopGuardEnabled,
+      loopGuardRolloutPercent,
+      loopGuardNoActionStreak,
+      alertsMinCycles,
+      alertsMaxNoActionRate,
+      alertsMaxReentryRate
     };
+  }
+
+  private isLoopGuardEnabledForRoom(roomId: string): boolean {
+    const loopGuardEnabled = this.config.agentLoopGuardEnabled !== false;
+    if (!loopGuardEnabled) {
+      return false;
+    }
+
+    const rolloutPercent = Math.max(0, Math.min(100, Number(this.config.agentLoopGuardRolloutPercent ?? 100)));
+    if (rolloutPercent >= 100) {
+      return true;
+    }
+    if (rolloutPercent <= 0) {
+      return false;
+    }
+
+    let hash = 0;
+    for (let index = 0; index < roomId.length; index += 1) {
+      hash = ((hash * 31) + roomId.charCodeAt(index)) % 100;
+    }
+    return hash < rolloutPercent;
   }
 
   private buildAvailableAgents(): AgentDescriptor[] {

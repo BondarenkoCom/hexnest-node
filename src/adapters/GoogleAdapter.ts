@@ -7,19 +7,21 @@ import {
 } from "./AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../protocol/types.js";
 
-interface OpenAIChatResponse {
-  choices?: Array<{
-    message?: {
-      content?: string;
+interface GoogleGenerateContentResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+      }>;
     };
   }>;
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
   };
 }
 
-export class OpenAIAdapter implements AgentAdapter {
+export class GoogleAdapter implements AgentAdapter {
   public readonly name: string;
   public readonly modelId: string;
   public readonly capabilities: string[];
@@ -35,23 +37,23 @@ export class OpenAIAdapter implements AgentAdapter {
       supportedRoles?: string[];
     } = {}
   ) {
-    this.name = options.name || "openai";
-    this.model = options.model || "gpt-4o-mini";
+    this.name = options.name || "google";
+    this.model = options.model || "gemini-2.5-flash";
     this.modelId = this.model;
-    this.baseUrl = options.baseUrl || "https://api.openai.com/v1";
+    this.baseUrl = options.baseUrl || "https://generativelanguage.googleapis.com/v1beta";
     this.capabilities = options.capabilities || ["general", "reasoning", "coding", "research"];
-    this.supportedRoles = options.supportedRoles || ["builder", "breaker", "researcher", "synthesizer", "judge"];
-    this.maxTokens = Math.max(64, Number(process.env.OPENAI_MAX_TOKENS || 1200));
+    this.supportedRoles = options.supportedRoles || ["researcher", "skeptic", "builder", "synthesizer", "judge"];
+    this.maxOutputTokens = Math.max(64, Number(process.env.GOOGLE_MAX_TOKENS || 1200));
   }
 
   private readonly model: string;
   public readonly baseUrl: string;
-  private readonly maxTokens: number;
+  private readonly maxOutputTokens: number;
   private lastUsage: { input: number; output: number } = { input: 0, output: 0 };
 
   async respond(context: RoomContext): Promise<AgentResponse> {
     if (!this.apiKey) {
-      throw new Error("OPENAI_API_KEY is missing");
+      throw new Error("GOOGLE_API_KEY is missing");
     }
 
     const systemPrompt = [
@@ -70,6 +72,7 @@ export class OpenAIAdapter implements AgentAdapter {
         return `${event.from} -> ${event.to} [${meta || "chat"}]${trigger}: ${event.text}`;
       })
       .join("\n");
+
     const actionable = (context.actionableEvents || [])
       .map((event) => {
         const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
@@ -77,40 +80,47 @@ export class OpenAIAdapter implements AgentAdapter {
       })
       .join("\n");
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+    const userPrompt = `Task: ${context.task}\nPhase: ${context.phase}\nContextVersion: ${context.contextVersion || "v1"}\nSummary: ${context.contextSummary || "n/a"}\nActionable events:\n${actionable || "(none)"}\nTimeline:\n${timeline || "(empty)"}`;
+
+    const endpoint = `${this.baseUrl.replace(/\/+$/, "")}/models/${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: this.model,
-        messages: [
-          { role: "system", content: systemPrompt },
+        systemInstruction: {
+          parts: [{ text: systemPrompt }]
+        },
+        contents: [
           {
             role: "user",
-            content: `Task: ${context.task}\nPhase: ${context.phase}\nContextVersion: ${context.contextVersion || "v1"}\nSummary: ${context.contextSummary || "n/a"}\nActionable events:\n${actionable || "(none)"}\nTimeline:\n${timeline || "(empty)"}`
+            parts: [{ text: userPrompt }]
           }
         ],
-        temperature: 0.3,
-        max_tokens: this.maxTokens
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: this.maxOutputTokens
+        }
       })
     });
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`OpenAI call failed (${response.status}): ${body}`);
+      throw new Error(`Google call failed (${response.status}): ${body}`);
     }
 
-    const payload = (await response.json()) as OpenAIChatResponse;
+    const payload = (await response.json()) as GoogleGenerateContentResponse;
     this.lastUsage = {
-      input: Number(payload.usage?.prompt_tokens || 0),
-      output: Number(payload.usage?.completion_tokens || 0)
+      input: Number(payload.usageMetadata?.promptTokenCount || 0),
+      output: Number(payload.usageMetadata?.candidatesTokenCount || 0)
     };
-    const text = String(payload.choices?.[0]?.message?.content || "").trim();
+
+    const text = String(payload.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("\n") || "").trim();
     if (!text) {
-      throw new Error("OpenAI returned an empty response");
+      throw new Error("Google returned an empty response");
     }
+
     return {
       text,
       confidence: inferConfidence(text, context.phase)

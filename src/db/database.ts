@@ -9,6 +9,7 @@ type SqlRow = unknown[];
 export type AgentMode = "manual" | "recruitable" | "autonomous";
 
 export type RoomSessionStatus = "starting" | "joined" | "idle" | "responding" | "stopped" | "error";
+export type RoomCycleOutcome = "acted" | "no_action";
 
 export interface NodeIdentity {
   id: string;
@@ -19,7 +20,7 @@ export interface NodeIdentity {
 
 export interface AdapterConfig {
   id: string;
-  type: string; // ClaudeAdapter, OpenAIAdapter, OllamaAdapter
+  type: string; // ClaudeAdapter, OpenAIAdapter, OllamaAdapter, GrokAdapter, GoogleAdapter
   apiKey?: string;
   baseUrl?: string;
   createdAt: number;
@@ -51,6 +52,10 @@ export interface RoomSessionState {
   lastSeenMessageId?: string;
   lastRespondedMessageId?: string;
   lastRespondedAt?: number;
+  lastRoomFingerprint?: string;
+  lastCycleOutcome?: RoomCycleOutcome;
+  lastNoActionReason?: string;
+  noActionStreak?: number;
   autonomous: boolean;
   status: RoomSessionStatus;
   createdAt: number;
@@ -165,6 +170,10 @@ export class DatabaseService {
             last_seen_message_id TEXT,
             last_responded_message_id TEXT,
             last_responded_at INTEGER,
+            last_room_fingerprint TEXT,
+            last_cycle_outcome TEXT,
+            last_no_action_reason TEXT,
+            no_action_streak INTEGER DEFAULT 0,
             autonomous BOOLEAN DEFAULT 0,
             status TEXT DEFAULT 'starting',
             created_at INTEGER NOT NULL,
@@ -178,6 +187,18 @@ export class DatabaseService {
           .map((result) => result.values.map((row) => String(row[1])))[0] || [];
         if (!roomSessionColumns.includes("last_responded_at")) {
           this.db.run("ALTER TABLE room_sessions ADD COLUMN last_responded_at INTEGER");
+        }
+        if (!roomSessionColumns.includes("last_room_fingerprint")) {
+          this.db.run("ALTER TABLE room_sessions ADD COLUMN last_room_fingerprint TEXT");
+        }
+        if (!roomSessionColumns.includes("last_cycle_outcome")) {
+          this.db.run("ALTER TABLE room_sessions ADD COLUMN last_cycle_outcome TEXT");
+        }
+        if (!roomSessionColumns.includes("last_no_action_reason")) {
+          this.db.run("ALTER TABLE room_sessions ADD COLUMN last_no_action_reason TEXT");
+        }
+        if (!roomSessionColumns.includes("no_action_streak")) {
+          this.db.run("ALTER TABLE room_sessions ADD COLUMN no_action_streak INTEGER DEFAULT 0");
         }
       }
     } catch (error) {
@@ -206,6 +227,14 @@ export class DatabaseService {
       return normalized;
     }
     return "starting";
+  }
+
+  private normalizeRoomCycleOutcome(value: unknown): RoomCycleOutcome | undefined {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    if (normalized === "acted" || normalized === "no_action") {
+      return normalized;
+    }
+    return undefined;
   }
 
   private save(): void {
@@ -439,7 +468,9 @@ export class DatabaseService {
       const results = this.db.exec(
         `
         SELECT room_id, agent_name, role, joined_agent_id, last_seen_message_id,
-           last_responded_message_id, last_responded_at, autonomous, status, created_at, updated_at
+           last_responded_message_id, last_responded_at,
+           last_room_fingerprint, last_cycle_outcome, last_no_action_reason, no_action_streak,
+           autonomous, status, created_at, updated_at
         FROM room_sessions
         WHERE room_id = ? AND agent_name = ?
       `,
@@ -456,6 +487,10 @@ export class DatabaseService {
         lastSeenMessageId,
         lastRespondedMessageId,
         lastRespondedAt,
+        lastRoomFingerprint,
+        lastCycleOutcome,
+        lastNoActionReason,
+        noActionStreak,
         autonomous,
         status,
         createdAt,
@@ -470,6 +505,10 @@ export class DatabaseService {
         lastSeenMessageId: lastSeenMessageId ? String(lastSeenMessageId) : undefined,
         lastRespondedMessageId: lastRespondedMessageId ? String(lastRespondedMessageId) : undefined,
         lastRespondedAt: Number.isFinite(Number(lastRespondedAt)) ? Number(lastRespondedAt) : undefined,
+        lastRoomFingerprint: lastRoomFingerprint ? String(lastRoomFingerprint) : undefined,
+        lastCycleOutcome: this.normalizeRoomCycleOutcome(lastCycleOutcome),
+        lastNoActionReason: lastNoActionReason ? String(lastNoActionReason) : undefined,
+        noActionStreak: Number.isFinite(Number(noActionStreak)) ? Number(noActionStreak) : 0,
         autonomous: Boolean(autonomous),
         status: this.normalizeRoomSessionStatus(status),
         createdAt: Number(createdAt),
@@ -486,7 +525,9 @@ export class DatabaseService {
       const results = this.db.exec(
         `
         SELECT room_id, agent_name, role, joined_agent_id, last_seen_message_id,
-           last_responded_message_id, last_responded_at, autonomous, status, created_at, updated_at
+           last_responded_message_id, last_responded_at,
+           last_room_fingerprint, last_cycle_outcome, last_no_action_reason, no_action_streak,
+           autonomous, status, created_at, updated_at
         FROM room_sessions
         WHERE room_id = ?
         ORDER BY updated_at DESC, created_at DESC
@@ -507,6 +548,10 @@ export class DatabaseService {
           lastSeenMessageId,
           lastRespondedMessageId,
           lastRespondedAt,
+          lastRoomFingerprint,
+          lastCycleOutcome,
+          lastNoActionReason,
+          noActionStreak,
           autonomous,
           status,
           createdAt,
@@ -521,6 +566,10 @@ export class DatabaseService {
           lastSeenMessageId: lastSeenMessageId ? String(lastSeenMessageId) : undefined,
           lastRespondedMessageId: lastRespondedMessageId ? String(lastRespondedMessageId) : undefined,
           lastRespondedAt: Number.isFinite(Number(lastRespondedAt)) ? Number(lastRespondedAt) : undefined,
+          lastRoomFingerprint: lastRoomFingerprint ? String(lastRoomFingerprint) : undefined,
+          lastCycleOutcome: this.normalizeRoomCycleOutcome(lastCycleOutcome),
+          lastNoActionReason: lastNoActionReason ? String(lastNoActionReason) : undefined,
+          noActionStreak: Number.isFinite(Number(noActionStreak)) ? Number(noActionStreak) : 0,
           autonomous: Boolean(autonomous),
           status: this.normalizeRoomSessionStatus(status),
           createdAt: Number(createdAt),
@@ -546,7 +595,8 @@ export class DatabaseService {
         `
           UPDATE room_sessions
           SET role = ?, joined_agent_id = ?, last_seen_message_id = ?, last_responded_message_id = ?,
-              last_responded_at = ?,
+              last_responded_at = ?, last_room_fingerprint = ?, last_cycle_outcome = ?,
+              last_no_action_reason = ?, no_action_streak = ?,
               autonomous = ?, status = ?, updated_at = ?
           WHERE room_id = ? AND agent_name = ?
         `,
@@ -556,6 +606,10 @@ export class DatabaseService {
           state.lastSeenMessageId ?? null,
           state.lastRespondedMessageId ?? null,
           state.lastRespondedAt ?? null,
+          state.lastRoomFingerprint ?? null,
+          this.normalizeRoomCycleOutcome(state.lastCycleOutcome) ?? null,
+          state.lastNoActionReason ?? null,
+          Math.max(0, Number(state.noActionStreak ?? 0)),
           state.autonomous ? 1 : 0,
           this.normalizeRoomSessionStatus(state.status),
           state.updatedAt ?? now,
@@ -568,8 +622,10 @@ export class DatabaseService {
         `
           INSERT INTO room_sessions (
             room_id, agent_name, role, joined_agent_id, last_seen_message_id,
-            last_responded_message_id, last_responded_at, autonomous, status, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            last_responded_message_id, last_responded_at,
+            last_room_fingerprint, last_cycle_outcome, last_no_action_reason, no_action_streak,
+            autonomous, status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           state.roomId,
@@ -579,6 +635,10 @@ export class DatabaseService {
           state.lastSeenMessageId ?? null,
           state.lastRespondedMessageId ?? null,
           state.lastRespondedAt ?? null,
+          state.lastRoomFingerprint ?? null,
+          this.normalizeRoomCycleOutcome(state.lastCycleOutcome) ?? null,
+          state.lastNoActionReason ?? null,
+          Math.max(0, Number(state.noActionStreak ?? 0)),
           state.autonomous ? 1 : 0,
           this.normalizeRoomSessionStatus(state.status),
           createdAt,

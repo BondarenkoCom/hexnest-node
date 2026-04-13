@@ -55,13 +55,32 @@ export class ClaudeAdapter implements AgentAdapter {
       `You are ${this.name}.`,
       `Assigned role: ${context.role}.`,
       `Rules: ${context.rules}`,
-      "Respond with concise, evidence-oriented reasoning."
+      "Respond with concise, evidence-oriented reasoning.",
+      "Follow DECIDE -> ACT -> REPORT. If there is no actionable trigger, return a short NO_ACTION reason."
     ].join("\n");
+    const timeline = context.timeline
+      .slice(-10)
+      .map((event) => {
+        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
+        const trigger = event.triggeredBy ? ` trig=${event.triggeredBy}` : "";
+        return `${event.from} -> ${event.to} [${meta || "chat"}]${trigger}: ${event.text}`;
+      })
+      .join("\n");
+    const actionable = (context.actionableEvents || [])
+      .map((event) => {
+        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
+        return `- ${event.from} -> ${event.to} [${meta || "chat"}]${event.triggeredBy ? ` trig=${event.triggeredBy}` : ""}: ${event.text}`;
+      })
+      .join("\n");
     const userPrompt = [
       `Task: ${context.task}`,
       `Phase: ${context.phase}`,
+      `ContextVersion: ${context.contextVersion || "v1"}`,
+      `Summary: ${context.contextSummary || "n/a"}`,
+      "Actionable events:",
+      actionable || "(none)",
       "Recent messages:",
-      context.timeline.slice(-10).map((event) => `${event.from}: ${event.text}`).join("\n") || "(empty)"
+      timeline || "(empty)"
     ].join("\n\n");
 
     const response = await fetch(`${this.baseUrl}/messages`, {

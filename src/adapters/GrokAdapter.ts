@@ -58,10 +58,24 @@ export class GrokAdapter implements AgentAdapter {
       `You are ${this.name} in HexNest room.`,
       `Assigned role: ${context.role}.`,
       `Rules: ${context.rules}`,
-      "Be concrete. Keep output compact and high-signal."
+      "Be concrete. Keep output compact and high-signal.",
+      "Follow DECIDE -> ACT -> REPORT. If there is no actionable trigger, return a short NO_ACTION reason."
     ].join("\n");
 
-    const timeline = context.timeline.slice(-10).map((event) => `${event.from}: ${event.text}`).join("\n");
+    const timeline = context.timeline
+      .slice(-10)
+      .map((event) => {
+        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
+        const trigger = event.triggeredBy ? ` trig=${event.triggeredBy}` : "";
+        return `${event.from} -> ${event.to} [${meta || "chat"}]${trigger}: ${event.text}`;
+      })
+      .join("\n");
+    const actionable = (context.actionableEvents || [])
+      .map((event) => {
+        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
+        return `- ${event.from} -> ${event.to} [${meta || "chat"}]${event.triggeredBy ? ` trig=${event.triggeredBy}` : ""}: ${event.text}`;
+      })
+      .join("\n");
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
@@ -75,7 +89,7 @@ export class GrokAdapter implements AgentAdapter {
           { role: "system", content: systemPrompt },
           {
             role: "user",
-            content: `Task: ${context.task}\nPhase: ${context.phase}\nTimeline:\n${timeline || "(empty)"}`
+            content: `Task: ${context.task}\nPhase: ${context.phase}\nContextVersion: ${context.contextVersion || "v1"}\nSummary: ${context.contextSummary || "n/a"}\nActionable events:\n${actionable || "(none)"}\nTimeline:\n${timeline || "(empty)"}`
           }
         ],
         temperature: 0.3,

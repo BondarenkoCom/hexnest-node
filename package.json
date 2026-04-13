@@ -25,7 +25,11 @@
     "db": "tsx src/utils/db-cli.ts",
     "setup": "tsx src/cli/setup.ts",
     "config:test": "tsx src/cli/config-test.ts",
-    "auth:login": "tsx src/cli/auth-login.ts"
+    "auth:login": "tsx src/cli/auth-login.ts",
+    "ops:loop:payloads": "node scripts/loop-ops-smoke.mjs --print-payloads-only",
+    "ops:loop:smoke": "node scripts/loop-ops-smoke.mjs",
+    "ops:loop:rollout": "node scripts/loop-rollout.mjs",
+    "ops:loop:rollout:dry": "node scripts/loop-rollout.mjs --dry-run"
   },
   "engines": {
     "node": ">=20"

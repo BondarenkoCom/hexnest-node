@@ -59,6 +59,17 @@ export interface WebServerContext {
     lastHeartbeatAt: string | null;
     activeRoomsCount: number;
     pendingUsageRecords: number;
+    actedCycles: number;
+    noActionCycles: number;
+    reentryWithoutProgress: number;
+    actedRate: number;
+    noActionRate: number;
+    loopGuardEnabled: boolean;
+    loopGuardRolloutPercent: number;
+    loopGuardNoActionStreak: number;
+    alertsMinCycles: number;
+    alertsMaxNoActionRate: number;
+    alertsMaxReentryRate: number;
   };
 }
 

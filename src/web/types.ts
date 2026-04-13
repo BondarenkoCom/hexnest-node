@@ -19,6 +19,17 @@ export interface NodeStatus {
   lastHeartbeatAt: string | null;
   activeRoomsCount: number;
   pendingUsageRecords: number;
+  actedCycles: number;
+  noActionCycles: number;
+  reentryWithoutProgress: number;
+  actedRate: number;
+  noActionRate: number;
+  loopGuardEnabled: boolean;
+  loopGuardRolloutPercent: number;
+  loopGuardNoActionStreak: number;
+  alertsMinCycles: number;
+  alertsMaxNoActionRate: number;
+  alertsMaxReentryRate: number;
 }
 
 export type ReadinessState = "ready" | "warn" | "error" | "info";
@@ -45,6 +56,10 @@ export interface RoomSessionInfo {
   lastSeenMessageId?: string;
   lastRespondedMessageId?: string;
   lastRespondedAt?: number;
+  lastRoomFingerprint?: string;
+  lastCycleOutcome?: "acted" | "no_action";
+  lastNoActionReason?: string;
+  noActionStreak?: number;
   autonomous: boolean;
   status: "starting" | "joined" | "idle" | "responding" | "stopped" | "error";
   createdAt: number;
@@ -94,4 +109,10 @@ export interface NodeConfigInfo {
   shutdownGraceMs: number;
   autoAcceptInvites: boolean;
   httpTimeoutMs: number;
+  agentLoopGuardEnabled: boolean;
+  agentLoopGuardRolloutPercent: number;
+  agentLoopGuardNoActionStreak: number;
+  agentAlertsMinCycles: number;
+  agentAlertsMaxNoActionRate: number;
+  agentAlertsMaxReentryRate: number;
 }

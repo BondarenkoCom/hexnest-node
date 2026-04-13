@@ -24,6 +24,21 @@ import {
   UsageRecord
 } from "./types.js";
 
+const ACTIONABLE_INTENTS = new Set([
+  "ask_room",
+  "request_input",
+  "request_feedback",
+  "request_review",
+  "request_plan",
+  "request_critique",
+  "request_analysis",
+  "call_for_input",
+  "need_help",
+  "need_human",
+  "summon_agent",
+  "escalate"
+]);
+
 export interface HexNestClientOptions {
   nodeToken?: string;
   userToken?: string;
@@ -327,10 +342,23 @@ export class HexNestClient implements HexNestClientLike {
         from: String(value.from || "unknown"),
         to: String(value.to || "room"),
         scope,
+        type: value.type ? String(value.type) : undefined,
+        intent: value.intent ? String(value.intent) : undefined,
+        triggeredBy: value.triggeredBy ? String(value.triggeredBy) : null,
         text: String(value.text || ""),
         confidence: typeof value.confidence === "number" ? value.confidence : undefined
       };
     });
+    const actionableEvents = timeline
+      .filter((event) => {
+        const normalizedIntent = String(event.intent || "").trim().toLowerCase();
+        return Boolean(
+          event.scope === "direct"
+          || event.triggeredBy
+          || ACTIONABLE_INTENTS.has(normalizedIntent)
+        );
+      })
+      .slice(-6);
 
     const rawArtifacts = Array.isArray(room.artifacts) ? room.artifacts : [];
     const artifacts = rawArtifacts.map((item, index) => {
@@ -351,7 +379,10 @@ export class HexNestClient implements HexNestClientLike {
       task: String(room.task || ""),
       role,
       phase: String(room.phase || "open_room"),
+      contextVersion: "v2",
       timeline,
+      actionableEvents,
+      contextSummary: `timeline=${timeline.length}; actionable=${actionableEvents.length}; artifacts=${artifacts.length}`,
       artifacts,
       rules: String((room.template as Record<string, unknown> | undefined)?.rules || "")
     };
