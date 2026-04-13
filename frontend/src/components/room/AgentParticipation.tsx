@@ -20,6 +20,11 @@ export const AgentParticipation: React.FC<AgentParticipationProps> = ({ roomId, 
   const availableAgents = detail.availableAgents;
   const joinedLocalAgent = room.connectedAgents.find(a => availableAgents.some(aa => aa.name === a.name));
   const activeSession = detail.localSessions.find(s => s.agentName === (joinedLocalAgent?.name || selectedAgent));
+  const canRestart = Boolean(activeSession?.autonomous);
+  const showStop = Boolean(
+    activeSession
+    && ['starting', 'joined', 'responding', 'idle'].includes(activeSession.status)
+  );
 
   const handleJoin = async () => {
     if (!selectedAgent) return;
@@ -132,15 +137,15 @@ export const AgentParticipation: React.FC<AgentParticipationProps> = ({ roomId, 
           )}
 
           <button
-            onClick={() => handleControl(activeSession ? 'restart' : 'start')}
+            onClick={() => handleControl(canRestart ? 'restart' : 'start')}
             disabled={loading || !selectedAgent || (!joinedLocalAgent && !activeSession)}
             className="px-4 py-2 bg-void border border-emerald-500/30 text-emerald-400 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-emerald-500/10 transition-all active:scale-95 disabled:opacity-50"
           >
-            {activeSession ? <RotateCcw className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            {activeSession ? 'Restart Session' : 'Start Session'}
+            {canRestart ? <RotateCcw className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            {canRestart ? 'Restart Session' : 'Start Session'}
           </button>
 
-          {activeSession && (
+          {showStop && (
             <button
               onClick={() => handleControl('stop')}
               disabled={loading}
