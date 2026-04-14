@@ -1,9 +1,11 @@
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { buildAdapters, loadEnvMap, loadRuntimeSetupAsync } from "./config.js";
 import { NodeRuntime } from "./core/NodeRuntime.js";
-import { resolveRuntimePath } from "./runtime-paths.js";
+import { resolveRuntimePath, resolveDefaultYamlConfigPath } from "./runtime-paths.js";
 import { createWebServer, startWebServer } from "./web/server.js";
+import { setupGlobalLogger } from "./utils/logger.js";
 
 function parseWebPort(rawPort: string | undefined): { port: number; explicit: boolean } {
   if (rawPort == null || rawPort.trim() === "") {
@@ -49,12 +51,43 @@ async function clearRuntimeInfo(runtimeInfoPath: string | null): Promise<void> {
   }
 }
 
+async function ensureConfigExists(env: Record<string, string>): Promise<void> {
+  const yamlPath = resolveDefaultYamlConfigPath(env);
+  if (yamlPath && !existsSync(yamlPath)) {
+    const templatePath = path.join(process.cwd(), "templates", "agent-config.example.yaml");
+    if (existsSync(templatePath)) {
+      console.info(`[hexnest-node] creating initial config at ${yamlPath} from template`);
+      await fs.mkdir(path.dirname(yamlPath), { recursive: true });
+      await fs.copyFile(templatePath, yamlPath);
+    }
+  }
+}
+
+async function validateIdentity(env: NodeJS.ProcessEnv): Promise<void> {
+  const identityPath = resolveRuntimePath(env.HEXNEST_IDENTITY_PATH || ".hexnest-identity.json", env as any);
+  if (existsSync(identityPath)) {
+    try {
+      const content = await fs.readFile(identityPath, "utf8");
+      const parsed = JSON.parse(content);
+      if (!parsed.nodeId || !parsed.nodeToken) {
+        throw new Error("Identity file is missing nodeId or nodeToken");
+      }
+    } catch (e) {
+      console.warn(`[hexnest-node] identity file ${identityPath} is invalid/corrupt. It will be recreated during start.`);
+    }
+  }
+}
+
 async function main(): Promise<void> {
+  setupGlobalLogger();
   console.log("-----------------------------------------");
   console.log("[HexNest Node] VERSION 1.1.0 (Fix Applied)");
   console.log("-----------------------------------------");
   
   const env = loadEnvMap();
+  await ensureConfigExists(env);
+  await validateIdentity(process.env);
+  
   const { config, adapters, database } = await loadRuntimeSetupAsync(env);
   const runtime = new NodeRuntime(config, adapters, { database });
   let runtimeInfoPath: string | null = null;

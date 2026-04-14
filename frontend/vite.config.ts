@@ -9,6 +9,11 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
+    port: 5173,
+    strictPort: true,
+    watch: {
+      ignored: ['**/src-tauri/**'],
+    },
     proxy: {
       '/api': 'http://127.0.0.1:3000'
     }
