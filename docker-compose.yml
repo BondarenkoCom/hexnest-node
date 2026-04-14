@@ -1,0 +1,26 @@
+services:
+  hexnest-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hexnest-node
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HEXNEST_WEB_HOST: 0.0.0.0
+      HEXNEST_WEB_PORT: 3000
+      HEXNEST_WEB_PORT_STRICT: "true"
+      HEXNEST_DB_PATH: /app/data/.hexnest.db
+      HEXNEST_IDENTITY_PATH: /app/data/.hexnest-identity.json
+      HEXNEST_RUNTIME_INFO_PATH: /app/data/.hexnest-runtime.json
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "3000:3000"
+    volumes:
+      - hexnest-node-data:/app/data
+
+volumes:
+  hexnest-node-data:

@@ -60,12 +60,13 @@ The node will automatically:
 
 ## Local Operator Flows
 
-HexNest Node can now be used in two primary modes:
+HexNest Node currently supports three practical ways to run the same local manager and runtime:
 
-- **Browser Mode**: Easiest development path, runs in your system browser.
-- **Desktop Shell**: Standalone Tauri-based desktop app with tray support.
+- **Browser Mode**: best for local development and debugging
+- **Docker**: best for technical operators who want a production-style self-hosted deployment
+- **Desktop Shell**: best for end users who want the lowest-friction desktop install experience
 
-Both modes use the same local node manager, runtime, and authentication flow.
+All three paths use the same node runtime, SQLite state, and authentication flow.
 
 ## Quick Start (Browser Mode)
 
@@ -79,9 +80,43 @@ npm run dev
 
 This will start the HexNest node runtime and launch the web UI on **http://localhost:3000** (or a free port).
 
+## Quick Start (Docker)
+
+Docker is the recommended path for technical operators who want a production-style runtime with the local web UI. The desktop shell is not included in the container.
+
+```bash
+cd hexnest-node
+cp .env.example .env
+docker compose up --build
+```
+
+This will:
+- Build the frontend and Node runtime into a single container
+- Expose the web UI on **http://localhost:3000**
+- Persist SQLite, identity, and runtime state in a Docker volume (`hexnest-node-data`)
+
+Docker-specific notes:
+- `HEXNEST_WEB_HOST` is forced to `0.0.0.0` inside the container
+- SQLite DB, runtime metadata, and identity files are stored under `/app/data`
+- If you use Ollama on the host machine, keep `OLLAMA_BASE_URL=http://host.docker.internal:11434`
+
+To stop the container:
+
+```bash
+docker compose down
+```
+
+To reset local node state completely:
+
+```bash
+docker compose down -v
+```
+
 ## Quick Start (Desktop Shell)
 
-Requires [Rust toolchain](https://rustup.rs/) and [C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+Desktop Shell is the best distribution path for non-technical users once you provide a packaged installer.
+
+For local development from source, it requires [Rust toolchain](https://rustup.rs/) and [C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
 
 ```bash
 cd hexnest-node
@@ -145,8 +180,6 @@ HexNest Node includes a built-in web interface for managing your node.
 - 🖥️ **Desktop Tray** — hide to tray and manage lifecycle from the system menu
 - 📱 **Responsive** — works on desktop and mobile
 
-See [WEB_UI.md](./WEB_UI.md) for detailed documentation.
-
 ### Configuration
 
 - `HEXNEST_WEB_PORT` (default: `3000`) — port for web UI
@@ -166,7 +199,6 @@ YAML template: [templates/agent-config.example.yaml](./templates/agent-config.ex
 ```text
 hexnest-node/
 ├── README.md
-├── WEB_UI.md
 ├── package.json
 ├── tsconfig.json
 ├── .env.example
@@ -187,9 +219,6 @@ hexnest-node/
 ├── scripts/                # Packaging and sidecar helpers
 ├── templates/              # Configuration examples
 └── test/                   # Integration tests
-├── templates/
-│   └── agent-config.example.yaml
-└── test/
     ├── heartbeat.test.ts
     ├── adapter.test.ts
     └── client.test.ts
@@ -273,7 +302,17 @@ Packages the Node runtime into a host-specific binary for the desktop app.
 ```bash
 npm run desktop:build
 ```
-Generates the final Windows installer/executable in `src-tauri/target/release/bundle`.
+Generates the host-native desktop bundle in `src-tauri/target/release/bundle`.
+
+## Desktop CI and Releases
+
+This repository includes a GitHub Actions workflow for native desktop builds on Windows, macOS, and Linux.
+
+- Pushes to `main` run the desktop build matrix
+- Pull requests run the same desktop build checks
+- Tags matching `v*` publish a GitHub Release with bundled desktop artifacts
+
+Workflow file: `.github/workflows/desktop-build.yml`
 
 ## Dev Commands
 
