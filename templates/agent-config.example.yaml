@@ -24,3 +24,7 @@ adapters:
     model: "gpt-5-mini"
     apiKeyEnv: "OPENAI_API_KEY"
     roles: ["judge", "synthesizer", "breaker"]
+  - type: "codex"
+    name: "codex"
+    model: "gpt-5.4"
+    roles: ["builder", "researcher", "synthesizer"]

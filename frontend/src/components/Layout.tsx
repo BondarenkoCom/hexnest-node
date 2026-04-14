@@ -19,8 +19,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="content">
           <header className="hero panel">
             <div className="hero-frame">
-              <div className="node-avatar">
-                {status?.isRunning ? '✨' : '⏸️'}
+              <div className={`node-pulse-hex ${status?.isRunning ? 'online' : 'offline'}`}>
+                <div className="pulse-ring" />
+                <div className="pulse-ring ring-2" />
+                <svg className="hex-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                  <polygon points="50,3 93,25 93,75 50,97 7,75 7,25" />
+                  <polygon className="hex-inner" points="50,18 78,33 78,67 50,82 22,67 22,33" />
+                  <circle className="hex-core" cx="50" cy="50" r="8" />
+                </svg>
               </div>
               <div>
                 <p className="eyebrow">LOCAL NODE</p>

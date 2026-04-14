@@ -9,6 +9,7 @@ import { OllamaAdapter } from "./adapters/OllamaAdapter.js";
 import { GrokAdapter } from "./adapters/GrokAdapter.js";
 import { OpenAIAdapter } from "./adapters/OpenAIAdapter.js";
 import { GoogleAdapter } from "./adapters/GoogleAdapter.js";
+import { CodexAdapter } from "./adapters/CodexAdapter.js";
 import { DatabaseService } from "./db/database.js";
 import type { ModelConfig } from "./db/database.js";
 import {
@@ -124,6 +125,9 @@ function normalizeAdapterKind(value: unknown): string {
   }
   if (normalized === "google" || normalized === "googleadapter" || normalized === "gemini") {
     return "google";
+  }
+  if (normalized === "codex" || normalized === "codexadapter") {
+    return "codex";
   }
   return normalized;
 }
@@ -274,6 +278,19 @@ function adapterFromSource(source: AdapterConfigSource, env: Record<string, stri
     });
   }
 
+  if (type === "codex") {
+    const timeoutRaw = str(env.CODEX_TIMEOUT_MS);
+    const timeoutMs = timeoutRaw ? Number(timeoutRaw) : undefined;
+    return new CodexAdapter({
+      name,
+      model: model || str(env.CODEX_MODEL),
+      timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : undefined,
+      codexPath: str(env.CODEX_CLI_PATH),
+      capabilities: capabilities.length ? capabilities : undefined,
+      supportedRoles: supportedRoles.length ? supportedRoles : undefined
+    });
+  }
+
   return null;
 }
 
@@ -360,6 +377,19 @@ function adapterFromModelConfig(config: ModelConfig, env: Record<string, string>
       name,
       model: model || str(env.GOOGLE_MODEL) || "gemini-2.5-flash",
       baseUrl,
+      capabilities: capabilities.length ? capabilities : undefined,
+      supportedRoles: supportedRoles.length ? supportedRoles : undefined
+    });
+  }
+
+  if (type === "codex") {
+    const timeoutRaw = str(env.CODEX_TIMEOUT_MS);
+    const timeoutMs = timeoutRaw ? Number(timeoutRaw) : undefined;
+    return new CodexAdapter({
+      name,
+      model: model || str(env.CODEX_MODEL),
+      timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : undefined,
+      codexPath: str(env.CODEX_CLI_PATH),
       capabilities: capabilities.length ? capabilities : undefined,
       supportedRoles: supportedRoles.length ? supportedRoles : undefined
     });

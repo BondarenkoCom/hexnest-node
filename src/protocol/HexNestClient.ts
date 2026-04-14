@@ -64,7 +64,7 @@ export interface HexNestClientLike {
   downloadRoomSummary(roomId: string): Promise<string>;
   exportRoom(roomId: string): Promise<unknown>;
   getRoomMessages(roomId: string, limit?: number): Promise<CoreRoomMessagesResponse>;
-  joinRoom(roomId: string, agentName: string, role: string): Promise<JoinRoomResponse>;
+  joinRoom(roomId: string, agentName: string, role?: string): Promise<JoinRoomResponse>;
   postRoomMessage(input: PostRoomMessageInput): Promise<void>;
   getRoomContext(roomId: string, role: string): Promise<RoomContext>;
 }
@@ -286,13 +286,14 @@ export class HexNestClient implements HexNestClientLike {
     });
   }
 
-  async joinRoom(roomId: string, agentName: string, role: string): Promise<JoinRoomResponse> {
+  async joinRoom(roomId: string, agentName: string, role?: string): Promise<JoinRoomResponse> {
+    const normalizedRole = String(role || "").trim();
     return this.request<JoinRoomResponse>(`/api/rooms/${encodeURIComponent(roomId)}/agents`, {
       method: "POST",
       authRequired: true,
       body: {
         name: agentName,
-        role
+        ...(normalizedRole ? { role: normalizedRole } : {})
       }
     });
   }

@@ -1,8 +1,49 @@
 import { Router, Request, Response } from "express";
+import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { promisify } from "node:util";
 import { loadEnvMap } from "../../config.js";
 import { WebServerContext } from "../server.js";
 import { ApiResponse, ModelInfo } from "../types.js";
+
+const execFileAsync = promisify(execFile);
+
+const DEFAULT_CODEX_MODELS = ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.2"];
+
+function resolveCodexCliPath(env: Record<string, string>): string {
+  return String(env.CODEX_CLI_PATH || process.env.CODEX_CLI_PATH || "codex").trim() || "codex";
+}
+
+async function checkCodexCliReady(env: Record<string, string>): Promise<{ ok: boolean; error?: string }> {
+  const codexPath = resolveCodexCliPath(env);
+  try {
+    const { stdout, stderr } = await execFileAsync(codexPath, ["login", "status"], {
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024
+    });
+    const output = `${stdout || ""}\n${stderr || ""}`.toLowerCase();
+    if (output.includes("logged in")) {
+      return { ok: true };
+    }
+    return { ok: false, error: "Codex CLI is installed but not logged in. Run `codex login`." };
+  } catch (error: any) {
+    if (error?.code === "ENOENT") {
+      return { ok: false, error: `Codex CLI is not found. Set CODEX_CLI_PATH (current: ${codexPath}).` };
+    }
+    const stderr = String(error?.stderr || "").trim();
+    const stdout = String(error?.stdout || "").trim();
+    return { ok: false, error: stderr || stdout || "Failed to check Codex CLI status" };
+  }
+}
+
+function buildCodexModelList(env: Record<string, string>): string[] {
+  const preferred = String(env.CODEX_MODEL || "").trim();
+  return [...new Set([preferred, ...DEFAULT_CODEX_MODELS].filter(Boolean))];
+}
+
+function getDefaultCodexModel(env: Record<string, string>): string {
+  return buildCodexModelList(env)[0] || "gpt-5.3-codex";
+}
 
 function toModelInfo(model: {
   id: string;
@@ -21,6 +62,7 @@ function toModelInfo(model: {
     id: model.id,
     name: model.name,
     type: model.type,
+    adapter: model.type,
     model: model.model,
     baseUrl: model.baseUrl,
     roles: model.roles,
@@ -101,6 +143,19 @@ function getRuntimeOnlyModels(context: WebServerContext): ModelInfo[] {
     });
   }
 
+  if (String(env.CODEX_MODEL || "").trim()) {
+    pushRuntimeModel({
+      id: "runtime:codex",
+      name: "codex",
+      type: "CodexAdapter",
+      model: String(env.CODEX_MODEL || "").trim(),
+      enabled: true,
+      agentMode: "manual",
+      active: !hasPersistedActive && runtimeOnly.length === 0,
+      runtimeOnly: true
+    });
+  }
+
   return runtimeOnly;
 }
 
@@ -156,6 +211,7 @@ export function modelsRouter(context: WebServerContext) {
   router.post("/test", async (req: Request, res: Response) => {
     try {
       const { adapter, model, baseUrl, apiKey } = req.body;
+      const env = loadEnvMap();
 
       if (!adapter || !model) {
         res.status(400).json({
@@ -311,6 +367,16 @@ export function modelsRouter(context: WebServerContext) {
             error: `Connection failed: ${err instanceof Error ? err.message : "Unknown error"}`
           });
         }
+      } else if (adapter === "CodexAdapter") {
+        const status = await checkCodexCliReady(env);
+        if (status.ok) {
+          res.json({ success: true });
+        } else {
+          res.json({
+            success: false,
+            error: status.error || "Codex CLI is unavailable"
+          });
+        }
       } else {
         res.status(400).json({
           success: false,
@@ -329,6 +395,7 @@ export function modelsRouter(context: WebServerContext) {
   router.post("/test-list", async (req: Request, res: Response) => {
     try {
       const { adapter, baseUrl, apiKey } = req.body;
+      const env = loadEnvMap();
 
       if (!adapter) {
         res.status(400).json({
@@ -528,6 +595,13 @@ export function modelsRouter(context: WebServerContext) {
             error: error instanceof Error ? error.message : "Google API test failed"
           });
         }
+      } else if (adapter === "CodexAdapter") {
+        const status = await checkCodexCliReady(env);
+        res.json({
+          success: true,
+          models: buildCodexModelList(env),
+          message: status.ok ? undefined : (status.error || "Codex CLI is unavailable")
+        });
       } else {
         res.status(400).json({
           success: false,
@@ -547,10 +621,13 @@ export function modelsRouter(context: WebServerContext) {
     try {
       // Support both new format { name, adapter, config } and old format { type, name, model, ... }
       const { type, adapter, name, model, config, baseUrl, apiKey, apiKeyEnv, roles, capabilities, agentMode } = req.body;
+      const env = loadEnvMap();
       
       // Extract values from new format if provided
-      const adapterType = adapter || type;
-      const modelName = config?.model || model;
+      const adapterType = String(adapter || type || "").trim();
+      const adapterTypeLower = adapterType.toLowerCase();
+      const inputModelName = String(config?.model || model || "").trim();
+      const modelName = inputModelName || (adapterTypeLower === "codexadapter" ? getDefaultCodexModel(env) : "");
       const modelBaseUrl = config?.baseUrl || baseUrl;
       const modelApiKey = config?.apiKey || apiKey;
 
@@ -599,6 +676,7 @@ export function modelsRouter(context: WebServerContext) {
           id: newModel.id,
           name: newModel.name,
           type: newModel.type,
+          adapter: newModel.type,
           model: newModel.model,
           baseUrl: newModel.baseUrl,
           roles: newModel.roles,
@@ -645,6 +723,7 @@ export function modelsRouter(context: WebServerContext) {
           id: updated.id,
           name: updated.name,
           type: updated.type,
+          adapter: updated.type,
           model: updated.model,
           baseUrl: updated.baseUrl,
           roles: updated.roles,
