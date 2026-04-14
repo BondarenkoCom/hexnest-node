@@ -72,6 +72,7 @@ interface AdapterConfigSource {
   capabilities?: string[];
   roles?: string[];
   supportedRoles?: string[];
+  responseMode?: "standard" | "slow_model";
   apiKeyEnv?: string;
   apiKey?: string;
 }
@@ -211,19 +212,20 @@ function adapterFromSource(source: AdapterConfigSource, env: Record<string, stri
   const name = str(source.name);
   const model = str(source.model);
   const baseUrl = str(source.baseUrl);
+  const responseMode = source.responseMode === "slow_model" ? "slow_model" : "standard";
   const capabilities = stringArray(source.capabilities);
   const supportedRoles = stringArray(source.supportedRoles).length
     ? stringArray(source.supportedRoles)
     : stringArray(source.roles);
 
   if (type === "ollama") {
-    const timeoutMs = config.responseMode === "slow_model" ? 120_000 : 90_000;
+    const timeoutMs = responseMode === "slow_model" ? 120_000 : 90_000;
     return new OllamaAdapter({
       name,
       model: model || "qwen2.5:14b",
       baseUrl: baseUrl || "http://127.0.0.1:11434",
       timeoutMs,
-      responseMode: config.responseMode,
+      responseMode,
       capabilities: capabilities.length ? capabilities : undefined,
       supportedRoles: supportedRoles.length ? supportedRoles : undefined
     });
