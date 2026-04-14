@@ -361,7 +361,8 @@ export function roomsRouter(context: WebServerContext) {
     try {
       const roomId = normalizeText(req.params.roomId, 120);
       const agentName = normalizeText(req.body?.agentName, 120);
-      const role = normalizeText(req.body?.role, 80);
+      const requestedRole = normalizeText(req.body?.role, 80);
+      const sessionRole = requestedRole;
 
       if (!roomId || !agentName) {
         res.status(400).json({ success: false, error: "roomId and agentName are required" });
@@ -376,7 +377,17 @@ export function roomsRouter(context: WebServerContext) {
       }
 
       const client = createClient(context);
-      const joined = await client.joinRoom(roomId, agentName, role);
+      let joined: Awaited<ReturnType<typeof client.joinRoom>>;
+      try {
+        joined = await client.joinRoom(roomId, agentName, requestedRole || undefined);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (requestedRole && /role can be set only when room is created from a template/i.test(message)) {
+          joined = await client.joinRoom(roomId, agentName, undefined);
+        } else {
+          throw error;
+        }
+      }
 
       const modelConfig = context.db.getModelConfig(agentName);
       let roomSessionStarted = false;
@@ -389,7 +400,7 @@ export function roomsRouter(context: WebServerContext) {
           const session = await context.startManualRoomSession(
             roomId,
             agentName,
-            role,
+            sessionRole,
             joined.agent.id,
             "manual room join"
           );

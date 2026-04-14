@@ -8,7 +8,8 @@ const PROVIDERS = [
   { type: "ClaudeAdapter", label: "Claude" },
   { type: "OpenAIAdapter", label: "OpenAI" },
   { type: "OllamaAdapter", label: "Ollama" },
-  { type: "GoogleAdapter", label: "Google" }
+  { type: "GoogleAdapter", label: "Google" },
+  { type: "CodexAdapter", label: "Codex CLI" }
 ] as const;
 
 interface LoopAlertCheck {
@@ -125,7 +126,7 @@ async function buildReadiness(context: WebServerContext): Promise<NodeReadiness>
       : "No provider credentials or base URLs stored",
     detail: configuredProviders.length > 0
       ? `Configured providers: ${configuredProviders.map((provider) => provider.label).join(", ")}`
-      : "Add Claude, OpenAI, or Ollama access in the Models section."
+      : "Add Claude, OpenAI, Ollama, or Codex CLI access in the Models section."
   });
 
   const heartbeatAgeMs = nodeStatus.lastHeartbeatAt ? Date.now() - Date.parse(nodeStatus.lastHeartbeatAt) : null;

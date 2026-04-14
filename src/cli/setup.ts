@@ -86,6 +86,10 @@ function parseAdapters(raw: string): AdapterSpec[] {
       parsed.push({ provider: "claude" });
       continue;
     }
+    if (normalized.startsWith("codex")) {
+      parsed.push({ provider: "codex" });
+      continue;
+    }
   }
 
   return parsed.length > 0 ? parsed : fallback;
@@ -97,6 +101,7 @@ function capabilitiesFromAdapters(adapters: AdapterSpec[]): string[] {
     if (adapter.provider === "ollama") capabilities.add("local");
     if (adapter.provider === "openai") capabilities.add("reasoning");
     if (adapter.provider === "claude") capabilities.add("analysis");
+    if (adapter.provider === "codex") capabilities.add("coding");
   }
   return [...capabilities];
 }
@@ -219,6 +224,11 @@ function buildEnvContent(input: {
     "",
     "ANTHROPIC_API_KEY=",
     "ANTHROPIC_MODEL=claude-3-7-sonnet-latest",
+    "",
+    "# Codex CLI adapter (uses local codex login)",
+    "CODEX_MODEL=gpt-5.4",
+    "CODEX_TIMEOUT_MS=120000",
+    "CODEX_CLI_PATH=codex",
     ""
   ].join("\n");
 }

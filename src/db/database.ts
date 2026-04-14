@@ -20,7 +20,7 @@ export interface NodeIdentity {
 
 export interface AdapterConfig {
   id: string;
-  type: string; // ClaudeAdapter, OpenAIAdapter, OllamaAdapter, GrokAdapter, GoogleAdapter
+  type: string; // ClaudeAdapter, OpenAIAdapter, OllamaAdapter, GrokAdapter, GoogleAdapter, CodexAdapter
   apiKey?: string;
   baseUrl?: string;
   createdAt: number;

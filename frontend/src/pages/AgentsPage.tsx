@@ -4,6 +4,9 @@ import type { ApiResponse, AdapterConfig, ModelConfig } from '../types';
 import { Plus, Trash2, Play, Pause, Star, X } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
+const DEFAULT_CODEX_MODELS = ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2'];
+const AGENT_MODES: Array<ModelConfig['agentMode']> = ['manual', 'recruitable', 'autonomous'];
+
 export const AgentsPage: React.FC = () => {
   const { refresh: refreshNode } = useNode();
   const [providers, setProviders] = useState<AdapterConfig[]>([]);
@@ -22,9 +25,11 @@ export const AgentsPage: React.FC = () => {
   const [modelName, setModelName] = useState('');
   const [modelId, setModelId] = useState('');
   const [modelAdapter, setModelAdapter] = useState('');
+  const [modelAgentMode, setModelAgentMode] = useState<ModelConfig['agentMode']>('manual');
 
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isTestingProvider, setIsTestingProvider] = useState(false);
+  const [updatingAgentMode, setUpdatingAgentMode] = useState<string | null>(null);
 
   // Confirm Modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -45,6 +50,7 @@ export const AgentsPage: React.FC = () => {
     if (type === 'OllamaAdapter') return 'Ollama';
     if (type === 'GrokAdapter') return 'Grok';
     if (type === 'GoogleAdapter') return 'Google Gemini';
+    if (type === 'CodexAdapter') return 'Codex CLI';
     return type.replace('Adapter', '');
   };
 
@@ -54,7 +60,14 @@ export const AgentsPage: React.FC = () => {
     if (type === 'OllamaAdapter') return '🦙';
     if (type === 'GrokAdapter') return '⚡';
     if (type === 'GoogleAdapter') return '🧠';
+    if (type === 'CodexAdapter') return '🛠️';
     return '🤖';
+  };
+
+  const agentModeLabel = (mode: ModelConfig['agentMode']): string => {
+    if (mode === 'manual') return 'Manual';
+    if (mode === 'autonomous') return 'Autonomous';
+    return 'Recruitable';
   };
 
   const fetchAgents = useCallback(async () => {
@@ -79,6 +92,11 @@ export const AgentsPage: React.FC = () => {
   }, [fetchAgents]);
 
   const loadAvailableModels = async (adapter: string) => {
+    const codexFallback = (): void => {
+      if (adapter === 'CodexAdapter') {
+        setAvailableModels(DEFAULT_CODEX_MODELS);
+      }
+    };
     if (!adapter) {
        setAvailableModels([]);
        return;
@@ -96,12 +114,21 @@ export const AgentsPage: React.FC = () => {
       });
       const testJson = await testRes.json();
       if (testJson.success && testJson.models) {
-        setAvailableModels(testJson.models);
+        const models = Array.isArray(testJson.models) && testJson.models.length > 0
+          ? testJson.models
+          : (adapter === 'CodexAdapter' ? DEFAULT_CODEX_MODELS : []);
+        setAvailableModels(models);
       } else {
-        alert(testJson.error || 'Failed to load models');
+        codexFallback();
+        if (adapter !== 'CodexAdapter') {
+          alert(testJson.error || 'Failed to load models');
+        }
       }
     } catch (err: any) {
-      alert('Error loading models: ' + err.message);
+      codexFallback();
+      if (adapter !== 'CodexAdapter') {
+        alert('Error loading models: ' + err.message);
+      }
     } finally {
       setIsTestingProvider(false);
     }
@@ -176,6 +203,29 @@ export const AgentsPage: React.FC = () => {
     }
   };
 
+  const updateAgentMode = async (name: string, agentMode: ModelConfig['agentMode']) => {
+    setUpdatingAgentMode(name);
+    try {
+      const res = await fetch(`/api/models/${encodeURIComponent(name)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentMode })
+      });
+      const json: ApiResponse<any> = await res.json();
+      if (json.success) {
+        await fetchAgents();
+        await refreshNode();
+      } else {
+        alert(json.error || 'Failed to update agent mode');
+      }
+    } catch (err) {
+      console.error('Update agent mode error:', err);
+      alert('Failed to update agent mode');
+    } finally {
+      setUpdatingAgentMode((current) => (current === name ? null : current));
+    }
+  };
+
   const saveProvider = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -206,14 +256,18 @@ export const AgentsPage: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     try {
+      const resolvedModelId = String(
+        modelId
+        || (modelAdapter === 'CodexAdapter' ? (availableModels[0] || 'gpt-5.3-codex') : '')
+      ).trim();
       const res = await fetch('/api/models', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           name: modelName, 
-          model: modelId, 
+          model: resolvedModelId, 
           type: modelAdapter,
-          agentMode: 'manual' 
+          agentMode: modelAgentMode
         })
       });
       const json: ApiResponse<any> = await res.json();
@@ -221,6 +275,7 @@ export const AgentsPage: React.FC = () => {
         setShowModelModal(false);
         setModelName('');
         setModelId('');
+        setModelAgentMode('manual');
         fetchAgents();
       } else {
         alert(json.error || 'Failed to add model');
@@ -287,6 +342,7 @@ export const AgentsPage: React.FC = () => {
               return;
             }
             setModelAdapter(providers[0].type);
+            setModelAgentMode('manual');
             loadAvailableModels(providers[0].type);
             setShowModelModal(true);
           }}
@@ -305,10 +361,23 @@ export const AgentsPage: React.FC = () => {
                   <h4 className="font-bold text-text mb-0">{m.model || m.name}</h4>
                   {m.active && <span className="text-[10px] bg-warn/20 text-warn border border-warn/30 px-2 py-0.5 rounded-full flex items-center gap-1"><Star className="w-2.5 h-2.5" /> Default</span>}
                 </div>
-                <p className="text-xs text-muted mb-2">{m.adapter} · {m.enabled ? '✓ Enabled' : '○ Disabled'}</p>
-                <div className="flex gap-2">
+                <p className="text-xs text-muted mb-2">{providerLabel(m.type || m.adapter || '')} · {m.enabled ? '✓ Enabled' : '○ Disabled'}</p>
+                <div className="flex gap-2 mb-2">
                   <span className="chip text-[10px] py-1">Mode: {m.agentMode}</span>
                   {m.runtimeOnly && <span className="chip text-[10px] py-1 bg-blue-500/10 border-blue-500/30 text-blue-400">Env Managed</span>}
+                </div>
+                <div className="space-y-1.5 max-w-[240px]">
+                  <label className="text-[10px] uppercase tracking-widest text-muted font-bold">Session Mode</label>
+                  <select
+                    className="w-full bg-void border border-line-soft rounded-xl px-3 py-2 text-xs outline-none focus:border-cyan/50 transition-colors appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    value={m.agentMode}
+                    disabled={Boolean(m.runtimeOnly) || updatingAgentMode === m.name}
+                    onChange={(e) => updateAgentMode(m.name, e.target.value as ModelConfig['agentMode'])}
+                  >
+                    {AGENT_MODES.map(mode => (
+                      <option key={mode} value={mode}>{agentModeLabel(mode)}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -369,6 +438,7 @@ export const AgentsPage: React.FC = () => {
                     <option value="OllamaAdapter">Ollama (Local)</option>
                     <option value="GrokAdapter">Grok (xAI)</option>
                     <option value="GoogleAdapter">Google (Gemini)</option>
+                    <option value="CodexAdapter">Codex CLI</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -376,11 +446,11 @@ export const AgentsPage: React.FC = () => {
                   <input 
                     type="password" 
                     className="form-control" 
-                    placeholder={providerType === 'OllamaAdapter' ? 'Not required for local' : 'Enter your API key...'}
+                    placeholder={providerType === 'OllamaAdapter' || providerType === 'CodexAdapter' ? 'Not required for local CLI' : 'Enter your API key...'}
                     value={apiKey}
                     onChange={e => setApiKey(e.target.value)}
                   />
-                  <p className="text-[10px] text-muted mt-2">Required for OpenAI, Claude, Grok, and Google. Optional for Ollama.</p>
+                  <p className="text-[10px] text-muted mt-2">Required for OpenAI, Claude, Grok, and Google. Optional for Ollama and Codex CLI.</p>
                 </div>
                 <div className="form-group">
                   <label>Base URL (Optional)</label>
@@ -479,6 +549,20 @@ export const AgentsPage: React.FC = () => {
                     )}
                   </select>
                   <p className="text-[10px] text-muted mt-2">The actual model name used by the provider.</p>
+                </div>
+                <div className="form-group">
+                  <label>Agent Mode</label>
+                  <select
+                    className="form-control"
+                    value={modelAgentMode}
+                    onChange={e => setModelAgentMode(e.target.value as ModelConfig['agentMode'])}
+                    required
+                  >
+                    <option value="manual">Manual (start by hand)</option>
+                    <option value="recruitable">Recruitable (auto-join invitations)</option>
+                    <option value="autonomous">Autonomous (continuous room loop)</option>
+                  </select>
+                  <p className="text-[10px] text-muted mt-2">Choose how this agent participates in room sessions.</p>
                 </div>
               </div>
               <div className="modal-footer">

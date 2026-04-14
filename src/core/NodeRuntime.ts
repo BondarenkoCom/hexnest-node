@@ -357,6 +357,8 @@ export class NodeRuntime {
       throw new Error("joinedAgentId is required to start a room session");
     }
 
+    const normalizedRole = String(role || "").trim();
+    const runtimeRole = normalizedRole || "participant";
     const autonomous = modelConfig?.agentMode === "autonomous";
 
     const alreadyRunning = this.activeRoomRuns.has(roomId);
@@ -364,7 +366,7 @@ export class NodeRuntime {
     const seededState = this.database?.upsertRoomSession({
       roomId,
       agentName,
-      role,
+      role: normalizedRole,
       joinedAgentId,
       lastSeenMessageId: this.database?.getRoomSession(roomId, agentName)?.lastSeenMessageId,
       lastRespondedMessageId: this.database?.getRoomSession(roomId, agentName)?.lastRespondedMessageId,
@@ -373,7 +375,7 @@ export class NodeRuntime {
       status: "joined"
     }) || null;
 
-    const run = this.startRoomRun(roomId, () => this.runRoomSession(roomId, role, taskHint, adapter, seededState, autonomous));
+    const run = this.startRoomRun(roomId, () => this.runRoomSession(roomId, runtimeRole, taskHint, adapter, seededState, autonomous));
     return {
       started: Boolean(run),
       alreadyRunning

@@ -91,6 +91,7 @@ export interface ModelInfo {
   id: string;
   name: string;
   type: string;
+  adapter?: string;
   model: string;
   baseUrl?: string;
   roles?: string[];

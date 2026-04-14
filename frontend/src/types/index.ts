@@ -62,7 +62,8 @@ export interface AdapterConfig {
 
 export interface ModelConfig {
   name: string;
-  adapter: string;
+  type: string;
+  adapter?: string;
   enabled: boolean;
   active: boolean;
   agentMode: 'manual' | 'recruitable' | 'autonomous';

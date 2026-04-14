@@ -35,7 +35,10 @@ describe("config", () => {
         "  - type: openai",
         "    name: yaml-openai",
         "    model: gpt-5-mini",
-        "    apiKeyEnv: OPENAI_API_KEY"
+        "    apiKeyEnv: OPENAI_API_KEY",
+        "  - type: codex",
+        "    name: yaml-codex",
+        "    model: gpt-5.4"
       ].join("\n"),
       "utf8"
     );
@@ -50,5 +53,6 @@ describe("config", () => {
     expect(config.heartbeatIntervalMs).toBe(12345);
     expect(config.autoAcceptInvites).toBe(false);
     expect(adapters.some((item) => item.name === "yaml-openai")).toBe(true);
+    expect(adapters.some((item) => item.name === "yaml-codex")).toBe(true);
   });
 });
