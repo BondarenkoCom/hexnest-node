@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNode } from '../context/NodeContext';
 import type { ApiResponse, AdapterConfig, ModelConfig } from '../types';
-import { Plus, Trash2, Play, Pause, Star, X } from 'lucide-react';
+import { Plus, Trash2, Play, Pause, Star, X, Info } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 const DEFAULT_CODEX_MODELS = ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2'];
 const AGENT_MODES: Array<ModelConfig['agentMode']> = ['manual', 'recruitable', 'autonomous'];
+const RESPONSE_MODES: Array<ModelConfig['responseMode']> = ['standard', 'slow_model'];
 
 export const AgentsPage: React.FC = () => {
   const { refresh: refreshNode } = useNode();
@@ -26,6 +27,7 @@ export const AgentsPage: React.FC = () => {
   const [modelId, setModelId] = useState('');
   const [modelAdapter, setModelAdapter] = useState('');
   const [modelAgentMode, setModelAgentMode] = useState<ModelConfig['agentMode']>('manual');
+  const [modelResponseMode, setModelResponseMode] = useState<ModelConfig['responseMode']>('standard');
 
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isTestingProvider, setIsTestingProvider] = useState(false);
@@ -45,6 +47,8 @@ export const AgentsPage: React.FC = () => {
   });
 
   const providerLabel = (type: string): string => {
+    const normalized = String(type || '').toLowerCase();
+    if (normalized === 'ollama' || normalized === 'ollamaadapter') return 'Ollama';
     if (type === 'ClaudeAdapter') return 'Claude';
     if (type === 'OpenAIAdapter') return 'OpenAI';
     if (type === 'OllamaAdapter') return 'Ollama';
@@ -55,6 +59,8 @@ export const AgentsPage: React.FC = () => {
   };
 
   const providerIcon = (type: string): string => {
+    const normalized = String(type || '').toLowerCase();
+    if (normalized === 'ollama' || normalized === 'ollamaadapter') return '🦙';
     if (type === 'ClaudeAdapter') return '🔮';
     if (type === 'OpenAIAdapter') return '🚀';
     if (type === 'OllamaAdapter') return '🦙';
@@ -68,6 +74,17 @@ export const AgentsPage: React.FC = () => {
     if (mode === 'manual') return 'Manual';
     if (mode === 'autonomous') return 'Autonomous';
     return 'Recruitable';
+  };
+
+  const responseModeLabel = (mode: ModelConfig['responseMode']): string => {
+    if (mode === 'slow_model') return 'Slow Model Safe';
+    return 'Standard';
+  };
+
+  const isOllamaModel = (m: ModelConfig): boolean => {
+    const primary = String(m.type || '').toLowerCase();
+    const secondary = String(m.adapter || '').toLowerCase();
+    return primary === 'ollama' || primary === 'ollamaadapter' || secondary === 'ollama' || secondary === 'ollamaadapter';
   };
 
   const fetchAgents = useCallback(async () => {
@@ -226,6 +243,29 @@ export const AgentsPage: React.FC = () => {
     }
   };
 
+  const updateResponseMode = async (name: string, responseMode: ModelConfig['responseMode']) => {
+    setUpdatingAgentMode(name);
+    try {
+      const res = await fetch(`/api/models/${encodeURIComponent(name)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ responseMode })
+      });
+      const json: ApiResponse<any> = await res.json();
+      if (json.success) {
+        await fetchAgents();
+        await refreshNode();
+      } else {
+        alert(json.error || 'Failed to update response mode');
+      }
+    } catch (err) {
+      console.error('Update response mode error:', err);
+      alert('Failed to update response mode');
+    } finally {
+      setUpdatingAgentMode((current) => (current === name ? null : current));
+    }
+  };
+
   const saveProvider = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -267,7 +307,8 @@ export const AgentsPage: React.FC = () => {
           name: modelName, 
           model: resolvedModelId, 
           type: modelAdapter,
-          agentMode: modelAgentMode
+          agentMode: modelAgentMode,
+          responseMode: modelResponseMode
         })
       });
       const json: ApiResponse<any> = await res.json();
@@ -276,6 +317,7 @@ export const AgentsPage: React.FC = () => {
         setModelName('');
         setModelId('');
         setModelAgentMode('manual');
+        setModelResponseMode('standard');
         fetchAgents();
       } else {
         alert(json.error || 'Failed to add model');
@@ -343,6 +385,7 @@ export const AgentsPage: React.FC = () => {
             }
             setModelAdapter(providers[0].type);
             setModelAgentMode('manual');
+            setModelResponseMode('standard');
             loadAvailableModels(providers[0].type);
             setShowModelModal(true);
           }}
@@ -364,10 +407,22 @@ export const AgentsPage: React.FC = () => {
                 <p className="text-xs text-muted mb-2">{providerLabel(m.type || m.adapter || '')} · {m.enabled ? '✓ Enabled' : '○ Disabled'}</p>
                 <div className="flex gap-2 mb-2">
                   <span className="chip text-[10px] py-1">Mode: {m.agentMode}</span>
+                  {isOllamaModel(m) && (
+                    <span className="chip text-[10px] py-1">Perf: {responseModeLabel(m.responseMode || 'standard')}</span>
+                  )}
                   {m.runtimeOnly && <span className="chip text-[10px] py-1 bg-blue-500/10 border-blue-500/30 text-blue-400">Env Managed</span>}
                 </div>
                 <div className="space-y-1.5 max-w-[240px]">
-                  <label className="text-[10px] uppercase tracking-widest text-muted font-bold">Session Mode</label>
+                  <label className="text-[10px] uppercase tracking-widest text-muted font-bold flex items-center gap-1">
+                    Session Mode
+                    <span
+                      className="inline-flex items-center text-muted/80"
+                      title="manual: agent does not auto-join; recruitable: agent can be invited by rooms; autonomous: agent keeps polling and responding in room loop"
+                      aria-label="Session mode help"
+                    >
+                      <Info className="w-3 h-3" />
+                    </span>
+                  </label>
                   <select
                     className="w-full bg-void border border-line-soft rounded-xl px-3 py-2 text-xs outline-none focus:border-cyan/50 transition-colors appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                     value={m.agentMode}
@@ -378,6 +433,21 @@ export const AgentsPage: React.FC = () => {
                       <option key={mode} value={mode}>{agentModeLabel(mode)}</option>
                     ))}
                   </select>
+                  {isOllamaModel(m) && (
+                    <>
+                      <label className="text-[10px] uppercase tracking-widest text-muted font-bold mt-3 block">Performance Mode</label>
+                      <select
+                        className="w-full bg-void border border-line-soft rounded-xl px-3 py-2 text-xs outline-none focus:border-cyan/50 transition-colors appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        value={m.responseMode || 'standard'}
+                        disabled={Boolean(m.runtimeOnly) || updatingAgentMode === m.name}
+                        onChange={(e) => updateResponseMode(m.name, e.target.value as ModelConfig['responseMode'])}
+                      >
+                        {RESPONSE_MODES.map(mode => (
+                          <option key={mode} value={mode}>{responseModeLabel(mode)}</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -551,7 +621,16 @@ export const AgentsPage: React.FC = () => {
                   <p className="text-[10px] text-muted mt-2">The actual model name used by the provider.</p>
                 </div>
                 <div className="form-group">
-                  <label>Agent Mode</label>
+                  <label className="flex items-center gap-1">
+                    Agent Mode
+                    <span
+                      className="inline-flex items-center text-muted/80"
+                      title="manual: agent does not auto-join; recruitable: agent can be invited by rooms; autonomous: agent keeps polling and responding in room loop"
+                      aria-label="Agent mode help"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                    </span>
+                  </label>
                   <select
                     className="form-control"
                     value={modelAgentMode}
@@ -564,6 +643,21 @@ export const AgentsPage: React.FC = () => {
                   </select>
                   <p className="text-[10px] text-muted mt-2">Choose how this agent participates in room sessions.</p>
                 </div>
+                {modelAdapter === 'OllamaAdapter' && (
+                  <div className="form-group">
+                    <label>Performance Mode</label>
+                    <select
+                      className="form-control"
+                      value={modelResponseMode}
+                      onChange={e => setModelResponseMode(e.target.value as ModelConfig['responseMode'])}
+                      required
+                    >
+                      <option value="standard">Standard (balanced)</option>
+                      <option value="slow_model">Slow Model Safe (longer timeout, compact context)</option>
+                    </select>
+                    <p className="text-[10px] text-muted mt-2">Use Slow Model Safe for large local models that timeout in room sessions.</p>
+                  </div>
+                )}
               </div>
               <div className="modal-footer">
                 <button 

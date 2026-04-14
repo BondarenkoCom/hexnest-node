@@ -1,11 +1,16 @@
 import {
   AgentAdapter,
   AgentResponse,
-  estimateTokensFromText,
-  estimateUsdFromModel,
   inferConfidence
 } from "./AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../protocol/types.js";
+import { estimateCostWithUsageFallback } from "./costing.js";
+import {
+  buildDiscussionSystemPrompt,
+  buildDiscussionUserPrompt,
+  formatActionableEvents,
+  formatTimeline
+} from "./prompting.js";
 
 interface OllamaChatResponse {
   message?: {
@@ -17,6 +22,8 @@ interface CachedResponse {
   value: AgentResponse;
   expiry: number;
 }
+
+type OllamaResponseMode = "standard" | "slow_model";
 
 export class OllamaAdapter implements AgentAdapter {
   public readonly name: string;
@@ -33,14 +40,16 @@ export class OllamaAdapter implements AgentAdapter {
       supportedRoles?: string[];
       timeoutMs?: number;
       maxOutputTokens?: number;
+      responseMode?: OllamaResponseMode;
     } = {}
   ) {
     this.name = options.name || "ollama-local";
     this.model = options.model || "qwen2.5:14b";
     this.modelId = this.model;
     this.baseUrl = options.baseUrl || "http://127.0.0.1:11434";
-    this.timeoutMs = Math.max(1_000, Number(options.timeoutMs ?? process.env.OLLAMA_TIMEOUT_MS ?? 45_000));
+    this.timeoutMs = Math.max(90_000, Number(options.timeoutMs ?? 90_000));
     this.maxOutputTokens = Math.max(64, Number(options.maxOutputTokens ?? process.env.OLLAMA_NUM_PREDICT ?? 900));
+    this.responseMode = options.responseMode === "slow_model" ? "slow_model" : "standard";
     this.capabilities = options.capabilities || ["general", "code", "research"];
     this.supportedRoles = options.supportedRoles || ["researcher", "skeptic", "builder", "bull", "bear"];
     this.responseCache = new Map();
@@ -53,6 +62,7 @@ export class OllamaAdapter implements AgentAdapter {
   public readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly maxOutputTokens: number;
+  private readonly responseMode: OllamaResponseMode;
   private readonly responseCache: Map<string, CachedResponse>;
   private readonly cacheExpiry: number;
 
@@ -107,70 +117,58 @@ export class OllamaAdapter implements AgentAdapter {
       return cachedResponse;
     }
 
-    const system = [
-      `You are ${this.name}, role=${context.role}.`,
-      `Task: ${context.task}`,
-      `Phase: ${context.phase}`,
-      `Rules: ${context.rules}`,
-      "Respond with direct, evidence-focused, concise output.",
-      "Follow DECIDE -> ACT -> REPORT. If there is no actionable trigger, return a short NO_ACTION reason."
-    ].join("\n");
-    const latest = context.timeline
-      .slice(-8)
-      .map((event) => {
-        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
-        const trigger = event.triggeredBy ? ` trig=${event.triggeredBy}` : "";
-        return `${event.from} -> ${event.to} [${meta || "chat"}]${trigger}: ${event.text}`;
-      })
-      .join("\n");
-    const actionable = (context.actionableEvents || [])
-      .map((event) => {
-        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
-        return `- ${event.from} -> ${event.to} [${meta || "chat"}]${event.triggeredBy ? ` trig=${event.triggeredBy}` : ""}: ${event.text}`;
-      })
-      .join("\n");
-    const prompt = [
-      `Task: ${context.task}`,
-      `Phase: ${context.phase}`,
-      `ContextVersion: ${context.contextVersion || "v1"}`,
-      `Summary: ${context.contextSummary || "n/a"}`,
-      "Actionable events:",
-      actionable || "(none)",
-      "Recent timeline:",
-      latest || "(empty)"
-    ].join("\n\n");
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const system = buildDiscussionSystemPrompt({
+      agentName: this.name,
+      role: context.role,
+      rules: context.rules,
+      styleLine: "Respond with direct, evidence-focused, concise output.",
+      includeTaskLine: `Task: ${context.task}`,
+      includePhaseLine: `Phase: ${context.phase}`
+    });
+    const isSlowModelMode = this.responseMode === "slow_model";
+    const latest = formatTimeline(context.timeline, isSlowModelMode ? 5 : 8);
+    const actionable = formatActionableEvents(
+      isSlowModelMode ? (context.actionableEvents || []).slice(-4) : context.actionableEvents
+    );
+    const prompt = buildDiscussionUserPrompt({
+      task: context.task,
+      phase: context.phase,
+      contextVersion: context.contextVersion,
+      contextSummary: context.contextSummary,
+      actionableText: actionable,
+      timelineText: latest,
+      timelineLabel: "Recent timeline"
+    });
 
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: this.model,
-          stream: false,
-          options: {
-            num_predict: this.maxOutputTokens
-          },
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: prompt }
-          ]
-        })
-      });
+      const initialPredict = isSlowModelMode
+        ? Math.max(128, Math.min(this.maxOutputTokens, 420))
+        : this.maxOutputTokens;
+      const initialTimeoutMs = isSlowModelMode ? Math.max(this.timeoutMs, 120_000) : this.timeoutMs;
+      response = await this.requestOllamaChat(system, prompt, initialPredict, initialTimeoutMs);
     } catch (error: any) {
-      if (error.name === "AbortError") {
-        throw new Error(`Ollama request timed out after ${this.timeoutMs}ms`);
+      if (this.isTimeoutError(error)) {
+        const compactTimeline = formatTimeline(context.timeline, 4);
+        const compactActionable = formatActionableEvents((context.actionableEvents || []).slice(-3));
+        const compactPrompt = buildDiscussionUserPrompt({
+          task: context.task,
+          phase: context.phase,
+          contextVersion: context.contextVersion,
+          contextSummary: context.contextSummary,
+          actionableText: compactActionable,
+          timelineText: compactTimeline,
+          timelineLabel: "Compact timeline"
+        });
+        const reducedPredict = Math.max(128, Math.min(this.maxOutputTokens, 420));
+        const retryTimeoutMs = Math.max(this.timeoutMs, isSlowModelMode ? 180_000 : 120_000);
+        console.warn(
+          `[${this.name}] primary request timed out (${this.timeoutMs}ms), retrying with compact context and num_predict=${reducedPredict}`
+        );
+        response = await this.requestOllamaChat(system, compactPrompt, reducedPredict, retryTimeoutMs);
+      } else {
+        throw error;
       }
-      if (error.code === "ECONNREFUSED" || error.message.includes("fetch failed")) {
-        throw new Error(`Ollama is NOT responding at ${this.baseUrl}. Please ensure Ollama is running and accessible.`);
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeout);
     }
 
     if (!response.ok) {
@@ -196,17 +194,49 @@ export class OllamaAdapter implements AgentAdapter {
   }
 
   async estimateCost(context: RoomContext, responseText = ""): Promise<CostEstimate> {
-    const inputText = [
-      context.task,
-      context.rules,
-      context.timeline.map((item) => item.text).join("\n")
-    ].join("\n");
-    const inputTokens = estimateTokensFromText(inputText);
-    const outputTokens = estimateTokensFromText(responseText);
-    return {
-      inputTokens,
-      outputTokens,
-      estimatedCostUsd: estimateUsdFromModel(this.modelId, inputTokens, outputTokens)
-    };
+    return estimateCostWithUsageFallback(this.modelId, context, responseText);
+  }
+
+  private isTimeoutError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error || "");
+    return /timed out/i.test(message);
+  }
+
+  private async requestOllamaChat(
+    system: string,
+    prompt: string,
+    numPredict: number,
+    timeoutMs: number
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(`${this.baseUrl}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: this.model,
+          stream: false,
+          options: {
+            num_predict: numPredict
+          },
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: prompt }
+          ]
+        })
+      });
+    } catch (error: any) {
+      if (error?.name === "AbortError") {
+        throw new Error(`Ollama request timed out after ${timeoutMs}ms`);
+      }
+      if (error?.code === "ECONNREFUSED" || String(error?.message || "").includes("fetch failed")) {
+        throw new Error(`Ollama is NOT responding at ${this.baseUrl}. Please ensure Ollama is running and accessible.`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 }

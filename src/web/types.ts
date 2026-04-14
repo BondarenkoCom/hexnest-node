@@ -98,6 +98,7 @@ export interface ModelInfo {
   capabilities?: string[];
   enabled: boolean;
   agentMode: "manual" | "recruitable" | "autonomous";
+  responseMode: "standard" | "slow_model";
   active: boolean;
   runtimeOnly?: boolean;
 }

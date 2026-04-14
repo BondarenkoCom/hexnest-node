@@ -85,6 +85,7 @@ Examples:
           model,
           enabled: true,
           agentMode: "recruitable",
+          responseMode: "standard",
           active: true
         });
 

@@ -7,6 +7,7 @@ import { resolveRuntimePath } from "../runtime-paths.js";
 type SqlRow = unknown[];
 
 export type AgentMode = "manual" | "recruitable" | "autonomous";
+export type ResponseMode = "standard" | "slow_model";
 
 export type RoomSessionStatus = "starting" | "joined" | "idle" | "responding" | "stopped" | "error";
 export type RoomCycleOutcome = "acted" | "no_action";
@@ -39,6 +40,7 @@ export interface ModelConfig {
   capabilities?: string[];
   enabled: boolean;
   agentMode: AgentMode;
+  responseMode: ResponseMode;
   active: boolean; // NEW: only one model can be active per adapter
   createdAt: number;
   updatedAt: number;
@@ -136,6 +138,7 @@ export class DatabaseService {
             capabilities TEXT,
             enabled BOOLEAN DEFAULT 1,
             agent_mode TEXT DEFAULT 'recruitable',
+            response_mode TEXT DEFAULT 'standard',
             active BOOLEAN DEFAULT 0,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
@@ -147,6 +150,9 @@ export class DatabaseService {
           .map((result) => result.values.map((row) => String(row[1])))[0] || [];
         if (!modelColumns.includes("agent_mode")) {
           this.db.run("ALTER TABLE model_configs ADD COLUMN agent_mode TEXT DEFAULT 'recruitable'");
+        }
+        if (!modelColumns.includes("response_mode")) {
+          this.db.run("ALTER TABLE model_configs ADD COLUMN response_mode TEXT DEFAULT 'standard'");
         }
       }
 
@@ -212,6 +218,14 @@ export class DatabaseService {
       return normalized;
     }
     return "recruitable";
+  }
+
+  private normalizeResponseMode(value: unknown): ResponseMode {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    if (normalized === "slow_model") {
+      return "slow_model";
+    }
+    return "standard";
   }
 
   private normalizeRoomSessionStatus(value: unknown): RoomSessionStatus {
@@ -306,7 +320,7 @@ export class DatabaseService {
       const results = this.db.exec(`
         SELECT 
           id, type, name, model, base_url, api_key, 
-          api_key_env, roles, capabilities, enabled, agent_mode, active,
+          api_key_env, roles, capabilities, enabled, agent_mode, response_mode, active,
           created_at, updated_at
         FROM model_configs
         ORDER BY created_at ASC
@@ -321,7 +335,7 @@ export class DatabaseService {
       console.log('[MODELS] Found', rows.length, 'model configs');
       
       return rows.map((row: SqlRow) => {
-        const [id, type, name, model, baseUrl, apiKey, apiKeyEnv, roles, capabilities, enabled, agentMode, active, createdAt, updatedAt] = row;
+        const [id, type, name, model, baseUrl, apiKey, apiKeyEnv, roles, capabilities, enabled, agentMode, responseMode, active, createdAt, updatedAt] = row;
         return {
           id: String(id),
           type: String(type),
@@ -334,6 +348,7 @@ export class DatabaseService {
           capabilities: capabilities ? JSON.parse(String(capabilities)) : undefined,
           enabled: Boolean(enabled),
           agentMode: this.normalizeAgentMode(agentMode),
+          responseMode: this.normalizeResponseMode(responseMode),
           active: Boolean(active),
           createdAt: Number(createdAt),
           updatedAt: Number(updatedAt)
@@ -352,7 +367,7 @@ export class DatabaseService {
         `
         SELECT 
           id, type, name, model, base_url, api_key,
-          api_key_env, roles, capabilities, enabled, agent_mode, active,
+          api_key_env, roles, capabilities, enabled, agent_mode, response_mode, active,
           created_at, updated_at
         FROM model_configs
         WHERE name = ?
@@ -362,7 +377,7 @@ export class DatabaseService {
 
       if (results.length === 0 || results[0].values.length === 0) return null;
 
-      const [id, type, modelName, model, baseUrl, apiKey, apiKeyEnv, roles, capabilities, enabled, agentMode, active, createdAt, updatedAt] =
+      const [id, type, modelName, model, baseUrl, apiKey, apiKeyEnv, roles, capabilities, enabled, agentMode, responseMode, active, createdAt, updatedAt] =
         results[0].values[0];
       return {
         id: String(id),
@@ -376,6 +391,7 @@ export class DatabaseService {
         capabilities: capabilities ? JSON.parse(String(capabilities)) : undefined,
         enabled: Boolean(enabled),
         agentMode: this.normalizeAgentMode(agentMode),
+        responseMode: this.normalizeResponseMode(responseMode),
         active: Boolean(active),
         createdAt: Number(createdAt),
         updatedAt: Number(updatedAt)
@@ -392,8 +408,8 @@ export class DatabaseService {
     this.db.run(
       `
         INSERT INTO model_configs 
-        (id, type, name, model, base_url, api_key, api_key_env, roles, capabilities, enabled, agent_mode, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, type, name, model, base_url, api_key, api_key_env, roles, capabilities, enabled, agent_mode, response_mode, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         id,
@@ -407,6 +423,7 @@ export class DatabaseService {
         config.capabilities ? JSON.stringify(config.capabilities) : null,
         config.enabled ? 1 : 0,
         this.normalizeAgentMode(config.agentMode),
+        this.normalizeResponseMode(config.responseMode),
         now,
         now
       ]
@@ -427,7 +444,7 @@ export class DatabaseService {
       `
         UPDATE model_configs
         SET type = ?, model = ?, base_url = ?, api_key = ?, api_key_env = ?, 
-          roles = ?, capabilities = ?, enabled = ?, agent_mode = ?, updated_at = ?
+          roles = ?, capabilities = ?, enabled = ?, agent_mode = ?, response_mode = ?, updated_at = ?
         WHERE name = ?
       `,
       [
@@ -440,6 +457,7 @@ export class DatabaseService {
         merged.capabilities ? JSON.stringify(merged.capabilities) : null,
         merged.enabled ? 1 : 0,
         this.normalizeAgentMode(merged.agentMode),
+        this.normalizeResponseMode(merged.responseMode),
         now,
         name
       ]
@@ -763,12 +781,12 @@ export class DatabaseService {
     if (!this.db) return null;
     try {
       const results = this.db.exec(
-        `SELECT id, type, name, model, base_url, api_key, api_key_env, roles, capabilities, enabled, agent_mode, active, created_at, updated_at 
+        `SELECT id, type, name, model, base_url, api_key, api_key_env, roles, capabilities, enabled, agent_mode, response_mode, active, created_at, updated_at 
          FROM model_configs WHERE type = ? AND active = 1 LIMIT 1`,
         [type]
       );
       if (results.length === 0 || results[0].values.length === 0) return null;
-      const [id, modelType, name, model, baseUrl, apiKey, apiKeyEnv, roles, capabilities, enabled, agentMode, active, createdAt, updatedAt] = results[0].values[0];
+      const [id, modelType, name, model, baseUrl, apiKey, apiKeyEnv, roles, capabilities, enabled, agentMode, responseMode, active, createdAt, updatedAt] = results[0].values[0];
       return {
         id: String(id),
         type: String(modelType),
@@ -781,6 +799,7 @@ export class DatabaseService {
         capabilities: capabilities ? JSON.parse(String(capabilities)) : undefined,
         enabled: Boolean(enabled),
         agentMode: this.normalizeAgentMode(agentMode),
+        responseMode: this.normalizeResponseMode(responseMode),
         active: Boolean(active),
         createdAt: Number(createdAt),
         updatedAt: Number(updatedAt)

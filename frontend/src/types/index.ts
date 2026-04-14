@@ -67,6 +67,7 @@ export interface ModelConfig {
   enabled: boolean;
   active: boolean;
   agentMode: 'manual' | 'recruitable' | 'autonomous';
+  responseMode: 'standard' | 'slow_model';
   model?: string;
   runtimeOnly?: boolean;
 }

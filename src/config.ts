@@ -217,10 +217,13 @@ function adapterFromSource(source: AdapterConfigSource, env: Record<string, stri
     : stringArray(source.roles);
 
   if (type === "ollama") {
+    const timeoutMs = config.responseMode === "slow_model" ? 120_000 : 90_000;
     return new OllamaAdapter({
       name,
       model: model || "qwen2.5:14b",
       baseUrl: baseUrl || "http://127.0.0.1:11434",
+      timeoutMs,
+      responseMode: config.responseMode,
       capabilities: capabilities.length ? capabilities : undefined,
       supportedRoles: supportedRoles.length ? supportedRoles : undefined
     });
@@ -532,6 +535,7 @@ export function buildAdapters(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = 
           capabilities: source.capabilities,
           enabled: true,
           agentMode: "recruitable",
+          responseMode: "standard",
           active: true
         });
       }

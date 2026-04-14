@@ -80,7 +80,17 @@ export class RoomAgentSession {
         return;
       }
 
-      await this.runInitialTurn();
+      try {
+        await this.runInitialTurn();
+      } catch (error) {
+        if (!this.isRecoverableAdapterError(error)) {
+          throw error;
+        }
+        this.options.logger?.warn(
+          `[session] recoverable adapter error during initial turn room=${this.options.roomId} agent=${this.options.adapter.name}; continuing without fatal stop`
+        );
+        await this.recordNoAction("adapter_recoverable_initial", `initial|${this.options.roomId}`);
+      }
 
       if (!this.options.autonomous) {
         await this.emitState("stopped");
@@ -171,7 +181,20 @@ export class RoomAgentSession {
       if (nextDecision) {
         await this.emitState("responding");
         this.options.logger?.info(`[session] Agent ${this.options.adapter.name} is generating response for room ${this.options.roomId}...`);
-        const response = await this.options.adapter.respond(context);
+        let response: AgentResponse;
+        try {
+          response = await this.options.adapter.respond(context);
+        } catch (error) {
+          if (!this.isRecoverableAdapterError(error)) {
+            throw error;
+          }
+          this.options.logger?.warn(
+            `[session] recoverable adapter error room=${this.options.roomId} agent=${this.options.adapter.name}; marking no-action and retrying next cycle`
+          );
+          await this.recordNoAction("adapter_recoverable", roomFingerprint);
+          await this.sleep(pollIntervalMs);
+          continue;
+        }
         this.options.logger?.info(`[session] Agent ${this.options.adapter.name} response generated, posting to room...`);
         await this.postTurn(context, response, nextDecision.triggeredBy, nextDecision.reason);
         this.lastCycleOutcome = "acted";
@@ -265,10 +288,56 @@ export class RoomAgentSession {
   }
 
   private decorateResponseText(response: AgentResponse): string {
+    const normalizedText = this.normalizeConversationalText(response.text);
     if (!response.pythonCode) {
-      return response.text;
+      return normalizedText;
     }
-    return `${response.text}\n\nPython snippet:\n\`\`\`python\n${response.pythonCode}\n\`\`\``;
+    return `${normalizedText}\n\nPython snippet:\n${response.pythonCode}`;
+  }
+
+  private normalizeConversationalText(text: string): string {
+    const raw = String(text || "").trim();
+    if (!raw) {
+      return "";
+    }
+
+    const lines = raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        let next = line;
+
+        // Drop markdown headings and list markers.
+        next = next.replace(/^#{1,6}\s+/, "");
+        next = next.replace(/^[-*+]\s+/, "");
+        next = next.replace(/^\d+[.)]\s+/, "");
+
+        // Remove common report section labels.
+        next = next.replace(/^(claim|evidence|counterpoint|conclusion|summary|core debate|follow-up question)\s*:\s*/i, "");
+
+        // Remove markdown emphasis markers.
+        next = next.replace(/\*\*(.*?)\*\*/g, "$1");
+        next = next.replace(/__(.*?)__/g, "$1");
+        next = next.replace(/`([^`]+)`/g, "$1");
+
+        return next.trim();
+      })
+      .filter(Boolean);
+
+    // Keep reply compact and conversational.
+    let compact = lines.join(" ").replace(/\s{2,}/g, " ").trim();
+
+    // Remove dangling punctuation that often appears after truncated generations.
+    compact = compact.replace(/\s*[-–—]\s*$/, "");
+    compact = compact.replace(/\s*[:;,]\s*$/, "");
+    compact = compact.replace(/\(\s*$/, "").trim();
+
+    if (compact && !/[.!?…]$/.test(compact) && compact.split(/\s+/).length > 6) {
+      compact = `${compact}.`;
+    }
+
+    return compact;
   }
 
   private async refreshCursor(): Promise<void> {
@@ -329,5 +398,10 @@ export class RoomAgentSession {
       };
       tick();
     });
+  }
+
+  private isRecoverableAdapterError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error || "");
+    return /timed out|empty response/i.test(message);
   }
 }

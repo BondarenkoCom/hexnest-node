@@ -55,6 +55,7 @@ function toModelInfo(model: {
   capabilities?: string[];
   enabled: boolean;
   agentMode: "manual" | "recruitable" | "autonomous";
+  responseMode: "standard" | "slow_model";
   active: boolean;
   runtimeOnly?: boolean;
 }): ModelInfo {
@@ -69,6 +70,7 @@ function toModelInfo(model: {
     capabilities: model.capabilities,
     enabled: model.enabled,
     agentMode: model.agentMode,
+    responseMode: model.responseMode,
     active: model.active,
     runtimeOnly: model.runtimeOnly
   };
@@ -97,6 +99,7 @@ function getRuntimeOnlyModels(context: WebServerContext): ModelInfo[] {
     baseUrl: String(env.OLLAMA_BASE_URL || "").trim() || "http://localhost:11434",
     enabled: true,
     agentMode: "manual",
+    responseMode: "standard",
     active: !hasPersistedActive,
     runtimeOnly: true
   });
@@ -110,6 +113,7 @@ function getRuntimeOnlyModels(context: WebServerContext): ModelInfo[] {
       baseUrl: String(env.OPENAI_BASE_URL || "").trim() || "https://api.openai.com/v1",
       enabled: true,
       agentMode: "manual",
+      responseMode: "standard",
       active: !hasPersistedActive && runtimeOnly.length === 0,
       runtimeOnly: true
     });
@@ -124,6 +128,7 @@ function getRuntimeOnlyModels(context: WebServerContext): ModelInfo[] {
       baseUrl: String(env.ANTHROPIC_BASE_URL || "").trim() || "https://api.anthropic.com/v1",
       enabled: true,
       agentMode: "manual",
+      responseMode: "standard",
       active: !hasPersistedActive && runtimeOnly.length === 0,
       runtimeOnly: true
     });
@@ -138,6 +143,7 @@ function getRuntimeOnlyModels(context: WebServerContext): ModelInfo[] {
       baseUrl: String(env.GOOGLE_BASE_URL || "").trim() || "https://generativelanguage.googleapis.com/v1beta",
       enabled: true,
       agentMode: "manual",
+      responseMode: "standard",
       active: !hasPersistedActive && runtimeOnly.length === 0,
       runtimeOnly: true
     });
@@ -151,6 +157,7 @@ function getRuntimeOnlyModels(context: WebServerContext): ModelInfo[] {
       model: String(env.CODEX_MODEL || "").trim(),
       enabled: true,
       agentMode: "manual",
+      responseMode: "standard",
       active: !hasPersistedActive && runtimeOnly.length === 0,
       runtimeOnly: true
     });
@@ -620,7 +627,7 @@ export function modelsRouter(context: WebServerContext) {
   router.post("/", (req: Request, res: Response) => {
     try {
       // Support both new format { name, adapter, config } and old format { type, name, model, ... }
-      const { type, adapter, name, model, config, baseUrl, apiKey, apiKeyEnv, roles, capabilities, agentMode } = req.body;
+      const { type, adapter, name, model, config, baseUrl, apiKey, apiKeyEnv, roles, capabilities, agentMode, responseMode } = req.body;
       const env = loadEnvMap();
       
       // Extract values from new format if provided
@@ -660,6 +667,7 @@ export function modelsRouter(context: WebServerContext) {
         capabilities,
         enabled: true,
         agentMode: agentMode === "manual" || agentMode === "autonomous" ? agentMode : "recruitable",
+        responseMode: responseMode === "slow_model" ? "slow_model" : "standard",
         active: false // Will be set to true if it's the first one
       });
 
@@ -683,6 +691,7 @@ export function modelsRouter(context: WebServerContext) {
           capabilities: newModel.capabilities,
           enabled: newModel.enabled,
           agentMode: newModel.agentMode,
+          responseMode: newModel.responseMode,
           active: newModel.active || allModels.length === 1
         }
       };
@@ -730,6 +739,7 @@ export function modelsRouter(context: WebServerContext) {
           capabilities: updated.capabilities,
           enabled: updated.enabled,
           agentMode: updated.agentMode,
+          responseMode: updated.responseMode,
           active: updated.active
         }
       };

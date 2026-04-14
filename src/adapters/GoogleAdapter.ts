@@ -1,11 +1,16 @@
 import {
   AgentAdapter,
   AgentResponse,
-  estimateTokensFromText,
-  estimateUsdFromModel,
   inferConfidence
 } from "./AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../protocol/types.js";
+import { estimateCostWithUsageFallback, extractUsageSnapshot, UsageSnapshot } from "./costing.js";
+import {
+  buildDiscussionSystemPrompt,
+  buildDiscussionUserPrompt,
+  formatActionableEvents,
+  formatTimeline
+} from "./prompting.js";
 
 interface GoogleGenerateContentResponse {
   candidates?: Array<{
@@ -49,38 +54,31 @@ export class GoogleAdapter implements AgentAdapter {
   private readonly model: string;
   public readonly baseUrl: string;
   private readonly maxOutputTokens: number;
-  private lastUsage: { input: number; output: number } = { input: 0, output: 0 };
+  private lastUsage: UsageSnapshot = { input: 0, output: 0 };
 
   async respond(context: RoomContext): Promise<AgentResponse> {
     if (!this.apiKey) {
       throw new Error("GOOGLE_API_KEY is missing");
     }
 
-    const systemPrompt = [
-      `You are ${this.name} in HexNest room.`,
-      `Assigned role: ${context.role}.`,
-      `Rules: ${context.rules}`,
-      "Be concrete. Keep output compact and high-signal.",
-      "Follow DECIDE -> ACT -> REPORT. If there is no actionable trigger, return a short NO_ACTION reason."
-    ].join("\n");
+    const systemPrompt = buildDiscussionSystemPrompt({
+      agentName: this.name,
+      role: context.role,
+      rules: context.rules,
+      styleLine: "Be concrete. Keep output compact and high-signal."
+    });
 
-    const timeline = context.timeline
-      .slice(-10)
-      .map((event) => {
-        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
-        const trigger = event.triggeredBy ? ` trig=${event.triggeredBy}` : "";
-        return `${event.from} -> ${event.to} [${meta || "chat"}]${trigger}: ${event.text}`;
-      })
-      .join("\n");
+    const timeline = formatTimeline(context.timeline, 10);
+    const actionable = formatActionableEvents(context.actionableEvents);
 
-    const actionable = (context.actionableEvents || [])
-      .map((event) => {
-        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
-        return `- ${event.from} -> ${event.to} [${meta || "chat"}]${event.triggeredBy ? ` trig=${event.triggeredBy}` : ""}: ${event.text}`;
-      })
-      .join("\n");
-
-    const userPrompt = `Task: ${context.task}\nPhase: ${context.phase}\nContextVersion: ${context.contextVersion || "v1"}\nSummary: ${context.contextSummary || "n/a"}\nActionable events:\n${actionable || "(none)"}\nTimeline:\n${timeline || "(empty)"}`;
+    const userPrompt = buildDiscussionUserPrompt({
+      task: context.task,
+      phase: context.phase,
+      contextVersion: context.contextVersion,
+      contextSummary: context.contextSummary,
+      actionableText: actionable,
+      timelineText: timeline
+    });
 
     const endpoint = `${this.baseUrl.replace(/\/+$/, "")}/models/${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
     const response = await fetch(endpoint, {
@@ -111,10 +109,10 @@ export class GoogleAdapter implements AgentAdapter {
     }
 
     const payload = (await response.json()) as GoogleGenerateContentResponse;
-    this.lastUsage = {
-      input: Number(payload.usageMetadata?.promptTokenCount || 0),
-      output: Number(payload.usageMetadata?.candidatesTokenCount || 0)
-    };
+    this.lastUsage = extractUsageSnapshot(payload, {
+      inputPath: "usageMetadata.promptTokenCount",
+      outputPath: "usageMetadata.candidatesTokenCount"
+    });
 
     const text = String(payload.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("\n") || "").trim();
     if (!text) {
@@ -128,24 +126,6 @@ export class GoogleAdapter implements AgentAdapter {
   }
 
   async estimateCost(context: RoomContext, responseText = ""): Promise<CostEstimate> {
-    if (this.lastUsage.input > 0 || this.lastUsage.output > 0) {
-      return {
-        inputTokens: this.lastUsage.input,
-        outputTokens: this.lastUsage.output,
-        estimatedCostUsd: estimateUsdFromModel(this.modelId, this.lastUsage.input, this.lastUsage.output)
-      };
-    }
-
-    const inputTokens = estimateTokensFromText([
-      context.task,
-      context.rules,
-      context.timeline.map((item) => item.text).join("\n")
-    ].join("\n"));
-    const outputTokens = estimateTokensFromText(responseText);
-    return {
-      inputTokens,
-      outputTokens,
-      estimatedCostUsd: estimateUsdFromModel(this.modelId, inputTokens, outputTokens)
-    };
+    return estimateCostWithUsageFallback(this.modelId, context, responseText, this.lastUsage);
   }
 }
