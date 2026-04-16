@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { HexNestClient } from "../../protocol/HexNestClient.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
@@ -58,6 +59,7 @@ function toModelInfo(model: {
   responseMode: "standard" | "slow_model";
   active: boolean;
   runtimeOnly?: boolean;
+  isExported?: boolean;
 }): ModelInfo {
   return {
     id: model.id,
@@ -72,7 +74,8 @@ function toModelInfo(model: {
     agentMode: model.agentMode,
     responseMode: model.responseMode,
     active: model.active,
-    runtimeOnly: model.runtimeOnly
+    runtimeOnly: model.runtimeOnly,
+    isExported: model.isExported
   };
 }
 
@@ -210,6 +213,91 @@ export function modelsRouter(context: WebServerContext) {
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Export/Register model to Core directory
+  router.post("/:name/export", async (req: Request, res: Response) => {
+    try {
+      const modelName = req.params.name;
+      const model = context.db.getModelConfig(modelName);
+      if (!model) {
+        res.status(404).json({ success: false, error: `Model ${modelName} not found` });
+        return;
+      }
+
+      const coreUrl = context.nodeConfig.coreUrl;
+      const userToken = context.nodeConfig.userToken;
+      if (!coreUrl || !userToken) {
+        res.status(400).json({ success: false, error: "Core URL and User Token are required to export agents" });
+        return;
+      }
+
+      const client = new HexNestClient(coreUrl, { userToken, nodeToken: context.db.getNodeIdentity()?.token });
+      
+      // Get node identity for the owner field if available
+      const nodeIdentity = context.db.getNodeIdentity();
+      const nodeName = "hexnest-node";
+
+      const registration = await client.postAgentDirectory({
+        name: model.name,
+        description: `Agent ${model.name} running on ${nodeName}`,
+        category: "utility",
+        protocol: "rest", // All Node agents are REST proxies
+        endpointUrl: `http://localhost:3000/api/a2a/mock/${model.name}`,
+        owner: nodeName,
+        capabilities: model.capabilities || ["chat", "reasoning"],
+        supportedRoles: model.roles || ["expert", "critic"]
+      });
+
+      context.db.updateModelConfig(model.name, { isExported: true });
+
+      res.json({
+        success: true,
+        data: registration
+      });
+    } catch (error) {
+      console.error("[web] Agent export error:", error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to register agent in Core"
+      });
+    }
+  });
+
+  // Unexport/Unregister model from Core directory
+  router.delete("/:name/export", async (req: Request, res: Response) => {
+    try {
+      const modelName = req.params.name;
+      const model = context.db.getModelConfig(modelName);
+      if (!model) {
+        res.status(404).json({ success: false, error: `Model ${modelName} not found` });
+        return;
+      }
+
+      const coreUrl = context.nodeConfig.coreUrl;
+      const userToken = context.nodeConfig.userToken;
+      if (!coreUrl || !userToken) {
+        res.status(400).json({ success: false, error: "Core URL and User Token are required" });
+        return;
+      }
+
+      const client = new HexNestClient(coreUrl, { userToken, nodeToken: context.db.getNodeIdentity()?.token });
+      const endpointUrl = `http://localhost:3000/api/a2a/mock/${model.name}`;
+
+      await client.deleteAgentDirectory(model.name, endpointUrl);
+
+      context.db.updateModelConfig(model.name, { isExported: false });
+
+      res.json({
+        success: true
+      });
+    } catch (error) {
+      console.error("[web] Agent unexport error:", error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to unregister agent from Core"
       });
     }
   });

@@ -361,7 +361,8 @@ export class NodeRuntime {
     const runtimeRole = normalizedRole || "participant";
     const autonomous = modelConfig?.agentMode === "autonomous";
 
-    const alreadyRunning = this.activeRoomRuns.has(roomId);
+    const runId = `${roomId}:${agentName}`;
+    const alreadyRunning = this.activeRoomRuns.has(runId);
 
     const seededState = this.database?.upsertRoomSession({
       roomId,
@@ -375,7 +376,7 @@ export class NodeRuntime {
       status: "joined"
     }) || null;
 
-    const run = this.startRoomRun(roomId, () => this.runRoomSession(roomId, runtimeRole, taskHint, adapter, seededState, autonomous));
+    const run = this.startRoomRun(runId, () => this.runRoomSession(roomId, runtimeRole, taskHint, adapter, seededState, autonomous));
     return {
       started: Boolean(run),
       alreadyRunning
@@ -395,9 +396,10 @@ export class NodeRuntime {
       return { stopped: false, hadActiveRun: false };
     }
 
-    const activeRun = this.activeRoomRuns.get(roomId);
+    const runId = `${roomId}:${agentName}`;
+    const activeRun = this.activeRoomRuns.get(runId);
     const hadActiveRun = Boolean(activeRun);
-    this.roomStopRequests.add(roomId);
+    this.roomStopRequests.add(runId);
     this.database?.upsertRoomSession({
       ...existingSession,
       status: "stopped",
@@ -533,25 +535,25 @@ export class NodeRuntime {
     );
   }
 
-  private startRoomRun(roomId: string, factory: () => Promise<void>): Promise<void> | undefined {
-    if (this.activeRoomRuns.has(roomId)) {
+  private startRoomRun(runId: string, factory: () => Promise<void>): Promise<void> | undefined {
+    if (this.activeRoomRuns.has(runId)) {
       return undefined;
     }
 
-    this.roomStopRequests.delete(roomId);
+    this.roomStopRequests.delete(runId);
 
     const run = factory()
       .catch((error) => {
         const message = this.err(error);
-        this.logger.error(`[node] room session failed room=${roomId}: ${message}`);
-        this.recordActivity("error", `Room session failed for ${roomId}: ${message}`);
+        this.logger.error(`[node] room session failed run=${runId}: ${message}`);
+        this.recordActivity("error", `Room session failed for ${runId}: ${message}`);
       })
       .finally(() => {
-        this.activeRoomRuns.delete(roomId);
-        this.roomStopRequests.delete(roomId);
+        this.activeRoomRuns.delete(runId);
+        this.roomStopRequests.delete(runId);
         this.refreshStatus();
       });
-    this.activeRoomRuns.set(roomId, run);
+    this.activeRoomRuns.set(runId, run);
     this.refreshStatus();
     return run;
   }
@@ -594,7 +596,7 @@ export class NodeRuntime {
       loopGuardEnabled,
       maxNoActionStreak: this.config.agentLoopGuardNoActionStreak,
       initialState: existingSession,
-      shouldStop: () => this.stopRequested || this.status === "draining" || !this.coreConnected || this.roomStopRequests.has(roomId),
+      shouldStop: () => this.stopRequested || this.status === "draining" || !this.coreConnected || this.roomStopRequests.has(`${roomId}:${adapter.name}`),
       onStateChange: async (state) => {
         if (state.status === "idle") {
           if (state.lastCycleOutcome === "acted") {

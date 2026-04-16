@@ -21,7 +21,8 @@ import {
   RegisterNodeResponse,
   RoomContext,
   SubmitUsageResponse,
-  UsageRecord
+  UsageRecord,
+  AgentDescriptor
 } from "./types.js";
 
 const ACTIONABLE_INTENTS = new Set([
@@ -56,6 +57,9 @@ export interface HexNestClientLike {
   markOffline(nodeId: string): Promise<void>;
   listRooms(limit?: number): Promise<CoreRoomsListResponse>;
   createRoom(payload: CreateCoreRoomInput): Promise<CoreRoomDetails>;
+  postAgentDirectory(data: any): Promise<any>;
+  deleteAgentDirectory(name: string, endpointUrl: string): Promise<any>;
+  getAgentsDirectory(): Promise<{ value: AgentDescriptor[] }>;
   getRoom(roomId: string): Promise<CoreRoomSnapshot>;
   getRoomStats(roomId: string): Promise<CoreRoomStats>;
   getRoomConnectBrief(roomId: string): Promise<CoreRoomConnectBrief>;
@@ -226,6 +230,28 @@ export class HexNestClient implements HexNestClientLike {
       method: "POST",
       authRequired: true,
       body: payload
+    });
+  }
+
+  async postAgentDirectory(data: any): Promise<any> {
+    return this.request("/api/agents/directory", {
+      method: "POST",
+      authRequired: true,
+      body: data
+    });
+  }
+
+  async deleteAgentDirectory(name: string, endpointUrl: string): Promise<any> {
+    const query = new URLSearchParams({ name, endpointUrl }).toString();
+    return this.request(`/api/agents/directory?${query}`, {
+      method: "DELETE",
+      authRequired: true
+    });
+  }
+
+  async getAgentsDirectory(): Promise<{ value: AgentDescriptor[] }> {
+    return this.request<{ value: AgentDescriptor[] }>("/api/agents/directory", {
+      method: "GET"
     });
   }
 

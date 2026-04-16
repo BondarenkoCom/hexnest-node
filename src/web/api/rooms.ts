@@ -133,6 +133,18 @@ export function roomsRouter(context: WebServerContext) {
       });
 
       const list = await client.listRooms(200);
+      const directoryRes = await client.getAgentsDirectory();
+      const coreAgents = Array.isArray(directoryRes?.value) ? directoryRes.value : [];
+      const localAgents = context.getAvailableAgents();
+
+      // Merge local agents with core agents, avoiding duplicates by name
+      const availableAgents = [...localAgents].map(la => ({ ...la, source: 'local' }));
+      for (const ca of coreAgents) {
+        if (!availableAgents.find(la => la.name === ca.name)) {
+          availableAgents.push({ ...ca, source: 'core', protocol: ca.protocol });
+        }
+      }
+      
       const sortedSummaries = list.value
         .slice()
         .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
@@ -173,7 +185,7 @@ export function roomsRouter(context: WebServerContext) {
         success: true,
         data: {
           rooms,
-          availableAgents: context.getAvailableAgents()
+          availableAgents
         }
       });
     } catch (error) {
@@ -187,7 +199,7 @@ export function roomsRouter(context: WebServerContext) {
 
   router.post("/", async (req: Request, res: Response) => {
     try {
-      const task = normalizeText(req.body?.task, 4000);
+      const task = normalizeText(req.body?.task, 100000); // Higher limit for admin proxying
       if (!task) {
         res.status(400).json({ success: false, error: "task is required" });
         return;
@@ -196,18 +208,55 @@ export function roomsRouter(context: WebServerContext) {
       const payload: CreateCoreRoomInput = {
         name: normalizeText(req.body?.name, 120) || undefined,
         task,
-        subnest: normalizeText(req.body?.subnest, 40) || undefined,
+        subnest: normalizeText(req.body?.subnest, 200) || undefined,
+        templateId: normalizeText(req.body?.templateId, 80) || undefined,
+        customRoles: Array.isArray(req.body?.customRoles) ? req.body.customRoles : undefined,
+        inviteAgentIds: Array.isArray(req.body?.inviteAgentIds) ? req.body.inviteAgentIds : undefined,
         pythonShellEnabled: normalizeBoolean(req.body?.pythonShellEnabled, false),
         webSearchEnabled: normalizeBoolean(req.body?.webSearchEnabled, true),
-        marketDataEnabled: normalizeBoolean(req.body?.marketDataEnabled, false)
+        marketDataEnabled: normalizeBoolean(req.body?.marketDataEnabled, false),
+        isPrivate: typeof req.body?.isPrivate === "boolean" ? req.body.isPrivate : undefined,
+        maxMessages: typeof req.body?.maxMessages === "number" ? req.body.maxMessages : undefined,
+        maxPythonJobs: typeof req.body?.maxPythonJobs === "number" ? req.body.maxPythonJobs : undefined,
+        maxSearchJobs: typeof req.body?.maxSearchJobs === "number" ? req.body.maxSearchJobs : undefined,
+        ttlDays: typeof req.body?.ttlDays === "number" ? req.body.ttlDays : undefined,
+        enableSentimentAnalysis: typeof req.body?.enableSentimentAnalysis === "boolean" ? req.body.enableSentimentAnalysis : undefined,
+        responseConstraint: req.body?.responseConstraint && typeof req.body.responseConstraint === "object" ? {
+          type: req.body.responseConstraint.type,
+          value: Number(req.body.responseConstraint.value)
+        } : undefined
       };
 
       const client = createClient(context);
       const room = await client.createRoom(payload);
 
-      const response: ApiResponse<CoreRoomDetails> = {
+      // Auto-join requested local agents
+      const localAgents = context.getAvailableAgents();
+      const requestedAgents = Array.isArray(req.body?.inviteAgentIds) ? req.body.inviteAgentIds : [];
+      const localToJoin = requestedAgents.filter((id: string) => localAgents.some(a => a.name === id));
+      
+      for (const agentName of localToJoin) {
+        try {
+          const joined = await client.joinRoom(room.id, agentName, undefined);
+          const modelConfig = context.db.getModelConfig(agentName);
+          if (modelConfig?.enabled) {
+            await context.startManualRoomSession(
+              room.id,
+              agentName,
+              "",
+              joined.agent.id,
+              "auto room start"
+            );
+          }
+        } catch (err) {
+          console.error(`Failed to auto-join local agent ${agentName}:`, err);
+        }
+      }
+
+      // IMPORTANT: Frontend expects `roomId` in response to navigate properly
+      const response: ApiResponse<{ roomId: string }> = {
         success: true,
-        data: room
+        data: { roomId: room.id }
       };
       res.status(201).json(response);
     } catch (error) {

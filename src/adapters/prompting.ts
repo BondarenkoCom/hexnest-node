@@ -38,7 +38,8 @@ export function formatTimeline(timeline: RoomContext["timeline"], limit = 10): s
     .map((event) => {
       const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
       const trigger = event.triggeredBy ? ` trig=${event.triggeredBy}` : "";
-      return `${event.from} -> ${event.to} [${meta || "chat"}]${trigger}: ${event.text}`;
+      const sentiment = event.sentiment ? ` [mood:${event.sentiment.label}]` : "";
+      return `${event.from} -> ${event.to} [${meta || "chat"}]${trigger}${sentiment}: ${event.text}`;
     })
     .join("\n");
 }
@@ -59,8 +60,9 @@ export function buildDiscussionSystemPrompt(options: {
   styleLine: string;
   includeTaskLine?: string;
   includePhaseLine?: string;
+  enableSentimentAnalysis?: boolean;
 }): string {
-  return [
+  const base = [
     `You are ${options.agentName} in HexNest room.`,
     `Assigned role: ${options.role}.`,
     roleDebateTone(options.role),
@@ -69,7 +71,15 @@ export function buildDiscussionSystemPrompt(options: {
     `Rules: ${options.rules}`,
     options.styleLine,
     ...liveDiscussionGuidance()
-  ].join("\n");
+  ];
+
+  if (options.enableSentimentAnalysis) {
+    base.push("Sentiment Analysis Instruction: Evaluate the emotional tone of the input message you are responding to and reflect an appropriate emotional awareness in your own response.");
+    base.push("Available Emotion Labels (MUST use one of): neutral, thinking, surprised, smirk, annoyed, arms_crossed, hand_chin, finger_up.");
+    base.push("Briefly assess your own response's sentiment internally to ensure it matches the room's objectives.");
+  }
+
+  return base.join("\n");
 }
 
 export function buildDiscussionUserPrompt(options: {

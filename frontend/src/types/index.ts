@@ -66,10 +66,21 @@ export interface ModelConfig {
   adapter?: string;
   enabled: boolean;
   active: boolean;
+  isExported?: boolean;
   agentMode: 'manual' | 'recruitable' | 'autonomous';
   responseMode: 'standard' | 'slow_model';
   model?: string;
   runtimeOnly?: boolean;
+}
+
+export interface AgentDescriptor {
+  name: string;
+  type: string;
+  source: 'core' | 'local' | string;
+  protocol?: string;
+  capabilities?: string[];
+  description?: string;
+  avatarUrl?: string;
 }
 
 export interface Artifact {

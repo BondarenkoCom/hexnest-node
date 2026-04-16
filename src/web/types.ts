@@ -101,6 +101,7 @@ export interface ModelInfo {
   responseMode: "standard" | "slow_model";
   active: boolean;
   runtimeOnly?: boolean;
+  isExported?: boolean;
 }
 
 export interface NodeConfigInfo {

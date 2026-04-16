@@ -20,6 +20,11 @@ export interface RoomEvent {
   intent?: string;
   triggeredBy?: string | null;
   text: string;
+  sentiment?: {
+    score: number; // -1 to 1
+    label: string; // e.g., "hostile", "neutral", "encouraging"
+    reasoning?: string;
+  };
   confidence?: number;
 }
 
@@ -35,6 +40,10 @@ export interface RoomContext {
   contextSummary?: string;
   artifacts: Artifact[];
   rules: string;
+  responseConstraint?: {
+    type: "sentences" | "chars" | "words";
+    value: number;
+  };
 }
 
 export interface CostEstimate {
@@ -59,6 +68,8 @@ export interface AgentDescriptor {
   name: string;
   capabilities: string[];
   supportedRoles: string[];
+  source?: string;
+  protocol?: string;
 }
 
 export interface PendingInvitation {
@@ -239,6 +250,27 @@ export interface CoreRoomDetails {
   latestMessageFrom?: string;
 }
 
+export interface CreateCoreRoomInput {
+  name?: string;
+  task: string;
+  subnest?: string;
+  templateId?: string;
+  inviteAgentIds?: string[];
+  customRoles?: Array<{ name: string; description: string }>;
+  pythonShellEnabled?: boolean;
+  webSearchEnabled?: boolean;
+  marketDataEnabled?: boolean;
+  isPrivate?: boolean;
+  maxMessages?: number;
+  maxPythonJobs?: number;
+  maxSearchJobs?: number;
+  ttlDays?: number;
+  responseConstraint?: {
+    type: "sentences" | "chars" | "words";
+    value: number;
+  };
+}
+
 export interface CoreRoomSnapshot extends CoreRoomDetails {
   settings: CoreRoomSettings;
   agentIds?: string[];
@@ -342,6 +374,12 @@ export interface CreateCoreRoomInput {
   pythonShellEnabled?: boolean;
   webSearchEnabled?: boolean;
   marketDataEnabled?: boolean;
+  responseConstraint?: {
+    type: "sentences" | "chars" | "words";
+    value: number;
+  };
+  isPrivate?: boolean;
+  enableSentimentAnalysis?: boolean;
 }
 
 export interface PostRoomMessageInput {

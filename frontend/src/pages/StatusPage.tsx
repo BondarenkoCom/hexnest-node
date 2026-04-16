@@ -41,6 +41,42 @@ export const StatusPage: React.FC = () => {
     }
   };
 
+  const handleDisconnect = async () => {
+    setIsConnecting(true);
+    try {
+      const res = await fetch('/api/core/disconnect', { method: 'POST' });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        addNotification(json.message || 'Node disconnected from Core', 'warn');
+        refresh();
+      } else {
+        addNotification(json.error || 'Disconnect failed', 'error');
+      }
+    } catch (err: any) {
+      addNotification('Connection error: ' + err.message, 'error');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleResetIdentity = async () => {
+    if (!window.confirm('Are you sure you want to reset node identity? This will clear local tokens and the next connection will register a new node ID.')) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/core/reset-identity', { method: 'POST' });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        addNotification(json.message || 'Node identity reset', 'info');
+        refresh();
+      } else {
+        addNotification(json.error || 'Reset failed', 'error');
+      }
+    } catch (err: any) {
+      addNotification('Reset error: ' + err.message, 'error');
+    }
+  };
+
   const formatUptime = (ms: number) => {
     const mins = Math.floor(ms / 1000 / 60);
     const secs = Math.floor((ms / 1000) % 60);
@@ -133,7 +169,7 @@ export const StatusPage: React.FC = () => {
                 disabled={isConnecting}
                 className="px-3 py-2 bg-green-500/10 border border-green-500/30 text-green-400 rounded-lg text-sm hover:bg-green-500/20 transition-colors disabled:opacity-50"
               >
-                {isConnecting ? 'Reconnecting...' : 'Reconnect Node'}
+                {isConnecting && !status?.coreConnected ? 'Connecting...' : 'Reconnect Node'}
               </button>
               <button 
                 onClick={handleTestConnection}
@@ -142,10 +178,17 @@ export const StatusPage: React.FC = () => {
               >
                 {isTesting ? 'Testing...' : 'Test Connection'}
               </button>
-              <button className="px-3 py-2 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 rounded-lg text-sm hover:bg-yellow-500/20 transition-colors">
-                Pause Network
+              <button 
+                onClick={handleDisconnect}
+                disabled={isConnecting || !status?.coreConnected}
+                className="px-3 py-2 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 rounded-lg text-sm hover:bg-yellow-500/20 transition-colors disabled:opacity-50"
+              >
+                Disconnect Node
               </button>
-              <button className="px-3 py-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg text-sm hover:bg-red-500/20 transition-colors">
+              <button 
+                onClick={handleResetIdentity}
+                className="px-3 py-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg text-sm hover:bg-red-500/20 transition-colors"
+              >
                 Reset Identity
               </button>
             </div>

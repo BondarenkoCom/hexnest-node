@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNode } from '../context/NodeContext';
 import type { ApiResponse, AdapterConfig, ModelConfig } from '../types';
-import { Plus, Trash2, Play, Pause, Star, X, Info } from 'lucide-react';
+import { Plus, Trash2, Play, Pause, Star, X, Info, Globe } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 const DEFAULT_CODEX_MODELS = ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2'];
@@ -9,14 +9,34 @@ const AGENT_MODES: Array<ModelConfig['agentMode']> = ['manual', 'recruitable', '
 const RESPONSE_MODES: Array<ModelConfig['responseMode']> = ['standard', 'slow_model'];
 
 export const AgentsPage: React.FC = () => {
-  const { refresh: refreshNode } = useNode();
+  const { status, refresh: refreshNode, addNotification } = useNode();
   const [providers, setProviders] = useState<AdapterConfig[]>([]);
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isConnectingCore, setIsConnectingCore] = useState(false);
 
   // Modal states
   const [showProviderModal, setShowProviderModal] = useState(false);
   const [showModelModal, setShowModelModal] = useState(false);
+
+  const toggleCoreConnection = async () => {
+    setIsConnectingCore(true);
+    try {
+      const endpoint = status?.coreConnected ? '/api/core/disconnect' : '/api/core/reconnect';
+      const res = await fetch(endpoint, { method: 'POST' });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        addNotification(json.message || (status?.coreConnected ? 'Disconnected from Core' : 'Connected to Core'), 'success');
+        refreshNode();
+      } else {
+        addNotification(json.error || 'Operation failed', 'error');
+      }
+    } catch (err: any) {
+      addNotification('Connection error: ' + err.message, 'error');
+    } finally {
+      setIsConnectingCore(false);
+    }
+  };
 
   // Form states
   const [providerType, setProviderType] = useState('OpenAIAdapter');
@@ -138,13 +158,13 @@ export const AgentsPage: React.FC = () => {
       } else {
         codexFallback();
         if (adapter !== 'CodexAdapter') {
-          alert(testJson.error || 'Failed to load models');
+          addNotification(testJson.error || 'Failed to load models', 'error');
         }
       }
     } catch (err: any) {
       codexFallback();
       if (adapter !== 'CodexAdapter') {
-        alert('Error loading models: ' + err.message);
+        addNotification('Error loading models: ' + err.message, 'error');
       }
     } finally {
       setIsTestingProvider(false);
@@ -233,13 +253,47 @@ export const AgentsPage: React.FC = () => {
         await fetchAgents();
         await refreshNode();
       } else {
-        alert(json.error || 'Failed to update agent mode');
+        addNotification(json.error || 'Failed to update agent mode', 'error');
       }
     } catch (err) {
       console.error('Update agent mode error:', err);
-      alert('Failed to update agent mode');
+      addNotification('Failed to update agent mode', 'error');
     } finally {
       setUpdatingAgentMode((current) => (current === name ? null : current));
+    }
+  };
+
+  const toggleCoreExport = async (name: string, isExported: boolean) => {
+    if (!status?.coreConnected) {
+      addNotification('Node must be connected to HexNest Core to manage agent directory.', 'warn');
+      return;
+    }
+    
+    // Optimistic UI update
+    setModels(prev => prev.map(m => m.name === name ? { ...m, isExported: !isExported } : m));
+    setUpdatingAgentMode(name);
+    
+    try {
+      const res = await fetch(`/api/models/${encodeURIComponent(name)}/export`, {
+        method: isExported ? 'DELETE' : 'POST'
+      });
+      const json: ApiResponse<any> = await res.json();
+      if (json.success) {
+        addNotification(isExported ? `Successfully unregistered ${name} from Core.` : `Successfully registered ${name} in Core network!`, 'success');
+        // Final sync with server
+        await fetchAgents();
+      } else {
+        // Revert on failure
+        setModels(prev => prev.map(m => m.name === name ? { ...m, isExported: isExported } : m));
+        addNotification(json.error || (isExported ? 'Failed to unexport agent' : 'Failed to export agent'), 'error');
+      }
+    } catch (err: any) {
+      // Revert on error
+      setModels(prev => prev.map(m => m.name === name ? { ...m, isExported: isExported } : m));
+      console.error('Export agent error:', err);
+      addNotification((isExported ? 'Failed to unexport agent: ' : 'Failed to export agent: ') + err.message, 'error');
+    } finally {
+      setUpdatingAgentMode(null);
     }
   };
 
@@ -256,11 +310,11 @@ export const AgentsPage: React.FC = () => {
         await fetchAgents();
         await refreshNode();
       } else {
-        alert(json.error || 'Failed to update response mode');
+        addNotification(json.error || 'Failed to update response mode', 'error');
       }
     } catch (err) {
       console.error('Update response mode error:', err);
-      alert('Failed to update response mode');
+      addNotification('Failed to update response mode', 'error');
     } finally {
       setUpdatingAgentMode((current) => (current === name ? null : current));
     }
@@ -283,7 +337,7 @@ export const AgentsPage: React.FC = () => {
         fetchAgents();
         refreshNode();
       } else {
-        alert(json.error || 'Failed to save provider');
+        addNotification(json.error || 'Failed to save provider', 'error');
       }
     } catch (err) {
       console.error('Save provider error:', err);
@@ -320,7 +374,7 @@ export const AgentsPage: React.FC = () => {
         setModelResponseMode('standard');
         fetchAgents();
       } else {
-        alert(json.error || 'Failed to add model');
+        addNotification(json.error || 'Failed to add model', 'error');
       }
     } catch (err) {
       console.error('Save model error:', err);
@@ -336,12 +390,22 @@ export const AgentsPage: React.FC = () => {
           <h2 className="mb-0">Connected Providers</h2>
           <p className="sub text-muted">Manage LLM API providers configured in this node.</p>
         </div>
-        <button 
-          onClick={() => setShowProviderModal(true)}
-          className="px-4 py-2 bg-text border border-line-soft text-void font-bold rounded-lg hover:bg-cyan transition-colors"
-        >
-          <Plus className="inline-block w-4 h-4 mr-1" /> Add Provider
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={toggleCoreConnection}
+            disabled={isConnectingCore}
+            className={`px-4 py-2 border font-bold rounded-lg transition-all flex items-center gap-2 ${status?.coreConnected ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20' : 'bg-cyan/10 border-cyan/30 text-cyan hover:bg-cyan/20'}`}
+          >
+            <Globe className={`w-4 h-4 ${isConnectingCore ? 'animate-spin' : ''}`} />
+            {isConnectingCore ? 'Connecting...' : (status?.coreConnected ? 'Core: Online' : 'Core: Offline')}
+          </button>
+          <button 
+            onClick={() => setShowProviderModal(true)}
+            className="px-4 py-2 bg-text border border-line-soft text-void font-bold rounded-lg hover:bg-cyan transition-colors"
+          >
+            <Plus className="inline-block w-4 h-4 mr-1" /> Add Provider
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 mb-8">
@@ -380,7 +444,7 @@ export const AgentsPage: React.FC = () => {
         <button 
           onClick={() => {
             if (providers.length === 0) {
-              alert('Please add at least one provider first.');
+              addNotification('Please add at least one provider first.', 'error');
               return;
             }
             setModelAdapter(providers[0].type);
@@ -467,6 +531,14 @@ export const AgentsPage: React.FC = () => {
                     Set Default
                   </button>
                 )}
+
+                <button 
+                  onClick={() => toggleCoreExport(m.name, m.isExported || false)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${m.isExported ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400 hover:bg-indigo-500/30' : 'bg-cyan/10 border-cyan/30 text-cyan hover:bg-cyan/20'}`}
+                  title={m.isExported ? "Unlink from Core directory so others cannot invite it" : "Make this agent available for others to invite in Core"}
+                >
+                  <Globe className="w-3 h-3 inline-block mr-1" /> {m.isExported ? 'Unlink' : 'Core'}
+                </button>
 
                 <button 
                   onClick={() => deleteAgent(m.name)}

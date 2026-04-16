@@ -1,0 +1,1 @@
+const fs = require('fs'); let c = fs.readFileSync('src/core/NodeRuntime.ts', 'utf8'); c = c.replace('const activeRun = this.activeRoomRuns.get(roomId);', 'const runId = ${roomId}:;\\n    const activeRun = this.activeRoomRuns.get(runId);'); c = c.replace('this.roomStopRequests.add(roomId);', 'this.roomStopRequests.add(runId);'); fs.writeFileSync('src/core/NodeRuntime.ts', c);

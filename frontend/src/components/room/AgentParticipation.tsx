@@ -18,8 +18,8 @@ export const AgentParticipation: React.FC<AgentParticipationProps> = ({ roomId, 
 
   const room = detail.room;
   const availableAgents = detail.availableAgents;
-  const joinedLocalAgent = room.connectedAgents.find(a => availableAgents.some(aa => aa.name === a.name));
-  const activeSession = detail.localSessions.find(s => s.agentName === (joinedLocalAgent?.name || selectedAgent));
+  const joinedLocalAgent = room.connectedAgents.find(a => a.name === selectedAgent);
+  const activeSession = detail.localSessions.find(s => s.agentName === selectedAgent);
   const canRestart = Boolean(activeSession?.autonomous);
   const showStop = Boolean(
     activeSession
@@ -43,7 +43,7 @@ export const AgentParticipation: React.FC<AgentParticipationProps> = ({ roomId, 
   const handleControl = async (action: 'start' | 'stop' | 'restart') => {
     setLoading(true);
     try {
-      const agentName = joinedLocalAgent?.name || selectedAgent;
+      const agentName = selectedAgent;
       const joinedAgentId = joinedLocalAgent?.id;
       
       await controlSession(roomId, agentName, action, action === 'start' ? { joinedAgentId, role } : undefined);
@@ -93,11 +93,11 @@ export const AgentParticipation: React.FC<AgentParticipationProps> = ({ roomId, 
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="text-[10px] uppercase tracking-widest text-muted font-bold active-glow-text">Local Agent</label>
+            <label className="text-[10px] uppercase tracking-widest text-muted font-bold active-glow-text">Local Agent ({availableAgents.length} Available)</label>
             <select
               value={selectedAgent}
               onChange={(e) => setSelectedAgent(e.target.value)}
-              disabled={loading || !!joinedLocalAgent}
+              disabled={loading}
               className="w-full bg-void border border-line-soft rounded-xl px-4 py-2.5 text-sm outline-none focus:border-cyan/50 transition-colors appearance-none"
             >
               {availableAgents.map(a => (
