@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AgentAdapter, AgentResponse } from "../src/adapters/AgentAdapter.js";
+import { AgentAdapter, AgentResponse } from "../src/adapters/index.js";
 import { NodeConfig } from "../src/config.js";
 import { NodeRuntime } from "../src/core/NodeRuntime.js";
 import { CoreApiError } from "../src/protocol/HexNestClient.js";
@@ -519,3 +519,4 @@ describe("NodeRuntime", () => {
     await runtime.stop();
   });
 });
+

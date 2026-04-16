@@ -1,5 +1,5 @@
-import { BaseDiscussionAdapter } from "./BaseDiscussionAdapter.js";
-import { extractUsageSnapshot } from "./costing.js";
+import { BaseDiscussionAdapter } from "../core/BaseDiscussionAdapter.js";
+import { extractUsageSnapshot } from "../core/costing.js";
 
 interface OpenAILikeChatResponse {
   choices?: Array<{
@@ -13,7 +13,7 @@ interface OpenAILikeChatResponse {
   };
 }
 
-export class MistralAdapter extends BaseDiscussionAdapter {
+export class QwenAdapter extends BaseDiscussionAdapter {
   protected readonly styleLine = "Be concrete. Keep output compact and high-signal.";
   private readonly maxTokens: number;
 
@@ -28,15 +28,16 @@ export class MistralAdapter extends BaseDiscussionAdapter {
     } = {}
   ) {
     super({
-      name: options.name || "mistral",
-      model: options.model || "mistral-large-latest",
-      baseUrl: options.baseUrl || "https://api.mistral.ai/v1",
+      name: options.name || "qwen",
+      model: options.model || "qwen-plus",
+      // Default to Aliyun DashScope compatible mode for Qwen APIs
+      baseUrl: options.baseUrl || "https://dashscope.aliyuncs.com/compatible-mode/v1",
       capabilities: options.capabilities,
       supportedRoles: options.supportedRoles,
       defaultCapabilities: ["general", "reasoning", "coding", "research"],
       defaultRoles: ["researcher", "skeptic", "builder", "synthesizer", "judge"]
     });
-    this.maxTokens = Math.max(64, Number(process.env.MISTRAL_MAX_TOKENS || 1200));
+    this.maxTokens = Math.max(64, Number(process.env.QWEN_MAX_TOKENS || 1200));
   }
 
   protected async executeCompletion(
@@ -44,7 +45,7 @@ export class MistralAdapter extends BaseDiscussionAdapter {
     userPrompt: string
   ): Promise<string> {
     if (!this.apiKey) {
-      throw new Error("MISTRAL_API_KEY is missing");
+      throw new Error("QWEN_API_KEY is missing");
     }
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -66,7 +67,7 @@ export class MistralAdapter extends BaseDiscussionAdapter {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Mistral call failed (${response.status}): ${body}`);
+      throw new Error(`Qwen call failed (${response.status}): ${body}`);
     }
 
     const payload = (await response.json()) as OpenAILikeChatResponse;
@@ -78,3 +79,4 @@ export class MistralAdapter extends BaseDiscussionAdapter {
     return String(payload.choices?.[0]?.message?.content || "").trim();
   }
 }
+

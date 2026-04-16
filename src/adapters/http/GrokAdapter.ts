@@ -1,7 +1,7 @@
-import { AgentAdapter, AgentResponse } from "./AgentAdapter.js";
-import { RoomContext } from "../protocol/types.js";
-import { extractUsageSnapshot } from "./costing.js";
-import { BaseDiscussionAdapter } from "./BaseDiscussionAdapter.js";
+import { AgentAdapter, AgentResponse } from "../core/AgentAdapter.js";
+import { RoomContext } from "../../protocol/types.js";
+import { extractUsageSnapshot } from "../core/costing.js";
+import { BaseDiscussionAdapter } from "../core/BaseDiscussionAdapter.js";
 
 interface GrokChatResponse {
   choices?: Array<{
@@ -83,3 +83,5 @@ export class GrokAdapter extends BaseDiscussionAdapter {
     return String(payload.choices?.[0]?.message?.content || "").trim();
   }
 }
+
+

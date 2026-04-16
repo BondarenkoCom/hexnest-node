@@ -1,12 +1,12 @@
-import { AgentAdapter, AgentResponse, inferConfidence } from "./AgentAdapter.js";
-import { CostEstimate, RoomContext } from "../protocol/types.js";
-import { estimateCostWithUsageFallback, UsageSnapshot } from "./costing.js";
+import { AgentAdapter, AgentResponse, inferConfidence } from "../core/AgentAdapter.js";
+import { CostEstimate, RoomContext } from "../../protocol/types.js";
+import { estimateCostWithUsageFallback, UsageSnapshot } from "../core/costing.js";
 import {
   buildDiscussionSystemPrompt,
   buildDiscussionUserPrompt,
   formatActionableEvents,
   formatTimeline
-} from "./prompting.js";
+} from "../core/prompting.js";
 
 /**
  * Base abstract class for AgentAdapters that use text-based LLMs.
@@ -100,3 +100,5 @@ export abstract class BaseDiscussionAdapter implements AgentAdapter {
     context: RoomContext
   ): Promise<string>;
 }
+
+

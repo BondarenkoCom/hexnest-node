@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { BaseCliAdapter } from "./BaseCliAdapter.js";
+import { BaseCliAdapter } from "../core/BaseCliAdapter.js";
 
 export class CodexAdapter extends BaseCliAdapter {
   private readonly codexPath: string;
@@ -69,4 +69,5 @@ export class CodexAdapter extends BaseCliAdapter {
     }
   }
 }
+
 

@@ -1,4 +1,4 @@
-import { Artifact, CostEstimate, RoomContext } from "../protocol/types.js";
+import { Artifact, CostEstimate, RoomContext } from "../../protocol/types.js";
 
 export interface AgentResponse {
   text: string;
@@ -68,3 +68,5 @@ export function inferConfidence(text: string, phase: string): number {
   const clamped = Math.min(0.95, Math.max(0.35, score));
   return Math.round(clamped * 100) / 100;
 }
+
+

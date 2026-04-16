@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { AgentAdapter, AgentResponse } from "../adapters/AgentAdapter.js";
+import { AgentAdapter, AgentResponse } from "../adapters/index.js";
 import { NodeConfig } from "../config.js";
 import { CoreApiError, HexNestClient, HexNestClientLike, isCoreApiError } from "../protocol/HexNestClient.js";
 import {
@@ -1197,3 +1197,6 @@ export class NodeRuntime {
     return error instanceof Error ? error.message : String(error);
   }
 }
+
+
+

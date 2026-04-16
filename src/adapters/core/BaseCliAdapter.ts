@@ -5,8 +5,8 @@ import {
   estimateTokensFromText,
   estimateUsdFromModel,
   inferConfidence
-} from "./AgentAdapter.js";
-import { CostEstimate, RoomContext } from "../protocol/types.js";
+} from "../core/AgentAdapter.js";
+import { CostEstimate, RoomContext } from "../../protocol/types.js";
 
 export interface CliRunResult {
   exitCode: number | null;
@@ -170,3 +170,5 @@ export abstract class BaseCliAdapter implements AgentAdapter {
     });
   }
 }
+
+

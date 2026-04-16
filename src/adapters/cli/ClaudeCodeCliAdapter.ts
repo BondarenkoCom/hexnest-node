@@ -1,4 +1,4 @@
-import { BaseCliAdapter } from "./BaseCliAdapter.js";
+import { BaseCliAdapter } from "../core/BaseCliAdapter.js";
 
 export class ClaudeCodeCliAdapter extends BaseCliAdapter {
   private readonly cliPath: string;
@@ -40,3 +40,4 @@ export class ClaudeCodeCliAdapter extends BaseCliAdapter {
     return text;
   }
 }
+

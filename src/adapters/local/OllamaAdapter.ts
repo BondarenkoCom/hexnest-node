@@ -2,15 +2,15 @@ import {
   AgentAdapter,
   AgentResponse,
   inferConfidence
-} from "./AgentAdapter.js";
-import { CostEstimate, RoomContext } from "../protocol/types.js";
-import { estimateCostWithUsageFallback } from "./costing.js";
+} from "../core/AgentAdapter.js";
+import { CostEstimate, RoomContext } from "../../protocol/types.js";
+import { estimateCostWithUsageFallback } from "../core/costing.js";
 import {
   buildDiscussionSystemPrompt,
   buildDiscussionUserPrompt,
   formatActionableEvents,
   formatTimeline
-} from "./prompting.js";
+} from "../core/prompting.js";
 
 interface OllamaChatResponse {
   message?: {
@@ -240,3 +240,5 @@ export class OllamaAdapter implements AgentAdapter {
     }
   }
 }
+
+

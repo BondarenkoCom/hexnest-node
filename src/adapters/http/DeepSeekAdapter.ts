@@ -1,5 +1,5 @@
-import { BaseDiscussionAdapter } from "./BaseDiscussionAdapter.js";
-import { extractUsageSnapshot } from "./costing.js";
+import { BaseDiscussionAdapter } from "../core/BaseDiscussionAdapter.js";
+import { extractUsageSnapshot } from "../core/costing.js";
 
 interface OpenAILikeChatResponse {
   choices?: Array<{
@@ -13,7 +13,7 @@ interface OpenAILikeChatResponse {
   };
 }
 
-export class QwenAdapter extends BaseDiscussionAdapter {
+export class DeepSeekAdapter extends BaseDiscussionAdapter {
   protected readonly styleLine = "Be concrete. Keep output compact and high-signal.";
   private readonly maxTokens: number;
 
@@ -28,16 +28,15 @@ export class QwenAdapter extends BaseDiscussionAdapter {
     } = {}
   ) {
     super({
-      name: options.name || "qwen",
-      model: options.model || "qwen-plus",
-      // Default to Aliyun DashScope compatible mode for Qwen APIs
-      baseUrl: options.baseUrl || "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      name: options.name || "deepseek",
+      model: options.model || "deepseek-chat",
+      baseUrl: options.baseUrl || "https://api.deepseek.com",
       capabilities: options.capabilities,
       supportedRoles: options.supportedRoles,
       defaultCapabilities: ["general", "reasoning", "coding", "research"],
-      defaultRoles: ["researcher", "skeptic", "builder", "synthesizer", "judge"]
+      defaultRoles: ["researcher", "builder", "judge", "synthesizer"]
     });
-    this.maxTokens = Math.max(64, Number(process.env.QWEN_MAX_TOKENS || 1200));
+    this.maxTokens = Math.max(64, Number(process.env.DEEPSEEK_MAX_TOKENS || 1200));
   }
 
   protected async executeCompletion(
@@ -45,10 +44,11 @@ export class QwenAdapter extends BaseDiscussionAdapter {
     userPrompt: string
   ): Promise<string> {
     if (!this.apiKey) {
-      throw new Error("QWEN_API_KEY is missing");
+      throw new Error("DEEPSEEK_API_KEY is missing");
     }
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+    const endpoint = `${(this.baseUrl || "").replace(/\/+$/, "")}/chat/completions`;
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -67,7 +67,7 @@ export class QwenAdapter extends BaseDiscussionAdapter {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Qwen call failed (${response.status}): ${body}`);
+      throw new Error(`DeepSeek call failed (${response.status}): ${body}`);
     }
 
     const payload = (await response.json()) as OpenAILikeChatResponse;
@@ -79,3 +79,4 @@ export class QwenAdapter extends BaseDiscussionAdapter {
     return String(payload.choices?.[0]?.message?.content || "").trim();
   }
 }
+

@@ -1,4 +1,4 @@
-import { BaseCliAdapter } from "./BaseCliAdapter.js";
+import { BaseCliAdapter } from "../core/BaseCliAdapter.js";
 
 export class CopilotCliAdapter extends BaseCliAdapter {
   private readonly cliPath: string;
@@ -42,3 +42,4 @@ export class CopilotCliAdapter extends BaseCliAdapter {
     return text;
   }
 }
+

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentAdapter, AgentResponse } from "../src/adapters/AgentAdapter.js";
+import type { AgentAdapter, AgentResponse } from "../src/adapters/index.js";
 import { RoomAgentSession } from "../src/core/RoomAgentSession.js";
 import type { RoomContext, CostEstimate } from "../src/protocol/types.js";
 
@@ -309,3 +309,4 @@ describe("RoomAgentSession", () => {
     expect(reasons).not.toContain("unchanged_room_fingerprint");
   });
 });
+

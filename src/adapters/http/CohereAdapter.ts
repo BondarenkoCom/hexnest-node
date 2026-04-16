@@ -1,5 +1,5 @@
-import { BaseDiscussionAdapter } from "./BaseDiscussionAdapter.js";
-import { extractUsageSnapshot } from "./costing.js";
+import { BaseDiscussionAdapter } from "../core/BaseDiscussionAdapter.js";
+import { extractUsageSnapshot } from "../core/costing.js";
 
 interface CohereChatResponse {
   text?: string;
@@ -76,3 +76,4 @@ export class CohereAdapter extends BaseDiscussionAdapter {
     return String(payload.text || "").trim();
   }
 }
+

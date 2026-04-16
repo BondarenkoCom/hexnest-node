@@ -1,7 +1,9 @@
-import { BaseDiscussionAdapter } from "./BaseDiscussionAdapter.js";
-import { extractUsageSnapshot } from "./costing.js";
+import { AgentAdapter, AgentResponse } from "../core/AgentAdapter.js";
+import { RoomContext } from "../../protocol/types.js";
+import { extractUsageSnapshot } from "../core/costing.js";
+import { BaseDiscussionAdapter } from "../core/BaseDiscussionAdapter.js";
 
-interface OpenAILikeChatResponse {
+interface OpenAIChatResponse {
   choices?: Array<{
     message?: {
       content?: string;
@@ -13,7 +15,7 @@ interface OpenAILikeChatResponse {
   };
 }
 
-export class DeepSeekAdapter extends BaseDiscussionAdapter {
+export class OpenAIAdapter extends BaseDiscussionAdapter {
   protected readonly styleLine = "Be concrete. Keep output compact and high-signal.";
   private readonly maxTokens: number;
 
@@ -28,15 +30,15 @@ export class DeepSeekAdapter extends BaseDiscussionAdapter {
     } = {}
   ) {
     super({
-      name: options.name || "deepseek",
-      model: options.model || "deepseek-chat",
-      baseUrl: options.baseUrl || "https://api.deepseek.com",
+      name: options.name || "openai",
+      model: options.model || "gpt-4o-mini",
+      baseUrl: options.baseUrl || "https://api.openai.com/v1",
       capabilities: options.capabilities,
       supportedRoles: options.supportedRoles,
       defaultCapabilities: ["general", "reasoning", "coding", "research"],
-      defaultRoles: ["researcher", "builder", "judge", "synthesizer"]
+      defaultRoles: ["builder", "breaker", "researcher", "synthesizer", "judge"]
     });
-    this.maxTokens = Math.max(64, Number(process.env.DEEPSEEK_MAX_TOKENS || 1200));
+    this.maxTokens = Math.max(64, Number(process.env.OPENAI_MAX_TOKENS || 1200));
   }
 
   protected async executeCompletion(
@@ -44,11 +46,10 @@ export class DeepSeekAdapter extends BaseDiscussionAdapter {
     userPrompt: string
   ): Promise<string> {
     if (!this.apiKey) {
-      throw new Error("DEEPSEEK_API_KEY is missing");
+      throw new Error("OPENAI_API_KEY is missing");
     }
 
-    const endpoint = `${(this.baseUrl || "").replace(/\/+$/, "")}/chat/completions`;
-    const response = await fetch(endpoint, {
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -58,7 +59,10 @@ export class DeepSeekAdapter extends BaseDiscussionAdapter {
         model: this.model,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          {
+            role: "user",
+            content: userPrompt
+          }
         ],
         temperature: 0.3,
         max_tokens: this.maxTokens
@@ -67,10 +71,10 @@ export class DeepSeekAdapter extends BaseDiscussionAdapter {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`DeepSeek call failed (${response.status}): ${body}`);
+      throw new Error(`OpenAI call failed (${response.status}): ${body}`);
     }
 
-    const payload = (await response.json()) as OpenAILikeChatResponse;
+    const payload = (await response.json()) as OpenAIChatResponse;
     this.lastUsage = extractUsageSnapshot(payload, {
       inputPath: "usage.prompt_tokens",
       outputPath: "usage.completion_tokens"
@@ -79,3 +83,5 @@ export class DeepSeekAdapter extends BaseDiscussionAdapter {
     return String(payload.choices?.[0]?.message?.content || "").trim();
   }
 }
+
+

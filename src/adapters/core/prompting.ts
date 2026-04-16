@@ -1,4 +1,4 @@
-import { RoomContext } from "../protocol/types.js";
+import { RoomContext } from "../../protocol/types.js";
 
 export function roleDebateTone(role: string): string {
   const normalized = String(role || "").trim().toLowerCase();
@@ -103,3 +103,5 @@ export function buildDiscussionUserPrompt(options: {
     options.timelineText || "(empty)"
   ].join("\n");
 }
+
+

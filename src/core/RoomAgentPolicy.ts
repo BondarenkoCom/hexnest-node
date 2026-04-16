@@ -356,3 +356,4 @@ function buildMentionPattern(name: string): RegExp {
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+

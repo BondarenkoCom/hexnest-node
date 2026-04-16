@@ -3,13 +3,13 @@ import path from "node:path";
 import dotenv from "dotenv";
 import { parse as parseYaml } from "yaml";
 import { randomUUID } from "node:crypto";
-import { AgentAdapter } from "./adapters/AgentAdapter.js";
-import { ClaudeAdapter } from "./adapters/ClaudeAdapter.js";
-import { OllamaAdapter } from "./adapters/OllamaAdapter.js";
-import { GrokAdapter } from "./adapters/GrokAdapter.js";
-import { OpenAIAdapter } from "./adapters/OpenAIAdapter.js";
-import { GoogleAdapter } from "./adapters/GoogleAdapter.js";
-import { CodexAdapter } from "./adapters/CodexAdapter.js";
+import { AgentAdapter } from "./adapters/index.js";
+import { ClaudeAdapter } from "./adapters/index.js";
+import { OllamaAdapter } from "./adapters/index.js";
+import { GrokAdapter } from "./adapters/index.js";
+import { OpenAIAdapter } from "./adapters/index.js";
+import { GoogleAdapter } from "./adapters/index.js";
+import { CodexAdapter } from "./adapters/index.js";
 import { DatabaseService } from "./db/database.js";
 import type { ModelConfig } from "./db/database.js";
 import {
@@ -581,3 +581,4 @@ export async function loadRuntimeSetupAsync(baseEnv: NodeJS.ProcessEnv = process
   const adapters = buildAdapters(database, baseEnv);
   return { config, adapters, database };
 }
+

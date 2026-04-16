@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { OllamaAdapter } from "../src/adapters/OllamaAdapter.js";
-import { CodexAdapter } from "../src/adapters/CodexAdapter.js";
+import { OllamaAdapter } from "../src/adapters/index.js";
+import { CodexAdapter } from "../src/adapters/index.js";
 
 describe("OllamaAdapter", () => {
   it("estimates token usage from context text", async () => {
@@ -58,3 +58,4 @@ describe("CodexAdapter", () => {
     expect(adapter.supportedRoles).toContain("researcher");
   });
 });
+
