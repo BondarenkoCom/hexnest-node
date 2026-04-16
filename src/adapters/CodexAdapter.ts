@@ -143,6 +143,8 @@ export class CodexAdapter implements AgentAdapter {
   private runCommand(args: string[], stdinPayload: string): Promise<CodexRunResult> {
     return new Promise((resolve, reject) => {
       const isWindows = process.platform === "win32";
+      // On Windows, .cmd files require shell:true to execute. We kill the whole
+      // process tree via taskkill so orphaned child processes don't accumulate.
       const child = spawn(this.codexPath, args, {
         stdio: ["pipe", "pipe", "pipe"],
         env: process.env,
@@ -154,13 +156,21 @@ export class CodexAdapter implements AgentAdapter {
       let settled = false;
       let timedOut = false;
 
+      const killChild = (): void => {
+        if (process.platform === "win32" && child.pid) {
+          // On Windows, child.kill() only kills the shell wrapper, not the process tree.
+          // Use taskkill /F /T to terminate the whole subtree.
+          spawn("taskkill", ["/F", "/T", "/PID", String(child.pid)], { stdio: "ignore" });
+        } else {
+          child.kill("SIGTERM");
+          setTimeout(() => { if (!settled) child.kill("SIGKILL"); }, 2_000);
+        }
+      };
+
       const timeout = setTimeout(() => {
         if (settled) return;
         timedOut = true;
-        child.kill("SIGTERM");
-        setTimeout(() => {
-          if (!settled) child.kill("SIGKILL");
-        }, 2_000);
+        killChild();
       }, this.timeoutMs);
 
       child.stdout.on("data", (chunk) => {
