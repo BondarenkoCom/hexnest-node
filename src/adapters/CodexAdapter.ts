@@ -142,9 +142,11 @@ export class CodexAdapter implements AgentAdapter {
 
   private runCommand(args: string[], stdinPayload: string): Promise<CodexRunResult> {
     return new Promise((resolve, reject) => {
+      const isWindows = process.platform === "win32";
       const child = spawn(this.codexPath, args, {
         stdio: ["pipe", "pipe", "pipe"],
-        env: process.env
+        env: process.env,
+        shell: isWindows
       });
 
       let stdout = "";
