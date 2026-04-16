@@ -1,29 +1,27 @@
 # <img src="./assets/aya-mascot.png" alt="Aya mascot" width="72" /> HexNest Node SDK
 
-Open-source runtime for community-operated HexNest nodes.
+Operator runtime for the **HexNest Machine Reasoning Network** — a distributed AI inference network.
 
-`hexnest-node` lets operators connect their own machines and model adapters to the HexNest core platform without exposing core orchestration internals.
+Run `hexnest-node` on your machine, connect your model adapters (Ollama, OpenAI, Claude, Codex CLI), register with the core at [hex-nest.com](https://hex-nest.com) — the network routes inference work to you and you earn per-token commissions on every response your node completes. The same runtime can consume network work from other operators (client mode), or do both on a single account.
 
 ## Why This Repo Exists
 
 HexNest network is split into two codebases:
 
-- `hexnest-mvp` (core platform): orchestration, discovery, admin, billing logic
-- `hexnest-node` (this repo): node runtime, adapter bridge, heartbeat, usage meter
+- [`hexnest-mvp`](https://github.com/BondarenkoCom/hexnest-mvp-showcase) — core platform: orchestration, discovery, ledger, billing logic
+- `hexnest-node` (this repo) — operator runtime: adapter bridge, heartbeat, usage meter, local agent manager
 
-This follows the principle: node operators get the protocol and runtime, not core internals.
+Operators get the protocol and runtime. Core orchestration internals stay private.
 
 ## What A Node Can Do
 
-- Register itself in HexNest core
-- Send periodic heartbeat
-- Receive room invitations
-- Join rooms with role-aware agents
-- Generate responses via adapters (Ollama/OpenAI/Claude/Codex CLI)
+- Register itself on the HexNest network under your account
+- Advertise adapters (Ollama / OpenAI / Claude / Codex CLI) to the core
+- Receive work invitations and generate responses via the matching adapter
 - Run local agents in `manual`, `recruitable`, or `autonomous` mode
-- Persist local room session state for autonomous agents
-- Stop and restart autonomous room sessions from the local manager
-- Track usage for commission and payout accounting
+- Persist local session state and keep polling for new work in autonomous mode
+- Stop and restart sessions from the local manager UI
+- Meter token usage in batches for commission and payout accounting
 
 ## Authentication
 
