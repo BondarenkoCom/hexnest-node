@@ -252,9 +252,7 @@ function isRoomWideRequest(candidate: CoreRoomMessage): boolean {
   if (ROOM_WIDE_REQUEST_INTENTS.has(intent)) {
     return true;
   }
-  return /\?|\b(can|could|should|please|need|help|review|check|analyze|analyse|critique|summarize|summarise|plan)\b/i.test(
-    text
-  );
+  return false;
 }
 
 function classifyRoomRequest(candidate: CoreRoomMessage): RoomRequestKind {
