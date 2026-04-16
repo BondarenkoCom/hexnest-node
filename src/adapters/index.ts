@@ -18,3 +18,7 @@ export * from "./cli/GeminiCliAdapter.js";
 export * from "./cli/OpenCodeCliAdapter.js";
 export * from "./local/OllamaAdapter.js";
 
+export * from "./local/LmStudioAdapter.js";
+export * from "./local/LlamaCppAdapter.js";
+export * from "./local/Gpt4AllAdapter.js";
+
