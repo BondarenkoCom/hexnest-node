@@ -32,6 +32,7 @@ export class CodexAdapter implements AgentAdapter {
       supportedRoles?: string[];
       timeoutMs?: number;
       codexPath?: string;
+      sandbox?: string;
     } = {}
   ) {
     this.name = options.name || "codex";
@@ -41,11 +42,13 @@ export class CodexAdapter implements AgentAdapter {
     this.supportedRoles = options.supportedRoles || ["builder", "researcher", "skeptic", "synthesizer", "judge"];
     this.timeoutMs = Math.max(1_000, Number(options.timeoutMs ?? process.env.CODEX_TIMEOUT_MS ?? 120_000));
     this.codexPath = String(options.codexPath || process.env.CODEX_CLI_PATH || "codex").trim() || "codex";
+    this.sandbox = String(options.sandbox || process.env.CODEX_SANDBOX || "read-only").trim();
   }
 
   private readonly model: string;
   private readonly timeoutMs: number;
   private readonly codexPath: string;
+  private readonly sandbox: string;
 
   async respond(context: RoomContext): Promise<AgentResponse> {
     const timeline = context.timeline
@@ -111,7 +114,7 @@ export class CodexAdapter implements AgentAdapter {
       "--ephemeral",
       "--skip-git-repo-check",
       "--sandbox",
-      "read-only",
+      this.sandbox,
       "--output-last-message",
       outputFile
     ];
