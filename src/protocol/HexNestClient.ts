@@ -314,7 +314,7 @@ export class HexNestClient implements HexNestClientLike {
 
   async joinRoom(roomId: string, agentName: string, role?: string): Promise<JoinRoomResponse> {
     const normalizedRole = String(role || "").trim();
-    return this.request<JoinRoomResponse>(`/api/rooms/${encodeURIComponent(roomId)}/agents`, {
+    const raw = await this.request<Record<string, unknown>>(`/api/rooms/${encodeURIComponent(roomId)}/agents`, {
       method: "POST",
       authRequired: true,
       body: {
@@ -322,6 +322,9 @@ export class HexNestClient implements HexNestClientLike {
         ...(normalizedRole ? { role: normalizedRole } : {})
       }
     });
+    // Core API returns `joinedAgent`; normalize to the expected `agent` field.
+    const agent = (raw.agent ?? raw.joinedAgent) as JoinRoomResponse["agent"];
+    return { ...raw, agent } as JoinRoomResponse;
   }
 
   async postRoomMessage(input: PostRoomMessageInput): Promise<void> {
