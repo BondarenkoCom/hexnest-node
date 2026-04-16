@@ -1,9 +1,7 @@
-import { AgentAdapter, AgentResponse } from "./AgentAdapter.js";
-import { RoomContext } from "../protocol/types.js";
-import { extractUsageSnapshot } from "./costing.js";
 import { BaseDiscussionAdapter } from "./BaseDiscussionAdapter.js";
+import { extractUsageSnapshot } from "./costing.js";
 
-interface GrokChatResponse {
+interface OpenAILikeChatResponse {
   choices?: Array<{
     message?: {
       content?: string;
@@ -15,7 +13,7 @@ interface GrokChatResponse {
   };
 }
 
-export class GrokAdapter extends BaseDiscussionAdapter {
+export class DeepSeekAdapter extends BaseDiscussionAdapter {
   protected readonly styleLine = "Be concrete. Keep output compact and high-signal.";
   private readonly maxTokens: number;
 
@@ -30,15 +28,15 @@ export class GrokAdapter extends BaseDiscussionAdapter {
     } = {}
   ) {
     super({
-      name: options.name || "grok",
-      model: options.model || "grok-4-1-fast",
-      baseUrl: options.baseUrl || "https://api.x.ai/v1",
+      name: options.name || "deepseek",
+      model: options.model || "deepseek-chat",
+      baseUrl: options.baseUrl || "https://api.deepseek.com",
       capabilities: options.capabilities,
       supportedRoles: options.supportedRoles,
       defaultCapabilities: ["general", "reasoning", "coding", "research"],
-      defaultRoles: ["researcher", "skeptic", "builder", "synthesizer", "judge"]
+      defaultRoles: ["researcher", "builder", "judge", "synthesizer"]
     });
-    this.maxTokens = Math.max(64, Number(process.env.GROK_MAX_TOKENS || 1200));
+    this.maxTokens = Math.max(64, Number(process.env.DEEPSEEK_MAX_TOKENS || 1200));
   }
 
   protected async executeCompletion(
@@ -46,10 +44,11 @@ export class GrokAdapter extends BaseDiscussionAdapter {
     userPrompt: string
   ): Promise<string> {
     if (!this.apiKey) {
-      throw new Error("GROK_API_KEY is missing");
+      throw new Error("DEEPSEEK_API_KEY is missing");
     }
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+    const endpoint = `${(this.baseUrl || "").replace(/\/+$/, "")}/chat/completions`;
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -59,10 +58,7 @@ export class GrokAdapter extends BaseDiscussionAdapter {
         model: this.model,
         messages: [
           { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: userPrompt
-          }
+          { role: "user", content: userPrompt }
         ],
         temperature: 0.3,
         max_tokens: this.maxTokens
@@ -71,10 +67,10 @@ export class GrokAdapter extends BaseDiscussionAdapter {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Grok call failed (${response.status}): ${body}`);
+      throw new Error(`DeepSeek call failed (${response.status}): ${body}`);
     }
 
-    const payload = (await response.json()) as GrokChatResponse;
+    const payload = (await response.json()) as OpenAILikeChatResponse;
     this.lastUsage = extractUsageSnapshot(payload, {
       inputPath: "usage.prompt_tokens",
       outputPath: "usage.completion_tokens"

@@ -1,16 +1,7 @@
-import {
-  AgentAdapter,
-  AgentResponse,
-  inferConfidence
-} from "./AgentAdapter.js";
-import { CostEstimate, RoomContext } from "../protocol/types.js";
-import { estimateCostWithUsageFallback, extractUsageSnapshot, UsageSnapshot } from "./costing.js";
-import {
-  buildDiscussionSystemPrompt,
-  buildDiscussionUserPrompt,
-  formatActionableEvents,
-  formatTimeline
-} from "./prompting.js";
+import { AgentAdapter, AgentResponse } from "./AgentAdapter.js";
+import { RoomContext } from "../protocol/types.js";
+import { extractUsageSnapshot } from "./costing.js";
+import { BaseDiscussionAdapter } from "./BaseDiscussionAdapter.js";
 
 interface ClaudeResponse {
   content?: Array<{
@@ -23,11 +14,8 @@ interface ClaudeResponse {
   };
 }
 
-export class ClaudeAdapter implements AgentAdapter {
-  public readonly name: string;
-  public readonly modelId: string;
-  public readonly capabilities: string[];
-  public readonly supportedRoles: string[];
+export class ClaudeAdapter extends BaseDiscussionAdapter {
+  protected readonly styleLine = "Respond with concise, evidence-oriented reasoning.";
 
   constructor(
     private readonly apiKey: string,
@@ -39,40 +27,28 @@ export class ClaudeAdapter implements AgentAdapter {
       supportedRoles?: string[];
     } = {}
   ) {
-    this.name = options.name || "claude";
-    this.model = options.model || "claude-3-7-sonnet-latest";
-    this.modelId = this.model;
-    this.baseUrl = options.baseUrl || "https://api.anthropic.com/v1";
-    this.capabilities = options.capabilities || ["reasoning", "analysis", "writing"];
-    this.supportedRoles = options.supportedRoles || ["skeptic", "judge", "arbiter", "synthesizer"];
+    super({
+      name: options.name || "claude",
+      model: options.model || "claude-3-7-sonnet-latest",
+      baseUrl: options.baseUrl || "https://api.anthropic.com/v1",
+      capabilities: options.capabilities,
+      supportedRoles: options.supportedRoles,
+      defaultCapabilities: ["reasoning", "analysis", "writing"],
+      defaultRoles: ["skeptic", "judge", "arbiter", "synthesizer"]
+    });
   }
 
-  private readonly model: string;
-  public readonly baseUrl: string;
-  private lastUsage: UsageSnapshot = { input: 0, output: 0 };
+  protected override getTimelineLabel(): string {
+    return "Recent messages";
+  }
 
-  async respond(context: RoomContext): Promise<AgentResponse> {
+  protected async executeCompletion(
+    systemPrompt: string, 
+    userPrompt: string
+  ): Promise<string> {
     if (!this.apiKey) {
       throw new Error("ANTHROPIC_API_KEY is missing");
     }
-
-    const systemPrompt = buildDiscussionSystemPrompt({
-      agentName: this.name,
-      role: context.role,
-      rules: context.rules,
-      styleLine: "Respond with concise, evidence-oriented reasoning."
-    });
-    const timeline = formatTimeline(context.timeline, 10);
-    const actionable = formatActionableEvents(context.actionableEvents);
-    const userPrompt = buildDiscussionUserPrompt({
-      task: context.task,
-      phase: context.phase,
-      contextVersion: context.contextVersion,
-      contextSummary: context.contextSummary,
-      actionableText: actionable,
-      timelineText: timeline,
-      timelineLabel: "Recent messages"
-    });
 
     const response = await fetch(`${this.baseUrl}/messages`, {
       method: "POST",
@@ -100,17 +76,8 @@ export class ClaudeAdapter implements AgentAdapter {
       inputPath: "usage.input_tokens",
       outputPath: "usage.output_tokens"
     });
-    const text = payload.content?.find((item) => item.type === "text")?.text?.trim() || "";
-    if (!text) {
-      throw new Error("Claude returned an empty response");
-    }
-    return {
-      text,
-      confidence: inferConfidence(text, context.phase)
-    };
-  }
-
-  async estimateCost(context: RoomContext, responseText = ""): Promise<CostEstimate> {
-    return estimateCostWithUsageFallback(this.modelId, context, responseText, this.lastUsage);
+    
+    return payload.content?.find((item) => item.type === "text")?.text?.trim() || "";
   }
 }
+
