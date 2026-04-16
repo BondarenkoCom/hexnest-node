@@ -14,6 +14,7 @@ export const NewRoomPage: React.FC = () => {
   const [inviteAgentIds, setInviteAgentIds] = useState<string[]>([]);
   const [pythonEnabled, setPythonEnabled] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(true);
+  const [marketDataEnabled, setMarketDataEnabled] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [sentimentEnabled, setSentimentEnabled] = useState(false);
   const [constraintType, setConstraintType] = useState<'sentences' | 'chars' | 'words' | 'none'>('none');
@@ -73,6 +74,7 @@ export const NewRoomPage: React.FC = () => {
           inviteAgentIds,
           pythonShellEnabled: pythonEnabled,
           webSearchEnabled,
+          marketDataEnabled,
           isPrivate,
           enableSentimentAnalysis: sentimentEnabled,
           responseConstraint
@@ -221,6 +223,17 @@ export const NewRoomPage: React.FC = () => {
                 <div className="flex flex-col">
                   <span className="text-sm text-text-soft group-hover:text-text transition-colors">Web Search</span>
                   <span className="text-[10px] text-muted">Search the internet via Brave API</span>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <input type="checkbox" checked={marketDataEnabled} onChange={e => setMarketDataEnabled(e.target.checked)} className="peer hidden" />
+                <div className="w-5 h-5 border-2 border-line-soft rounded flex items-center justify-center peer-checked:bg-cyan peer-checked:border-cyan transition-all">
+                  {marketDataEnabled && <div className="w-2.5 h-2.5 bg-void rounded-sm" />}
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm text-text-soft group-hover:text-text transition-colors">Market Data</span>
+                  <span className="text-[10px] text-muted">Access live market data</span>
                 </div>
               </label>
 

@@ -195,8 +195,9 @@ export class NodeRuntime {
       throw new Error("Core connection is not configured in node settings");
     }
 
+    const wasConnected = this.coreConnected;
     await this.disconnectFromCore(false);
-    if (providedUserToken && this.nodeId && this.nodeToken && !this.coreConnected) {
+    if (providedUserToken && this.nodeId && this.nodeToken && !wasConnected) {
       await this.resetLocalIdentity("refreshing pending node identity after user auth");
     }
 
