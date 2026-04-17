@@ -70,7 +70,11 @@ export class RoomAgentSession {
     await this.emitState("starting");
     try {
       await this.ensureJoined();
-      this.lastRespondedAt = Date.now();
+      // Don't reset lastRespondedAt here — would impose an artificial 15s cooldown and
+      // cause the cursor to race past actionable messages before the cooldown expires.
+      if (!this.lastRespondedAt) {
+        this.lastRespondedAt = Date.now();
+      }
       this.options.logger?.info(`[session] Agent ${this.options.adapter.name} is joined and ready in room ${this.options.roomId}`);
       await this.emitState("idle");
 
@@ -154,10 +158,13 @@ export class RoomAgentSession {
         (left, right) => Date.parse(left.timestamp || "") - Date.parse(right.timestamp || "")
       );
       const unseen = this.getUnseenMessages(ordered);
-      this.lastSeenMessageId = ordered.at(-1)?.id || this.lastSeenMessageId;
+      // Advance cursor only for messages we deliberately skip (system/self handled inside
+      // pickNextTrigger). Do NOT advance here for messages rejected by policy/cooldown —
+      // otherwise the cursor races past actionable messages before cooldown expires.
       const roomFingerprint = this.buildRoomFingerprint(ordered);
 
       if (unseen.length === 0) {
+        this.lastSeenMessageId = ordered.at(-1)?.id || this.lastSeenMessageId;
         await this.recordNoAction("no_unseen_messages", roomFingerprint);
         await this.sleep(pollIntervalMs);
         continue;
@@ -170,6 +177,7 @@ export class RoomAgentSession {
         && roomFingerprint === this.lastRoomFingerprint
         && this.noActionStreak >= maxNoActionStreak
       ) {
+        this.lastSeenMessageId = ordered.at(-1)?.id || this.lastSeenMessageId;
         await this.recordNoAction("unchanged_room_fingerprint", roomFingerprint);
         await this.sleep(pollIntervalMs);
         continue;
@@ -177,6 +185,13 @@ export class RoomAgentSession {
 
       const context = await this.options.client.getRoomContext(this.options.roomId, this.options.role);
       const nextDecision = this.pickNextTrigger(unseen, context.phase, context.role);
+
+      if (nextDecision && "cooldownPending" in nextDecision) {
+        // Actionable messages exist but cooldown is active — hold cursor, retry next cycle.
+        await this.recordNoAction("cooldown_pending", roomFingerprint);
+        await this.sleep(pollIntervalMs);
+        continue;
+      }
 
       if (nextDecision) {
         await this.emitState("responding");
@@ -206,6 +221,10 @@ export class RoomAgentSession {
         continue;
       }
 
+      // Policy rejected all unseen messages — advance cursor so we don't retry them forever,
+      // but only skip messages that are definitively non-actionable (system, self, wrong target).
+      // Cooldown-rejected messages are retried next cycle since cursor stays put.
+      this.lastSeenMessageId = ordered.at(-1)?.id || this.lastSeenMessageId;
       await this.recordNoAction("policy_rejected_unseen_messages", roomFingerprint);
 
       await this.sleep(pollIntervalMs);
@@ -216,7 +235,8 @@ export class RoomAgentSession {
     unseen: CoreRoomMessage[],
     roomPhase: string,
     roomRole: string
-  ): { triggeredBy: string; reason: string } | null {
+  ): { triggeredBy: string; reason: string; cooldownPending?: never } | { cooldownPending: true } | null {
+    let anyCooldownPending = false;
     for (let index = unseen.length - 1; index >= 0; index -= 1) {
       const message = unseen[index];
       const decision = evaluateRoomAgentPolicy({
@@ -236,9 +256,14 @@ export class RoomAgentSession {
           reason: decision.reason
         };
       }
+      if (decision.reason === "room cooldown active") {
+        anyCooldownPending = true;
+      }
     }
 
-    return null;
+    // If the only reason nothing fired is an active cooldown, signal the caller to
+    // hold the cursor in place so these messages are retried after cooldown expires.
+    return anyCooldownPending ? { cooldownPending: true } : null;
   }
 
   private getUnseenMessages(messages: CoreRoomMessage[]): CoreRoomMessage[] {
