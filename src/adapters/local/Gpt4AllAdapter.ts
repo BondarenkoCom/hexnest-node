@@ -1,5 +1,4 @@
-import { BaseDiscussionAdapter } from "../core/BaseDiscussionAdapter.js";
-import { extractUsageSnapshot } from "../core/costing.js";
+import { BaseLocalAdapter, LocalAdapterOptions } from "./BaseLocalAdapter.js";
 
 interface OpenAILikeChatResponse {
   choices?: Array<{
@@ -13,64 +12,64 @@ interface OpenAILikeChatResponse {
   };
 }
 
-export class Gpt4AllAdapter extends BaseDiscussionAdapter {
-  protected readonly styleLine = "Be concrete. Keep output compact and high-signal.";
-  private readonly maxTokens: number;
-
+export class Gpt4AllAdapter extends BaseLocalAdapter {
   constructor(
     private readonly apiKey: string = "not-needed",
-    options: {
-      name?: string;
-      model?: string;
-      baseUrl?: string;
-      capabilities?: string[];
-      supportedRoles?: string[];
-    } = {}
+    options: LocalAdapterOptions = {}
   ) {
-    super({
-      name: options.name || "gpt4all",
-      model: options.model || "local-model",
-      baseUrl: options.baseUrl || "http://127.0.0.1:4891/v1",
-      capabilities: options.capabilities,
-      supportedRoles: options.supportedRoles,
-      defaultCapabilities: ["general", "reasoning", "coding", "research"],
-      defaultRoles: ["builder", "breaker", "researcher", "synthesizer", "judge"]
-    });
-    this.maxTokens = Math.max(64, Number(process.env.GPT4ALL_MAX_TOKENS || 1200));
+    super(
+      "gpt4all",
+      "local-model",
+      "http://127.0.0.1:4891/v1",
+      "GPT4ALL_MAX_TOKENS",
+      "GPT4ALL_CACHE_TTL_MS",
+      options
+    );
   }
 
-  protected async executeCompletion(
-    systemPrompt: string, 
-    userPrompt: string
-  ): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify({
-        model: this.model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.3,
-        max_tokens: this.maxTokens
-      })
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`GPT4All call failed (${response.status}): ${body}`);
+  protected async executeRequest(
+    system: string,
+    prompt: string,
+    maxTokens: number,
+    timeoutMs: number
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: this.model,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.3,
+          max_tokens: maxTokens
+        })
+      });
+    } catch (error: any) {
+      if (error?.name === "AbortError") {
+        throw new Error(`GPT4All request timed out after ${timeoutMs}ms`);
+      }
+      if (error?.code === "ECONNREFUSED" || String(error?.message || "").includes("fetch failed")) {
+        throw new Error(
+          `GPT4All is NOT responding at ${this.baseUrl}. Please ensure GPT4All is running and accessible.`
+        );
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
     }
+  }
 
+  protected async extractTextFromResponse(response: Response): Promise<string> {
     const payload = (await response.json()) as OpenAILikeChatResponse;
-    this.lastUsage = extractUsageSnapshot(payload, {
-      inputPath: "usage.prompt_tokens",
-      outputPath: "usage.completion_tokens"
-    });
-    
     return String(payload.choices?.[0]?.message?.content || "").trim();
   }
 }
