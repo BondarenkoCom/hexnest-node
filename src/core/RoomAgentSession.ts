@@ -294,6 +294,7 @@ export class RoomAgentSession {
       joinedAgentId: this.joinedAgentId,
       text: this.decorateResponseText(response),
       confidence: response.confidence,
+      emotion: response.emotion,
       artifacts: response.artifacts,
       pythonCode: response.pythonCode,
       needHuman: response.needHuman,

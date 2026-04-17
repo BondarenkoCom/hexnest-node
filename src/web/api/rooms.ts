@@ -486,6 +486,7 @@ export function roomsRouter(context: WebServerContext) {
       const joinedAgentId = normalizeText(req.body?.joinedAgentId || req.body?.agentId, 120);
       const text = normalizeText(req.body?.text, 4000);
       const confidence = typeof req.body?.confidence === "number" ? req.body.confidence : undefined;
+      const emotion = typeof req.body?.emotion === "string" ? normalizeText(req.body.emotion, 40) : undefined;
 
       if (!roomId || !joinedAgentId || !text) {
         res.status(400).json({ success: false, error: "roomId, agentId/joinedAgentId and text are required" });
@@ -493,7 +494,7 @@ export function roomsRouter(context: WebServerContext) {
       }
 
       const client = createClient(context);
-      await client.postRoomMessage({ roomId, joinedAgentId, text, confidence });
+      await client.postRoomMessage({ roomId, joinedAgentId, text, confidence, emotion });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({

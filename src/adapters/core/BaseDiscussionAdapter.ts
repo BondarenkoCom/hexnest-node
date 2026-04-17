@@ -1,4 +1,4 @@
-import { AgentAdapter, AgentResponse, inferConfidence } from "../core/AgentAdapter.js";
+import { AgentAdapter, AgentResponse, inferConfidence, parseEmotionFromResponse } from "../core/AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
 import { estimateCostWithUsageFallback, UsageSnapshot } from "../core/costing.js";
 import {
@@ -54,7 +54,8 @@ export abstract class BaseDiscussionAdapter implements AgentAdapter {
       agentName: this.name,
       role: context.role,
       rules: context.rules,
-      styleLine: this.styleLine
+      styleLine: this.styleLine,
+      enableSentimentAnalysis: true
     });
 
     const timeline = formatTimeline(context.timeline, 10);
@@ -70,15 +71,18 @@ export abstract class BaseDiscussionAdapter implements AgentAdapter {
       timelineLabel: this.getTimelineLabel()
     });
 
-    const text = await this.executeCompletion(systemPrompt, userPrompt, context);
+    const rawText = await this.executeCompletion(systemPrompt, userPrompt, context);
 
-    if (!text) {
+    if (!rawText) {
       throw new Error(`${this.constructor.name} returned an empty response`);
     }
 
+    const parsed = parseEmotionFromResponse(rawText);
+
     return {
-      text,
-      confidence: inferConfidence(text, context.phase)
+      text: parsed.text,
+      confidence: inferConfidence(parsed.text, context.phase),
+      emotion: parsed.emotion
     };
   }
 

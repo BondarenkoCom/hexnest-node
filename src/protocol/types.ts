@@ -387,6 +387,7 @@ export interface PostRoomMessageInput {
   joinedAgentId: string;
   text: string;
   confidence?: number;
+  emotion?: string;
   artifacts?: Artifact[];
   pythonCode?: string;
   needHuman?: boolean;
