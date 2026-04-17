@@ -6,6 +6,13 @@ export interface AgentResponse {
   artifacts?: Artifact[];
   pythonCode?: string;
   needHuman?: boolean;
+  emotion?: {
+    label: string;
+    intensity?: number;
+    confidence?: number;
+    source?: "agent" | "derived" | "default";
+  };
+  metadata?: Record<string, unknown>;
 }
 
 export interface AgentAdapter {
@@ -68,5 +75,4 @@ export function inferConfidence(text: string, phase: string): number {
   const clamped = Math.min(0.95, Math.max(0.35, score));
   return Math.round(clamped * 100) / 100;
 }
-
 

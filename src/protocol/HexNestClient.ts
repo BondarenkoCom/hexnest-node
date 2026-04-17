@@ -346,6 +346,12 @@ export class HexNestClient implements HexNestClientLike {
     if (input.triggeredBy !== undefined) {
       body.triggeredBy = input.triggeredBy;
     }
+    if (input.emotion) {
+      body.emotion = input.emotion;
+    }
+    if (input.metadata && typeof input.metadata === "object") {
+      body.metadata = input.metadata;
+    }
 
     await this.request(`/api/rooms/${encodeURIComponent(input.roomId)}/messages`, {
       method: "POST",
@@ -376,6 +382,14 @@ export class HexNestClient implements HexNestClientLike {
         intent: value.intent ? String(value.intent) : undefined,
         triggeredBy: value.triggeredBy ? String(value.triggeredBy) : null,
         text: String(value.text || ""),
+        emotion:
+          value.emotion && typeof value.emotion === "object"
+            ? (value.emotion as RoomContext["timeline"][number]["emotion"])
+            : undefined,
+        metadata:
+          value.metadata && typeof value.metadata === "object" && !Array.isArray(value.metadata)
+            ? (value.metadata as Record<string, unknown>)
+            : undefined,
         confidence: typeof value.confidence === "number" ? value.confidence : undefined
       };
     });
@@ -409,6 +423,7 @@ export class HexNestClient implements HexNestClientLike {
       task: String(room.task || ""),
       role,
       phase: String(room.phase || "open_room"),
+      debateFastMode: Boolean((room.settings as Record<string, unknown> | undefined)?.debateFastMode),
       contextVersion: "v2",
       timeline,
       actionableEvents,
