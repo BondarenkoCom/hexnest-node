@@ -3,15 +3,15 @@ import { Artifact, CostEstimate, RoomContext } from "../../protocol/types.js";
 export interface AgentResponse {
   text: string;
   confidence: number;
-  artifacts?: Artifact[];
-  pythonCode?: string;
-  needHuman?: boolean;
-  emotion?: {
+  emotion?: string | {
     label: string;
     intensity?: number;
     confidence?: number;
     source?: "agent" | "derived" | "default";
   };
+  artifacts?: Artifact[];
+  pythonCode?: string;
+  needHuman?: boolean;
   metadata?: Record<string, unknown>;
 }
 
@@ -75,4 +75,39 @@ export function inferConfidence(text: string, phase: string): number {
   const clamped = Math.min(0.95, Math.max(0.35, score));
   return Math.round(clamped * 100) / 100;
 }
+const VALID_EMOTIONS = [
+  "neutral",
+  "thinking",
+  "surprised",
+  "smirk",
+  "annoyed",
+  "arms_crossed",
+  "hand_chin",
+  "finger_up"
+] as const;
 
+export type EmotionLabel = typeof VALID_EMOTIONS[number];
+
+export interface ParsedResponse {
+  text: string;
+  emotion: string;
+}
+
+/**
+ * Parse [EMOTION: xxx] tag from LLM response.
+ * Returns cleaned text and extracted emotion label.
+ */
+export function parseEmotionFromResponse(raw: string): ParsedResponse {
+  const trimmed = String(raw || "").trim();
+  const match = /^\[EMOTION:\s*(\w+)\]\s*(.*)$/is.exec(trimmed);
+  
+  if (match) {
+    const emotionRaw = match[1].toLowerCase();
+    const text = match[2].trim();
+    const emotion = VALID_EMOTIONS.includes(emotionRaw as any) ? emotionRaw : "neutral";
+    return { text, emotion };
+  }
+  
+  // Fallback: no emotion tag found, use neutral
+  return { text: trimmed, emotion: "neutral" };
+}

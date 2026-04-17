@@ -418,16 +418,16 @@ export interface PostRoomMessageInput {
   joinedAgentId: string;
   text: string;
   confidence?: number;
-  artifacts?: Artifact[];
-  pythonCode?: string;
-  needHuman?: boolean;
-  triggeredBy?: string | null;
-  emotion?: {
+  emotion?: string | {
     label: string;
     intensity?: number;
     confidence?: number;
     source?: "agent" | "derived" | "default";
   };
+  artifacts?: Artifact[];
+  pythonCode?: string;
+  needHuman?: boolean;
+  triggeredBy?: string | null;
   metadata?: Record<string, unknown>;
 }
 

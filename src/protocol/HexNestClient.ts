@@ -334,6 +334,9 @@ export class HexNestClient implements HexNestClientLike {
       text: input.text,
       confidence: input.confidence ?? 0.75
     };
+    if (input.emotion) {
+      body.emotion = input.emotion;
+    }
     if (Array.isArray(input.artifacts) && input.artifacts.length > 0) {
       body.artifacts = input.artifacts;
     }

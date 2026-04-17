@@ -4,7 +4,8 @@ import {
   AgentResponse,
   estimateTokensFromText,
   estimateUsdFromModel,
-  inferConfidence
+  inferConfidence,
+  parseEmotionFromResponse
 } from "../core/AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
 
@@ -74,10 +75,13 @@ export abstract class BaseCliAdapter implements AgentAdapter {
       timeline || "(empty)"
     ].join("\n");
 
-    const text = await this.executeCli(prompt);
+    const rawText = await this.executeCli(prompt);
+    const parsed = parseEmotionFromResponse(rawText);
+    
     return {
-      text,
-      confidence: inferConfidence(text, context.phase)
+      text: parsed.text,
+      confidence: inferConfidence(parsed.text, context.phase),
+      emotion: parsed.emotion
     };
   }
 
@@ -170,5 +174,4 @@ export abstract class BaseCliAdapter implements AgentAdapter {
     });
   }
 }
-
 

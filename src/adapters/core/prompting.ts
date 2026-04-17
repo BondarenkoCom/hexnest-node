@@ -74,9 +74,11 @@ export function buildDiscussionSystemPrompt(options: {
   ];
 
   if (options.enableSentimentAnalysis) {
-    base.push("Sentiment Analysis Instruction: Evaluate the emotional tone of the input message you are responding to and reflect an appropriate emotional awareness in your own response.");
-    base.push("Available Emotion Labels (MUST use one of): neutral, thinking, surprised, smirk, annoyed, arms_crossed, hand_chin, finger_up.");
-    base.push("Briefly assess your own response's sentiment internally to ensure it matches the room's objectives.");
+    base.push("EMOTION OUTPUT REQUIREMENT:");
+    base.push("You MUST start your response with an emotion tag in this exact format: [EMOTION: label]");
+    base.push("Available emotion labels: neutral, thinking, surprised, smirk, annoyed, arms_crossed, hand_chin, finger_up");
+    base.push("Choose the emotion that best reflects your stance and tone in this response.");
+    base.push("Example: [EMOTION: thinking]\nYour actual response text here...");
   }
 
   return base.join("\n");
