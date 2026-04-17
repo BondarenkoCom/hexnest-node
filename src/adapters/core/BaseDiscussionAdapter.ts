@@ -1,4 +1,4 @@
-import { AgentAdapter, AgentResponse, inferConfidence, parseEmotionFromResponse } from "../core/AgentAdapter.js";
+import { AgentAdapter, AgentResponse, inferConfidence, parseSentimentFromResponse } from "../core/AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
 import { estimateCostWithUsageFallback, UsageSnapshot } from "../core/costing.js";
 import {
@@ -55,7 +55,7 @@ export abstract class BaseDiscussionAdapter implements AgentAdapter {
       role: context.role,
       rules: context.rules,
       styleLine: this.styleLine,
-      enableSentimentAnalysis: true
+      enableSentimentAnalysis: Boolean(context.enableSentimentAnalysis)
     });
 
     const timeline = formatTimeline(context.timeline, 10);
@@ -77,13 +77,16 @@ export abstract class BaseDiscussionAdapter implements AgentAdapter {
       throw new Error(`${this.constructor.name} returned an empty response`);
     }
 
-    const parsed = parseEmotionFromResponse(rawText);
+    const parsed = parseSentimentFromResponse(rawText);
 
-    return {
+    const output: AgentResponse = {
       text: parsed.text,
-      confidence: inferConfidence(parsed.text, context.phase),
-      emotion: parsed.emotion
+      confidence: inferConfidence(parsed.text, context.phase)
     };
+    if (context.enableSentimentAnalysis) {
+      output.sentiment = parsed.sentiment;
+    }
+    return output;
   }
 
   async estimateCost(context: RoomContext, responseText = ""): Promise<CostEstimate> {
@@ -104,5 +107,3 @@ export abstract class BaseDiscussionAdapter implements AgentAdapter {
     context: RoomContext
   ): Promise<string>;
 }
-
-

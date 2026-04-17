@@ -2,7 +2,7 @@ import {
   AgentAdapter,
   AgentResponse,
   inferConfidence,
-  parseEmotionFromResponse
+  parseSentimentFromResponse
 } from "../core/AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
 import { estimateCostWithUsageFallback } from "../core/costing.js";
@@ -125,7 +125,7 @@ export class OllamaAdapter implements AgentAdapter {
       styleLine: "Respond with direct, evidence-focused, concise output.",
       includeTaskLine: `Task: ${context.task}`,
       includePhaseLine: `Phase: ${context.phase}`,
-      enableSentimentAnalysis: true
+      enableSentimentAnalysis: Boolean(context.enableSentimentAnalysis)
     });
     const isSlowModelMode = this.responseMode === "slow_model";
     const latest = formatTimeline(context.timeline, isSlowModelMode ? 5 : 8);
@@ -184,13 +184,15 @@ export class OllamaAdapter implements AgentAdapter {
       throw new Error("Ollama returned an empty response");
     }
 
-    const parsed = parseEmotionFromResponse(rawText);
+    const parsed = parseSentimentFromResponse(rawText);
 
-    const result = {
+    const result: AgentResponse = {
       text: parsed.text,
-      confidence: inferConfidence(parsed.text, context.phase),
-      emotion: parsed.emotion
+      confidence: inferConfidence(parsed.text, context.phase)
     };
+    if (context.enableSentimentAnalysis) {
+      result.sentiment = parsed.sentiment;
+    }
 
     // Cache the response before returning
     this.setCachedResponse(context, result);
@@ -245,5 +247,3 @@ export class OllamaAdapter implements AgentAdapter {
     }
   }
 }
-
-

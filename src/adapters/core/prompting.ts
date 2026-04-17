@@ -74,11 +74,11 @@ export function buildDiscussionSystemPrompt(options: {
   ];
 
   if (options.enableSentimentAnalysis) {
-    base.push("EMOTION OUTPUT REQUIREMENT:");
-    base.push("You MUST start your response with an emotion tag in this exact format: [EMOTION: label]");
-    base.push("Available emotion labels: neutral, thinking, surprised, smirk, annoyed, arms_crossed, hand_chin, finger_up");
-    base.push("Choose the emotion that best reflects your stance and tone in this response.");
-    base.push("Example: [EMOTION: thinking]\nYour actual response text here...");
+    base.push("SENTIMENT OUTPUT REQUIREMENT:");
+    base.push("You MUST start your response with a sentiment tag in this exact format: [SENTIMENT: label]");
+    base.push("Available sentiment labels: hostile, skeptical, neutral, concerned, encouraging, confident");
+    base.push("Choose the sentiment that best reflects your stance and tone in this response.");
+    base.push("Example: [SENTIMENT: skeptical]\nYour actual response text here...");
   }
 
   return base.join("\n");
@@ -105,5 +105,4 @@ export function buildDiscussionUserPrompt(options: {
     options.timelineText || "(empty)"
   ].join("\n");
 }
-
 

@@ -1,5 +1,3 @@
-import { AgentAdapter, AgentResponse, parseEmotionFromResponse } from "../core/AgentAdapter.js";
-import { RoomContext } from "../../protocol/types.js";
 import { extractUsageSnapshot } from "../core/costing.js";
 import { BaseDiscussionAdapter } from "../core/BaseDiscussionAdapter.js";
 
@@ -80,6 +78,5 @@ export class ClaudeAdapter extends BaseDiscussionAdapter {
     return payload.content?.find((item) => item.type === "text")?.text?.trim() || "";
   }
 }
-
 
 

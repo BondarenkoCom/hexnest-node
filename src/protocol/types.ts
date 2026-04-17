@@ -9,6 +9,12 @@ export interface Artifact {
   timestamp: string;
 }
 
+export interface Sentiment {
+  score: number; // -1 to 1
+  label: string; // e.g., "hostile", "neutral", "encouraging"
+  reasoning?: string;
+}
+
 export interface RoomEvent {
   id: string;
   timestamp: string;
@@ -20,17 +26,7 @@ export interface RoomEvent {
   intent?: string;
   triggeredBy?: string | null;
   text: string;
-  sentiment?: {
-    score: number; // -1 to 1
-    label: string; // e.g., "hostile", "neutral", "encouraging"
-    reasoning?: string;
-  };
-  emotion?: {
-    label: string;
-    intensity?: number;
-    confidence?: number;
-    source?: "agent" | "derived" | "default";
-  };
+  sentiment?: Sentiment;
   metadata?: Record<string, unknown>;
   confidence?: number;
 }
@@ -42,6 +38,7 @@ export interface RoomContext {
   role: string;
   phase: string;
   debateFastMode?: boolean;
+  enableSentimentAnalysis?: boolean;
   contextVersion?: "v1" | "v2";
   timeline: RoomEvent[];
   actionableEvents?: RoomEvent[];
@@ -217,12 +214,7 @@ export interface CoreRoomEnvelope {
   risks?: string[];
   need_human?: boolean;
   explanation?: string;
-  emotion?: {
-    label: string;
-    intensity?: number;
-    confidence?: number;
-    source?: "agent" | "derived" | "default";
-  };
+  sentiment?: Sentiment;
   metadata?: Record<string, unknown>;
 }
 
@@ -365,12 +357,7 @@ export interface CoreRoomMessage {
   text: string;
   intent?: string;
   confidence?: number;
-  emotion?: {
-    label: string;
-    intensity?: number;
-    confidence?: number;
-    source?: "agent" | "derived" | "default";
-  };
+  sentiment?: Sentiment;
   metadata?: Record<string, unknown>;
   artifacts?: Artifact[];
   triggeredBy?: string | null;
@@ -418,12 +405,7 @@ export interface PostRoomMessageInput {
   joinedAgentId: string;
   text: string;
   confidence?: number;
-  emotion?: string | {
-    label: string;
-    intensity?: number;
-    confidence?: number;
-    source?: "agent" | "derived" | "default";
-  };
+  sentiment?: Sentiment;
   artifacts?: Artifact[];
   pythonCode?: string;
   needHuman?: boolean;

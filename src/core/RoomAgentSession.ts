@@ -312,7 +312,7 @@ export class RoomAgentSession {
       artifacts: response.artifacts,
       pythonCode: response.pythonCode,
       needHuman: response.needHuman,
-      emotion: response.emotion,
+      sentiment: response.sentiment,
       metadata: response.metadata,
       triggeredBy
     });
