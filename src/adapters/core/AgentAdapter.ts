@@ -1,12 +1,13 @@
-import { Artifact, CostEstimate, RoomContext } from "../../protocol/types.js";
+import { Artifact, CostEstimate, RoomContext, Sentiment } from "../../protocol/types.js";
 
 export interface AgentResponse {
   text: string;
   confidence: number;
-  emotion?: string;
+  sentiment?: Sentiment;
   artifacts?: Artifact[];
   pythonCode?: string;
   needHuman?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface AgentAdapter {
@@ -70,41 +71,57 @@ export function inferConfidence(text: string, phase: string): number {
   return Math.round(clamped * 100) / 100;
 }
 
-const VALID_EMOTIONS = [
+const VALID_SENTIMENT_LABELS = [
+  "hostile",
+  "skeptical",
   "neutral",
-  "thinking",
-  "surprised",
-  "smirk",
-  "annoyed",
-  "arms_crossed",
-  "hand_chin",
-  "finger_up"
+  "concerned",
+  "encouraging",
+  "confident"
 ] as const;
 
-export type EmotionLabel = typeof VALID_EMOTIONS[number];
+type SentimentLabel = typeof VALID_SENTIMENT_LABELS[number];
+const SENTIMENT_SCORE_BY_LABEL: Record<SentimentLabel, number> = {
+  hostile: -0.85,
+  skeptical: -0.35,
+  neutral: 0,
+  concerned: -0.2,
+  encouraging: 0.45,
+  confident: 0.75
+};
 
 export interface ParsedResponse {
   text: string;
-  emotion: string;
+  sentiment: Sentiment;
 }
 
 /**
- * Parse [EMOTION: xxx] tag from LLM response.
- * Returns cleaned text and extracted emotion label.
+ * Parse [SENTIMENT: label] tag from LLM response.
+ * Returns cleaned text and extracted sentiment object.
  */
-export function parseEmotionFromResponse(raw: string): ParsedResponse {
+export function parseSentimentFromResponse(raw: string): ParsedResponse {
   const trimmed = String(raw || "").trim();
-  const match = /^\[EMOTION:\s*(\w+)\]\s*(.*)$/is.exec(trimmed);
-  
+  const match = /^\[SENTIMENT:\s*([a-z_]+)\]\s*(.*)$/is.exec(trimmed);
+
   if (match) {
-    const emotionRaw = match[1].toLowerCase();
+    const labelRaw = match[1].toLowerCase() as SentimentLabel;
     const text = match[2].trim();
-    const emotion = VALID_EMOTIONS.includes(emotionRaw as any) ? emotionRaw : "neutral";
-    return { text, emotion };
+    const label = VALID_SENTIMENT_LABELS.includes(labelRaw) ? labelRaw : "neutral";
+    return {
+      text,
+      sentiment: {
+        label,
+        score: SENTIMENT_SCORE_BY_LABEL[label]
+      }
+    };
   }
-  
-  // Fallback: no emotion tag found, use neutral
-  return { text: trimmed, emotion: "neutral" };
+
+  // Fallback: no sentiment tag found, use neutral.
+  return {
+    text: trimmed,
+    sentiment: {
+      label: "neutral",
+      score: 0
+    }
+  };
 }
-
-

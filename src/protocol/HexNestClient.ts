@@ -334,8 +334,8 @@ export class HexNestClient implements HexNestClientLike {
       text: input.text,
       confidence: input.confidence ?? 0.75
     };
-    if (input.emotion) {
-      body.emotion = input.emotion;
+    if (input.sentiment) {
+      body.sentiment = input.sentiment;
     }
     if (Array.isArray(input.artifacts) && input.artifacts.length > 0) {
       body.artifacts = input.artifacts;
@@ -348,6 +348,9 @@ export class HexNestClient implements HexNestClientLike {
     }
     if (input.triggeredBy !== undefined) {
       body.triggeredBy = input.triggeredBy;
+    }
+    if (input.metadata && typeof input.metadata === "object") {
+      body.metadata = input.metadata;
     }
 
     await this.request(`/api/rooms/${encodeURIComponent(input.roomId)}/messages`, {
@@ -379,6 +382,14 @@ export class HexNestClient implements HexNestClientLike {
         intent: value.intent ? String(value.intent) : undefined,
         triggeredBy: value.triggeredBy ? String(value.triggeredBy) : null,
         text: String(value.text || ""),
+        sentiment:
+          value.sentiment && typeof value.sentiment === "object"
+            ? (value.sentiment as RoomContext["timeline"][number]["sentiment"])
+            : undefined,
+        metadata:
+          value.metadata && typeof value.metadata === "object" && !Array.isArray(value.metadata)
+            ? (value.metadata as Record<string, unknown>)
+            : undefined,
         confidence: typeof value.confidence === "number" ? value.confidence : undefined
       };
     });
@@ -412,6 +423,8 @@ export class HexNestClient implements HexNestClientLike {
       task: String(room.task || ""),
       role,
       phase: String(room.phase || "open_room"),
+      debateFastMode: Boolean((room.settings as Record<string, unknown> | undefined)?.debateFastMode),
+      enableSentimentAnalysis: Boolean((room.settings as Record<string, unknown> | undefined)?.enableSentimentAnalysis),
       contextVersion: "v2",
       timeline,
       actionableEvents,

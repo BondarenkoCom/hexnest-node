@@ -66,5 +66,3 @@ export class OllamaAdapter extends BaseLocalAdapter {
     return String(payload.message?.content || "").trim();
   }
 }
-
-

@@ -36,7 +36,9 @@ export interface RoomAgentSessionOptions {
 }
 
 const DEFAULT_POLL_MS = 8_000;
+const FAST_MODE_POLL_MS = 900;
 const DEFAULT_AUTONOMOUS_COOLDOWN_MS = 15_000;
+const FAST_MODE_COOLDOWN_MS = 2_500;
 const DEFAULT_MAX_NO_ACTION_STREAK = 3;
 
 export class RoomAgentSession {
@@ -148,11 +150,18 @@ export class RoomAgentSession {
   }
 
   private async runAutonomousLoop(): Promise<void> {
-    const pollIntervalMs = Math.max(1_000, this.options.pollIntervalMs ?? DEFAULT_POLL_MS);
+    const configuredPollIntervalMs = Math.max(1_000, this.options.pollIntervalMs ?? DEFAULT_POLL_MS);
     const loopGuardEnabled = this.options.loopGuardEnabled !== false;
     const maxNoActionStreak = Math.max(1, this.options.maxNoActionStreak ?? DEFAULT_MAX_NO_ACTION_STREAK);
+    let fastMode = await this.resolveDebateFastMode();
 
     while (!this.options.shouldStop?.()) {
+      const pollIntervalMs = fastMode
+        ? Math.min(configuredPollIntervalMs, FAST_MODE_POLL_MS)
+        : configuredPollIntervalMs;
+      const cooldownMs = fastMode
+        ? Math.min(DEFAULT_AUTONOMOUS_COOLDOWN_MS, FAST_MODE_COOLDOWN_MS)
+        : DEFAULT_AUTONOMOUS_COOLDOWN_MS;
       const messages = await this.options.client.getRoomMessages(this.options.roomId, 30);
       const ordered = [...messages.messages].sort(
         (left, right) => Date.parse(left.timestamp || "") - Date.parse(right.timestamp || "")
@@ -184,7 +193,12 @@ export class RoomAgentSession {
       }
 
       const context = await this.options.client.getRoomContext(this.options.roomId, this.options.role);
-      const nextDecision = this.pickNextTrigger(unseen, context.phase, context.role);
+      const contextFastMode = Boolean(context.debateFastMode);
+      fastMode = contextFastMode;
+      const effectiveCooldownMs = contextFastMode
+        ? Math.min(DEFAULT_AUTONOMOUS_COOLDOWN_MS, FAST_MODE_COOLDOWN_MS)
+        : cooldownMs;
+      const nextDecision = this.pickNextTrigger(unseen, context.phase, context.role, effectiveCooldownMs);
 
       if (nextDecision && "cooldownPending" in nextDecision) {
         // Actionable messages exist but cooldown is active — hold cursor, retry next cycle.
@@ -234,7 +248,8 @@ export class RoomAgentSession {
   private pickNextTrigger(
     unseen: CoreRoomMessage[],
     roomPhase: string,
-    roomRole: string
+    roomRole: string,
+    cooldownMs: number
   ): { triggeredBy: string; reason: string; cooldownPending?: never } | { cooldownPending: true } | null {
     let anyCooldownPending = false;
     for (let index = unseen.length - 1; index >= 0; index -= 1) {
@@ -247,7 +262,7 @@ export class RoomAgentSession {
         roomRole,
         lastRespondedMessageId: this.lastRespondedMessageId,
         lastRespondedAt: this.lastRespondedAt,
-        cooldownMs: DEFAULT_AUTONOMOUS_COOLDOWN_MS,
+        cooldownMs,
         now: Date.now()
       });
       if (decision.shouldRespond && decision.triggeredBy) {
@@ -294,10 +309,11 @@ export class RoomAgentSession {
       joinedAgentId: this.joinedAgentId,
       text: this.decorateResponseText(response),
       confidence: response.confidence,
-      emotion: response.emotion,
       artifacts: response.artifacts,
       pythonCode: response.pythonCode,
       needHuman: response.needHuman,
+      sentiment: response.sentiment,
+      metadata: response.metadata,
       triggeredBy
     });
 
@@ -410,6 +426,15 @@ export class RoomAgentSession {
     return `${messages.length}|${recent.join("|")}`;
   }
 
+  private async resolveDebateFastMode(): Promise<boolean> {
+    try {
+      const room = await this.options.client.getRoom(this.options.roomId);
+      return Boolean(room.settings?.debateFastMode);
+    } catch {
+      return false;
+    }
+  }
+
   private sleep(ms: number): Promise<void> {
     const stepMs = 250;
     return new Promise((resolve) => {
@@ -431,5 +456,3 @@ export class RoomAgentSession {
     return /timed out|empty response/i.test(message);
   }
 }
-
-

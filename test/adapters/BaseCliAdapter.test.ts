@@ -34,12 +34,12 @@ describe("BaseCliAdapter", () => {
   it("handles basic respond scenario", async () => {
     const adapter = new TestCliAdapter();
     const response = await adapter.respond({
-      id: "run-1",
       roomId: "r1",
       roomName: "Test Room",
       task: "Test task",
       role: "cli-role",
       phase: "open_room",
+      rules: "",
       timeline: [],
       artifacts: [],
     });
@@ -61,12 +61,12 @@ describe("BaseCliAdapter", () => {
     const adapter = new TestCliAdapter();
     const estimate = await adapter.estimateCost(
       {
-        id: "run-1",
         roomId: "r1",
         roomName: "Room 1",
         task: "Task",
         role: "researcher",
         phase: "independent_answers",
+        rules: "",
         timeline: [{ id: "1", timestamp: "T", phase: "P", from: "A", to: "B", scope: "room", type: "chat", text: "Text" }],
         artifacts: [],
       },

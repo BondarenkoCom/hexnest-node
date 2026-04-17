@@ -2,7 +2,7 @@ import {
   AgentAdapter,
   AgentResponse,
   inferConfidence,
-  parseEmotionFromResponse
+  parseSentimentFromResponse
 } from "../core/AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
 import { estimateCostWithUsageFallback } from "../core/costing.js";
@@ -38,7 +38,7 @@ export interface LocalAdapterOptions {
  * - Timeout handling with automatic retry
  * - Slow model mode for large models (14B+)
  * - Dynamic context reduction on timeout
- * - Emotion parsing and confidence inference
+ * - Sentiment parsing and confidence inference
  */
 export abstract class BaseLocalAdapter implements AgentAdapter {
   public readonly name: string;
@@ -148,7 +148,7 @@ export abstract class BaseLocalAdapter implements AgentAdapter {
       styleLine: this.styleLine,
       includeTaskLine: `Task: ${context.task}`,
       includePhaseLine: `Phase: ${context.phase}`,
-      enableSentimentAnalysis: true
+      enableSentimentAnalysis: Boolean(context.enableSentimentAnalysis)
     });
 
     const isSlowModelMode = this.responseMode === "slow_model";
@@ -207,13 +207,15 @@ export abstract class BaseLocalAdapter implements AgentAdapter {
       throw new Error(`${this.name} returned an empty response`);
     }
 
-    const parsed = parseEmotionFromResponse(rawText);
+    const parsed = parseSentimentFromResponse(rawText);
 
-    const result = {
+    const result: AgentResponse = {
       text: parsed.text,
-      confidence: inferConfidence(parsed.text, context.phase),
-      emotion: parsed.emotion
+      confidence: inferConfidence(parsed.text, context.phase)
     };
+    if (context.enableSentimentAnalysis) {
+      result.sentiment = parsed.sentiment;
+    }
 
     this.setCachedResponse(context, result);
 

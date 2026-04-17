@@ -7,7 +7,8 @@ import type {
   CoreRoomSnapshot,
   CoreRoomStats,
   CreateCoreRoomInput,
-  JoinRoomResponse
+  JoinRoomResponse,
+  Sentiment
 } from "../../protocol/types.js";
 import type { WebServerContext } from "../server.js";
 import { ApiResponse, RoomSessionInfo } from "../types.js";
@@ -54,6 +55,27 @@ function normalizeText(value: unknown, maxLength: number): string {
 
 function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function normalizeSentiment(value: unknown): Sentiment | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const raw = value as Record<string, unknown>;
+  const label = normalizeText(raw.label, 40).toLowerCase();
+  if (!label) {
+    return undefined;
+  }
+  const score =
+    typeof raw.score === "number" && Number.isFinite(raw.score)
+      ? Math.max(-1, Math.min(1, raw.score))
+      : 0;
+  const reasoning = normalizeText(raw.reasoning, 240) || undefined;
+  return {
+    label,
+    score,
+    ...(reasoning ? { reasoning } : {})
+  };
 }
 
 function requireCoreUrl(context: WebServerContext): string {
@@ -486,7 +508,7 @@ export function roomsRouter(context: WebServerContext) {
       const joinedAgentId = normalizeText(req.body?.joinedAgentId || req.body?.agentId, 120);
       const text = normalizeText(req.body?.text, 4000);
       const confidence = typeof req.body?.confidence === "number" ? req.body.confidence : undefined;
-      const emotion = typeof req.body?.emotion === "string" ? normalizeText(req.body.emotion, 40) : undefined;
+      const sentiment = normalizeSentiment(req.body?.sentiment);
 
       if (!roomId || !joinedAgentId || !text) {
         res.status(400).json({ success: false, error: "roomId, agentId/joinedAgentId and text are required" });
@@ -494,7 +516,7 @@ export function roomsRouter(context: WebServerContext) {
       }
 
       const client = createClient(context);
-      await client.postRoomMessage({ roomId, joinedAgentId, text, confidence, emotion });
+      await client.postRoomMessage({ roomId, joinedAgentId, text, confidence, sentiment });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({
@@ -592,4 +614,3 @@ export function roomsRouter(context: WebServerContext) {
 
   return router;
 }
-

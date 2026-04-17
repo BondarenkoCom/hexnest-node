@@ -9,6 +9,12 @@ export interface Artifact {
   timestamp: string;
 }
 
+export interface Sentiment {
+  score: number; // -1 to 1
+  label: string; // e.g., "hostile", "neutral", "encouraging"
+  reasoning?: string;
+}
+
 export interface RoomEvent {
   id: string;
   timestamp: string;
@@ -20,11 +26,8 @@ export interface RoomEvent {
   intent?: string;
   triggeredBy?: string | null;
   text: string;
-  sentiment?: {
-    score: number; // -1 to 1
-    label: string; // e.g., "hostile", "neutral", "encouraging"
-    reasoning?: string;
-  };
+  sentiment?: Sentiment;
+  metadata?: Record<string, unknown>;
   confidence?: number;
 }
 
@@ -34,6 +37,8 @@ export interface RoomContext {
   task: string;
   role: string;
   phase: string;
+  debateFastMode?: boolean;
+  enableSentimentAnalysis?: boolean;
   contextVersion?: "v1" | "v2";
   timeline: RoomEvent[];
   actionableEvents?: RoomEvent[];
@@ -170,6 +175,9 @@ export interface CoreRoomSettings {
   webSearchEnabled?: boolean;
   marketDataEnabled?: boolean;
   isPublic?: boolean;
+  debateFastMode?: boolean;
+  webhookUrl?: string;
+  webhookEvents?: string[];
 }
 
 export interface CoreRoomTemplateRole {
@@ -206,6 +214,8 @@ export interface CoreRoomEnvelope {
   risks?: string[];
   need_human?: boolean;
   explanation?: string;
+  sentiment?: Sentiment;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CoreRoomTimelineEvent {
@@ -260,6 +270,9 @@ export interface CreateCoreRoomInput {
   pythonShellEnabled?: boolean;
   webSearchEnabled?: boolean;
   marketDataEnabled?: boolean;
+  debateFastMode?: boolean;
+  webhookUrl?: string;
+  webhookEvents?: string[];
   isPrivate?: boolean;
   maxMessages?: number;
   maxPythonJobs?: number;
@@ -344,6 +357,8 @@ export interface CoreRoomMessage {
   text: string;
   intent?: string;
   confidence?: number;
+  sentiment?: Sentiment;
+  metadata?: Record<string, unknown>;
   artifacts?: Artifact[];
   triggeredBy?: string | null;
 }
@@ -374,6 +389,9 @@ export interface CreateCoreRoomInput {
   pythonShellEnabled?: boolean;
   webSearchEnabled?: boolean;
   marketDataEnabled?: boolean;
+  debateFastMode?: boolean;
+  webhookUrl?: string;
+  webhookEvents?: string[];
   responseConstraint?: {
     type: "sentences" | "chars" | "words";
     value: number;
@@ -387,11 +405,12 @@ export interface PostRoomMessageInput {
   joinedAgentId: string;
   text: string;
   confidence?: number;
-  emotion?: string;
+  sentiment?: Sentiment;
   artifacts?: Artifact[];
   pythonCode?: string;
   needHuman?: boolean;
   triggeredBy?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 export interface User {

@@ -38,12 +38,12 @@ describe("BaseDiscussionAdapter", () => {
   it("handles basic ask scenario", async () => {
     const adapter = new TestDiscussionAdapter();
     const response = await adapter.respond({
-      id: "run-1",
       roomId: "r1",
       roomName: "Test Room",
       task: "Test task",
       role: "test-role",
       phase: "open_room",
+      rules: "",
       timeline: [],
       artifacts: [],
     });
@@ -69,6 +69,7 @@ describe("BaseDiscussionAdapter", () => {
         task: "Task",
         role: "researcher",
         phase: "independent_answers",
+        rules: "",
         timeline: [{ id: "1", timestamp: "T", phase: "P", from: "A", to: "B", scope: "room", text: "Text" }],
         artifacts: [],
       },
