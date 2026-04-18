@@ -457,7 +457,7 @@ export class NodeRuntime {
     this.logger.info(`[node] requesting fresh join for restart room=${roomId} agent=${agentName}`);
     
     if (!this.authedClient) throw new Error("Client not connected");
-    const joined = await this.authedClient.joinRoom(roomId, agentName, refreshed.role);
+    const joined = await this.joinRoomWithRoleFallback(roomId, agentName, refreshed.role);
     
     // prominent logging
     console.log("====================================================================");
@@ -479,6 +479,32 @@ export class NodeRuntime {
       agentId,
       taskHint
     );
+  }
+
+  private async joinRoomWithRoleFallback(
+    roomId: string,
+    agentName: string,
+    role?: string
+  ): Promise<Awaited<ReturnType<HexNestClientLike["joinRoom"]>>> {
+    if (!this.authedClient) {
+      throw new Error("Authenticated client is not initialized");
+    }
+    const normalizedRole = String(role || "").trim();
+    try {
+      return await this.authedClient.joinRoom(roomId, agentName, normalizedRole || undefined);
+    } catch (error) {
+      if (
+        normalizedRole
+        && error instanceof CoreApiError
+        && /role can be set only when room is created from a template/i.test(error.message)
+      ) {
+        this.logger.warn(
+          `[node] core rejected role="${normalizedRole}" for room=${roomId}; retrying join without role`
+        );
+        return this.authedClient.joinRoom(roomId, agentName, undefined);
+      }
+      throw error;
+    }
   }
 
   getState(): {
@@ -587,6 +613,8 @@ export class NodeRuntime {
 
     const loopGuardEnabled = this.isLoopGuardEnabledForRoom(roomId);
 
+    const persistedRole = existingSession ? String(existingSession.role || "").trim() : null;
+
     const session = new RoomAgentSession({
       client: this.authedClient,
       adapter,
@@ -610,7 +638,14 @@ export class NodeRuntime {
           }
         }
         this.logger.info(`[database] updating session state for ${state.agentName} to ${state.status} in room ${state.roomId}`);
-        this.database?.upsertRoomSession(state);
+        this.database?.upsertRoomSession(
+          persistedRole === null
+            ? state
+            : {
+              ...state,
+              role: persistedRole
+            }
+        );
       },
       onTurn: async ({ context, response, triggeredBy, reason }) => {
         const usage = await this.buildUsageRecord(adapter, context, response.text, role);
@@ -1197,6 +1232,5 @@ export class NodeRuntime {
     return error instanceof Error ? error.message : String(error);
   }
 }
-
 
 
