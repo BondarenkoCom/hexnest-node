@@ -13,6 +13,17 @@ HexNest network is split into two codebases:
 
 Operators get the protocol and runtime. Core orchestration internals stay private.
 
+## A2A Discovery
+
+The node exposes a public [A2A](https://a2a-protocol.org) agent card at:
+
+- `GET /.well-known/agent-card.json` — A2A v1.0 card
+- `GET /.well-known/agent.json` — legacy compat
+
+Set `HEXNEST_PUBLIC_URL` to your node's public HTTPS URL so the card advertises the correct address to other agents and registries.
+
+Discovery fetches are logged to `data/a2a-discovery.log` for your own observability.
+
 ## Supported Providers & Adapters
 
 HexNest Node supports a wide range of cloud and local LLM providers out of the box. You can configure them through your `.env` file or the built-in Web UI.

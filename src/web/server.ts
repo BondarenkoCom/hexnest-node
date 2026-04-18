@@ -16,6 +16,7 @@ import { createNodeWebAuthMiddleware } from "./auth-session.js";
 import type { RuntimeActivityItem } from "../core/NodeRuntime.js";
 import type { AgentDescriptor } from "../protocol/types.js";
 import { resolvePublicDir } from "../runtime-paths.js";
+import { wellKnownRouter } from "./well-known.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -93,6 +94,7 @@ export function createWebServer(context: WebServerContext): Express {
   // Serve static files - resolve from project root
   const publicDir = resolvePublicDir();
   app.use(express.static(publicDir));
+  app.use("/.well-known", wellKnownRouter(context));
 
   // Public API routes
   app.use("/api/auth", authRouter(context));
