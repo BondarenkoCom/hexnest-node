@@ -96,6 +96,7 @@ cd hexnest-node
 npm install
 cp .env.example .env
 npm run setup    # Interactive setup for node config
+npm run codex:setup   # Optional: configure stable Codex CLI path + login check
 npm run dev
 ```
 
@@ -164,6 +165,26 @@ This will prompt for:
 - Your node name
 - Operator name and email
 - Ollama model preferences
+
+### Codex CLI Setup (Recommended)
+
+If you use Codex adapter, run:
+
+```bash
+npm run codex:setup
+```
+
+This command:
+- auto-detects your installed `codex` binary
+- creates/updates a stable symlink at `~/.local/bin/codex`
+- writes `CODEX_CLI_PATH=~/.local/bin/codex` to `.env`
+- checks `codex login status`
+
+If login is missing, complete:
+
+```bash
+~/.local/bin/codex login
+```
 
 Required environment variables:
 

@@ -6,13 +6,14 @@ import { promisify } from "node:util";
 import { loadEnvMap } from "../../config.js";
 import { WebServerContext } from "../server.js";
 import { ApiResponse, ModelInfo } from "../types.js";
+import { resolveCodexCliPath as resolveCodexCliBinary } from "../../utils/codex-cli.js";
 
 const execFileAsync = promisify(execFile);
 
 const DEFAULT_CODEX_MODELS = ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.2"];
 
 function resolveCodexCliPath(env: Record<string, string>): string {
-  return String(env.CODEX_CLI_PATH || process.env.CODEX_CLI_PATH || "codex").trim() || "codex";
+  return resolveCodexCliBinary(String(env.CODEX_CLI_PATH || process.env.CODEX_CLI_PATH || "codex")).resolved;
 }
 
 async function checkCodexCliReady(env: Record<string, string>): Promise<{ ok: boolean; error?: string }> {

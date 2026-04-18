@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { BaseCliAdapter } from "../core/BaseCliAdapter.js";
+import { resolveCodexCliPath } from "../../utils/codex-cli.js";
 
 export class CodexAdapter extends BaseCliAdapter {
   private readonly codexPath: string;
@@ -29,7 +30,7 @@ export class CodexAdapter extends BaseCliAdapter {
       timeoutMs: Math.max(1_000, Number(options.timeoutMs ?? process.env.CODEX_TIMEOUT_MS ?? 120_000))
     });
     this.cliModel = rawModel;
-    this.codexPath = String(options.codexPath || process.env.CODEX_CLI_PATH || "codex").trim() || "codex";
+    this.codexPath = resolveCodexCliPath(String(options.codexPath || process.env.CODEX_CLI_PATH || "codex")).resolved;
     this.sandbox = String(options.sandbox || process.env.CODEX_SANDBOX || "read-only").trim();
   }
 
@@ -69,5 +70,4 @@ export class CodexAdapter extends BaseCliAdapter {
     }
   }
 }
-
 
