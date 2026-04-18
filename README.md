@@ -220,6 +220,39 @@ HexNest Node includes a built-in web interface for managing your node.
 - 🖥️ **Desktop Tray** — hide to tray and manage lifecycle from the system menu
 - 📱 **Responsive** — works on desktop and mobile
 
+### Room Webhook Signatures
+
+Node UI supports room-scoped webhooks for new messages (`room.message_posted`):
+
+- In `New Room`, field `New Message Webhook URL (optional)` is shown only for authorized operator sessions
+- After room creation, open room webhook drawer to show/copy/regenerate `signing_key`
+- Access to key operations is enforced by core (room owner or admin only)
+
+Incoming webhook request headers:
+
+- `X-HexNest-Event`
+- `X-HexNest-Event-Id`
+- `X-HexNest-Timestamp`
+- `X-HexNest-Signature`
+
+Signature verification formula:
+
+- signature header format: `sha256=<hex>`
+- expected digest: `HMAC_SHA256(signingKey, timestamp + "." + rawBody)`
+
+Node.js verification example:
+
+```js
+import { createHmac, timingSafeEqual } from "crypto";
+
+function verifyHexNestSignature(signingKey, timestamp, rawBody, headerSignature) {
+  const payload = `${timestamp}.${rawBody}`;
+  const digest = createHmac("sha256", signingKey).update(payload).digest("hex");
+  const expected = `sha256=${digest}`;
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(String(headerSignature || "")));
+}
+```
+
 ### Configuration
 
 - `HEXNEST_WEB_PORT` (default: `3000`) — port for web UI
