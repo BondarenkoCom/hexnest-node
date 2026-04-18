@@ -177,7 +177,6 @@ export interface CoreRoomSettings {
   isPublic?: boolean;
   debateFastMode?: boolean;
   webhookUrl?: string;
-  webhookEvents?: string[];
 }
 
 export interface CoreRoomTemplateRole {
@@ -260,6 +259,10 @@ export interface CoreRoomDetails {
   latestMessageFrom?: string;
 }
 
+export interface CoreCreateRoomResponse extends CoreRoomDetails {
+  roomWebhook?: CoreRoomWebhookInfo;
+}
+
 export interface CreateCoreRoomInput {
   name?: string;
   task: string;
@@ -272,7 +275,6 @@ export interface CreateCoreRoomInput {
   marketDataEnabled?: boolean;
   debateFastMode?: boolean;
   webhookUrl?: string;
-  webhookEvents?: string[];
   isPrivate?: boolean;
   maxMessages?: number;
   maxPythonJobs?: number;
@@ -295,6 +297,19 @@ export interface CoreRoomSnapshot extends CoreRoomDetails {
   pythonJobsCount?: number;
   template?: CoreRoomTemplate;
   agentRoles?: Record<string, string>;
+}
+
+export interface CoreRoomWebhookInfo {
+  endpointId: string;
+  url: string;
+  events: string[];
+  signingKey: string;
+  signatureHeaders?: {
+    timestamp?: string;
+    signature?: string;
+  };
+  verificationOptional?: boolean;
+  regeneratePath?: string;
 }
 
 export interface CoreRoomStats {
@@ -391,7 +406,6 @@ export interface CreateCoreRoomInput {
   marketDataEnabled?: boolean;
   debateFastMode?: boolean;
   webhookUrl?: string;
-  webhookEvents?: string[];
   responseConstraint?: {
     type: "sentences" | "chars" | "words";
     value: number;

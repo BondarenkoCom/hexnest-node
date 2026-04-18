@@ -148,6 +148,7 @@ export interface RoomDetail {
       pythonShellEnabled: boolean;
       webSearchEnabled?: boolean;
       marketDataEnabled?: boolean;
+      webhookUrl?: string;
     };
     timeline: RoomTimelineEvent[];
     artifacts: Artifact[];
@@ -165,4 +166,23 @@ export interface RoomDetail {
   brief: any;
   availableAgents: Array<{ name: string; supportedRoles: string[] }>;
   localSessions: RoomSession[];
+}
+
+export interface RoomWebhookInfo {
+  endpointId: string;
+  url: string;
+  events: string[];
+  signingKey: string;
+  signatureHeaders?: {
+    timestamp?: string;
+    signature?: string;
+  };
+  verificationOptional?: boolean;
+  regeneratePath?: string;
+}
+
+export interface RoomWebhookSigningKeyPayload {
+  roomWebhook?: RoomWebhookInfo;
+  access: 'granted' | 'forbidden' | 'missing';
+  message?: string;
 }

@@ -4,11 +4,13 @@ import {
   AuthRegisterRequest,
   AuthResponse,
   CoreRoomConnectBrief,
+  CoreCreateRoomResponse,
   CoreRoomDetails,
   CoreRoomHeartbeatResponse,
   CoreRoomMessagesResponse,
   CoreRoomSnapshot,
   CoreRoomStats,
+  CoreRoomWebhookInfo,
   CoreRoomsListResponse,
   CreateCoreRoomInput,
   DeleteNodeResponse,
@@ -56,7 +58,12 @@ export interface HexNestClientLike {
   submitUsage(nodeId: string, records: UsageRecord[]): Promise<SubmitUsageResponse>;
   markOffline(nodeId: string): Promise<void>;
   listRooms(limit?: number): Promise<CoreRoomsListResponse>;
-  createRoom(payload: CreateCoreRoomInput): Promise<CoreRoomDetails>;
+  createRoom(payload: CreateCoreRoomInput): Promise<CoreCreateRoomResponse>;
+  getRoomWebhookSigningKey(roomId: string): Promise<{ ok: boolean; roomId: string; roomWebhook: CoreRoomWebhookInfo }>;
+  regenerateRoomWebhookSigningKey(
+    roomId: string,
+    currentSigningKey: string
+  ): Promise<{ ok: boolean; roomId: string; roomWebhook: CoreRoomWebhookInfo }>;
   postAgentDirectory(data: any): Promise<any>;
   deleteAgentDirectory(name: string, endpointUrl: string): Promise<any>;
   getAgentsDirectory(): Promise<{ value: AgentDescriptor[] }>;
@@ -225,12 +232,46 @@ export class HexNestClient implements HexNestClientLike {
     });
   }
 
-  async createRoom(payload: CreateCoreRoomInput): Promise<CoreRoomDetails> {
-    return this.request<CoreRoomDetails>("/api/rooms", {
+  async createRoom(payload: CreateCoreRoomInput): Promise<CoreCreateRoomResponse> {
+    const authRequired: true | "user" = this.userToken ? "user" : true;
+    return this.request<CoreCreateRoomResponse>("/api/rooms", {
       method: "POST",
-      authRequired: true,
+      authRequired,
       body: payload
     });
+  }
+
+  async getRoomWebhookSigningKey(
+    roomId: string
+  ): Promise<{ ok: boolean; roomId: string; roomWebhook: CoreRoomWebhookInfo }> {
+    return this.request<{ ok: boolean; roomId: string; roomWebhook: CoreRoomWebhookInfo }>(
+      `/api/rooms/${encodeURIComponent(roomId)}/webhook-signing-key`,
+      {
+        method: "GET",
+        authRequired: "user"
+      }
+    );
+  }
+
+  async regenerateRoomWebhookSigningKey(
+    roomId: string,
+    currentSigningKey: string
+  ): Promise<{ ok: boolean; roomId: string; roomWebhook: CoreRoomWebhookInfo }> {
+    const signingKey = String(currentSigningKey || "").trim();
+    if (!signingKey) {
+      throw new Error("Current signing key is required");
+    }
+    return this.request<{ ok: boolean; roomId: string; roomWebhook: CoreRoomWebhookInfo }>(
+      `/api/rooms/${encodeURIComponent(roomId)}/webhook-signing-key/regenerate`,
+      {
+        method: "POST",
+        authRequired: false,
+        body: {}
+      },
+      {
+        Authorization: bearer(signingKey)
+      }
+    );
   }
 
   async postAgentDirectory(data: any): Promise<any> {
@@ -440,7 +481,8 @@ export class HexNestClient implements HexNestClientLike {
       method?: string;
       authRequired?: boolean | "user" | "node";
       body?: unknown;
-    } = {}
+    } = {},
+    extraHeaders?: Record<string, string>
   ): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -469,7 +511,10 @@ export class HexNestClient implements HexNestClientLike {
 
       const response = await fetch(`${this.coreUrl}${path}`, {
         method: options.method || "GET",
-        headers,
+        headers: {
+          ...headers,
+          ...(extraHeaders || {})
+        },
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
         signal: controller.signal
       });

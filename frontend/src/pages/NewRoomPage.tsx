@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNode } from '../context/NodeContext';
 import { PlusCircle, Info, Search } from 'lucide-react';
-import type { ApiResponse, AgentDescriptor } from '../types';
+import type { ApiResponse, AgentDescriptor, RoomWebhookInfo } from '../types';
 
 export const NewRoomPage: React.FC = () => {
   const navigate = useNavigate();
@@ -15,6 +15,7 @@ export const NewRoomPage: React.FC = () => {
   const [pythonEnabled, setPythonEnabled] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(true);
   const [marketDataEnabled, setMarketDataEnabled] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [sentimentEnabled, setSentimentEnabled] = useState(false);
   const [constraintType, setConstraintType] = useState<'sentences' | 'chars' | 'words' | 'none'>('none');
@@ -52,6 +53,7 @@ export const NewRoomPage: React.FC = () => {
     a.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (a.description || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const canConfigureWebhook = Boolean(readiness?.operatorEmail);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,6 +61,12 @@ export const NewRoomPage: React.FC = () => {
     setError(null);
 
     try {
+      const normalizedWebhookUrl = webhookUrl.trim();
+      if (normalizedWebhookUrl && !canConfigureWebhook) {
+        setError('Sign in with an operator account to configure room webhooks.');
+        return;
+      }
+
       const responseConstraint = constraintType !== 'none' ? {
         type: constraintType,
         value: constraintValue
@@ -75,16 +83,21 @@ export const NewRoomPage: React.FC = () => {
           pythonShellEnabled: pythonEnabled,
           webSearchEnabled,
           marketDataEnabled,
+          webhookUrl: canConfigureWebhook ? (normalizedWebhookUrl || undefined) : undefined,
           isPrivate,
           enableSentimentAnalysis: sentimentEnabled,
           responseConstraint
         })
       });
 
-      const json: ApiResponse<{ roomId: string }> = await res.json();
+      const json: ApiResponse<{ roomId: string; roomWebhook?: RoomWebhookInfo }> = await res.json();
       if (json.success && json.data?.roomId) {
         await refresh();
-        navigate(`/rooms/${json.data.roomId}`);
+        navigate(`/rooms/${json.data.roomId}${normalizedWebhookUrl && canConfigureWebhook ? '?open=webhook' : ''}`, {
+          state: {
+            initialRoomWebhook: json.data.roomWebhook
+          }
+        });
       } else {
         setError(json.error || 'Failed to create room');
       }
@@ -157,6 +170,34 @@ export const NewRoomPage: React.FC = () => {
               Restrict agent's file access to a specific top-level directory.
             </p>
           </div>
+
+          {canConfigureWebhook ? (
+            <div className="form-group flex flex-col gap-1.5">
+              <label htmlFor="webhookUrlInput" className="text-xs uppercase tracking-wider text-cyan-soft font-bold">
+                New Message Webhook URL (optional)
+              </label>
+              <input
+                type="url"
+                id="webhookUrlInput"
+                className="w-full bg-void border border-line-soft rounded-lg px-4 py-2.5 text-text focus:border-cyan outline-none transition-all"
+                placeholder="https://example.com/hexnest/webhook"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+              />
+              <p className="text-[10px] text-muted leading-relaxed">
+                Room webhook sends only new message events. Signing key is available to the room owner in room properties.
+              </p>
+            </div>
+          ) : (
+            <div className="form-group flex flex-col gap-1.5 p-3 rounded-lg border border-amber-400/30 bg-amber-500/5">
+              <p className="text-xs uppercase tracking-wider text-amber-300 font-bold">
+                Room Webhook Is Unavailable
+              </p>
+              <p className="text-[11px] text-muted leading-relaxed">
+                Sign in with an operator account to enable webhook delivery for new room messages.
+              </p>
+            </div>
+          )}
 
           <div className="form-group flex flex-col gap-3 p-4 bg-void bg-opacity-50 rounded-lg border border-line-soft">
             <div className="flex items-center justify-between">

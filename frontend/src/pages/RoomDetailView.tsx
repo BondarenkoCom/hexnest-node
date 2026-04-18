@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { RefreshCw, LayoutDashboard } from 'lucide-react';
 import { useNode } from '../context/NodeContext';
 import { RoomHero } from '../components/room/RoomHero';
@@ -7,11 +7,18 @@ import { AgentParticipation } from '../components/room/AgentParticipation';
 import { RoomTimeline } from '../components/room/RoomTimeline';
 import { RoomSidebar } from '../components/room/RoomSidebar';
 import { RoomArtifacts } from '../components/room/RoomArtifacts';
-import type { ApiResponse, RoomDetail } from '../types';
+import type { ApiResponse, RoomDetail, RoomWebhookInfo } from '../types';
+
+interface RoomDetailLocationState {
+  initialRoomWebhook?: RoomWebhookInfo;
+}
 
 export const RoomDetailView: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
+  const location = useLocation();
+  const locationState = (location.state || {}) as RoomDetailLocationState;
   const { sessionId } = useNode();
+  const openDrawer = new URLSearchParams(location.search).get('open') || '';
   const [detail, setDetail] = useState<RoomDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +128,8 @@ export const RoomDetailView: React.FC = () => {
           <RoomSidebar 
             roomId={roomId!} 
             detail={detail} 
+            focusWebhook={openDrawer === 'webhook'}
+            initialRoomWebhook={locationState.initialRoomWebhook}
             onRefresh={() => fetchDetail(true)} 
           />
           

@@ -1,9 +1,10 @@
 import { Router, Request, Response } from "express";
-import { HexNestClient } from "../../protocol/HexNestClient.js";
+import { HexNestClient, isCoreApiError } from "../../protocol/HexNestClient.js";
 import type {
   AgentDescriptor,
   CoreRoomConnectBrief,
   CoreRoomDetails,
+  CoreRoomWebhookInfo,
   CoreRoomSnapshot,
   CoreRoomStats,
   CreateCoreRoomInput,
@@ -40,6 +41,17 @@ interface LocalRoomSessionControlPayload {
   localSessions: RoomSessionInfo[];
 }
 
+interface LocalCreateRoomPayload {
+  roomId: string;
+  roomWebhook?: CoreRoomWebhookInfo;
+}
+
+interface LocalRoomWebhookSigningKeyPayload {
+  roomWebhook?: CoreRoomWebhookInfo;
+  access: "granted" | "forbidden" | "missing";
+  message?: string;
+}
+
 
 interface LocalJoinSelfPayload {
   joinedAgent: JoinRoomResponse["agent"];
@@ -47,6 +59,20 @@ interface LocalJoinSelfPayload {
   roomSessionAlreadyRunning: boolean;
   roomSessionAutonomous: boolean;
   warning?: string;
+}
+
+function sendCoreClientError(res: Response, error: unknown): boolean {
+  if (!isCoreApiError(error)) {
+    return false;
+  }
+  const status = Number(error.details.status || 500);
+  const safeStatus = Number.isInteger(status) && status >= 400 && status < 600 ? status : 500;
+  const message = error.message.replace(/^Core API failed \d+\s+[^\:]+:\s*/i, "").trim();
+  res.status(safeStatus).json({
+    success: false,
+    error: message || "Core API error"
+  });
+  return true;
 }
 
 function normalizeText(value: unknown, maxLength: number): string {
@@ -227,6 +253,19 @@ export function roomsRouter(context: WebServerContext) {
         return;
       }
 
+      const webhookUrl = normalizeText(req.body?.webhookUrl, 1000) || undefined;
+      const hasOperatorSession = Boolean(
+        normalizeText(context.db.getNodeConfig("user_email"), 320) &&
+        normalizeText(context.db.getNodeConfig("user_token"), 4096)
+      );
+      if (webhookUrl && !hasOperatorSession) {
+        res.status(401).json({
+          success: false,
+          error: "Operator authorization is required to configure room webhooks."
+        });
+        return;
+      }
+
       const payload: CreateCoreRoomInput = {
         name: normalizeText(req.body?.name, 120) || undefined,
         task,
@@ -237,6 +276,7 @@ export function roomsRouter(context: WebServerContext) {
         pythonShellEnabled: normalizeBoolean(req.body?.pythonShellEnabled, false),
         webSearchEnabled: normalizeBoolean(req.body?.webSearchEnabled, true),
         marketDataEnabled: normalizeBoolean(req.body?.marketDataEnabled, false),
+        webhookUrl,
         isPrivate: typeof req.body?.isPrivate === "boolean" ? req.body.isPrivate : undefined,
         maxMessages: typeof req.body?.maxMessages === "number" ? req.body.maxMessages : undefined,
         maxPythonJobs: typeof req.body?.maxPythonJobs === "number" ? req.body.maxPythonJobs : undefined,
@@ -276,12 +316,111 @@ export function roomsRouter(context: WebServerContext) {
       }
 
       // IMPORTANT: Frontend expects `roomId` in response to navigate properly
-      const response: ApiResponse<{ roomId: string }> = {
+      const response: ApiResponse<LocalCreateRoomPayload> = {
         success: true,
-        data: { roomId: room.id }
+        data: {
+          roomId: room.id,
+          ...(room.roomWebhook ? { roomWebhook: room.roomWebhook } : {})
+        }
       };
       res.status(201).json(response);
     } catch (error) {
+      if (sendCoreClientError(res, error)) {
+        return;
+      }
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.get("/:roomId/webhook-signing-key", async (req: Request, res: Response) => {
+    try {
+      const roomId = normalizeText(req.params.roomId, 120);
+      if (!roomId) {
+        res.status(400).json({ success: false, error: "roomId is required" });
+        return;
+      }
+
+      const client = createClient(context);
+      const payload = await client.getRoomWebhookSigningKey(roomId);
+      const response: ApiResponse<LocalRoomWebhookSigningKeyPayload> = {
+        success: true,
+        data: {
+          roomWebhook: payload.roomWebhook,
+          access: "granted"
+        }
+      };
+      res.json(response);
+    } catch (error) {
+      if (isCoreApiError(error)) {
+        const status = Number(error.details.status || 0);
+        if (status === 403 || status === 404) {
+          const message = error.message.replace(/^Core API failed \d+\s+[^\:]+:\s*/i, "").trim();
+          const response: ApiResponse<LocalRoomWebhookSigningKeyPayload> = {
+            success: true,
+            data: {
+              access: status === 403 ? "forbidden" : "missing",
+              message: message || (status === 403 ? "Signing key is unavailable for this account." : "Room webhook is not configured.")
+            }
+          };
+          res.json(response);
+          return;
+        }
+      }
+      if (sendCoreClientError(res, error)) {
+        return;
+      }
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  router.post("/:roomId/webhook-signing-key/regenerate", async (req: Request, res: Response) => {
+    try {
+      const roomId = normalizeText(req.params.roomId, 120);
+      const currentSigningKey = normalizeText(req.body?.currentSigningKey, 512);
+      if (!roomId) {
+        res.status(400).json({ success: false, error: "roomId is required" });
+        return;
+      }
+      if (!currentSigningKey) {
+        res.status(400).json({ success: false, error: "currentSigningKey is required" });
+        return;
+      }
+
+      const client = createClient(context);
+      const payload = await client.regenerateRoomWebhookSigningKey(roomId, currentSigningKey);
+      const response: ApiResponse<LocalRoomWebhookSigningKeyPayload> = {
+        success: true,
+        data: {
+          roomWebhook: payload.roomWebhook,
+          access: "granted"
+        }
+      };
+      res.json(response);
+    } catch (error) {
+      if (isCoreApiError(error)) {
+        const status = Number(error.details.status || 0);
+        if (status === 403 || status === 404) {
+          const message = error.message.replace(/^Core API failed \d+\s+[^\:]+:\s*/i, "").trim();
+          const response: ApiResponse<LocalRoomWebhookSigningKeyPayload> = {
+            success: true,
+            data: {
+              access: status === 403 ? "forbidden" : "missing",
+              message: message || (status === 403 ? "Signing key is unavailable for this account." : "Room webhook is not configured.")
+            }
+          };
+          res.json(response);
+          return;
+        }
+      }
+      if (sendCoreClientError(res, error)) {
+        return;
+      }
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : "Unknown error"
