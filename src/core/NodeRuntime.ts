@@ -18,6 +18,7 @@ import { CommissionMeter } from "./CommissionMeter.js";
 import { Heartbeat } from "./Heartbeat.js";
 import { DatabaseService } from "../db/database.js";
 import { RoomAgentSession } from "./RoomAgentSession.js";
+import { PriorityQueue } from "../utils/PriorityQueue.js";
 
 interface RuntimeLogger {
   info(...args: unknown[]): void;
@@ -60,6 +61,7 @@ export class NodeRuntime {
 
   private readonly meter = new CommissionMeter();
   private readonly adapters = new Map<string, AgentAdapter>();
+  private readonly adapterQueues = new Map<string, PriorityQueue>();
   private readonly logger: RuntimeLogger;
   private readonly createClient: (coreUrl: string, options: { nodeToken?: string; userToken?: string; timeoutMs?: number }) => HexNestClientLike;
   private readonly makeUuid: () => string;
@@ -107,6 +109,12 @@ export class NodeRuntime {
 
     for (const adapter of adapters) {
       this.adapters.set(adapter.name, adapter);
+      
+      const concurrency = adapter.concurrencyLimit || 1;
+      this.adapterQueues.set(adapter.name, new PriorityQueue({
+        concurrency,
+        maxQueueSize: Math.max(20, concurrency * 5)
+      }));
     }
   }
 
@@ -615,6 +623,8 @@ export class NodeRuntime {
 
     const persistedRole = existingSession ? String(existingSession.role || "").trim() : null;
 
+    const queue = this.adapterQueues.get(adapter.name);
+
     const session = new RoomAgentSession({
       client: this.authedClient,
       adapter,
@@ -623,6 +633,7 @@ export class NodeRuntime {
       taskHint,
       autonomous,
       loopGuardEnabled,
+      priorityQueue: queue,
       maxNoActionStreak: this.config.agentLoopGuardNoActionStreak,
       initialState: existingSession,
       shouldStop: () => this.stopRequested || this.status === "draining" || !this.coreConnected || this.roomStopRequests.has(`${roomId}:${adapter.name}`),

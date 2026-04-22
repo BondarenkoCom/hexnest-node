@@ -91,6 +91,7 @@ export interface HeartbeatPayload {
   status: NodeStatus;
   availableAgents: AgentDescriptor[];
   activeRooms: string[];
+  batchLimit?: number;
   meter: {
     totalTokensUsed: number;
     totalRoomsJoined: number;

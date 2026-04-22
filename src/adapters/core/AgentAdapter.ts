@@ -16,6 +16,7 @@ export interface AgentAdapter {
   baseUrl?: string;
   capabilities: string[];
   supportedRoles: string[];
+  concurrencyLimit?: number;
   respond(context: RoomContext): Promise<AgentResponse>;
   estimateCost(context: RoomContext, responseText?: string): Promise<CostEstimate>;
 }

@@ -3,6 +3,7 @@ import type { RoomCycleOutcome, RoomSessionState, RoomSessionStatus } from "../d
 import { HexNestClientLike } from "../protocol/HexNestClient.js";
 import { CoreRoomMessage, RoomContext } from "../protocol/types.js";
 import { evaluateRoomAgentPolicy } from "./RoomAgentPolicy.js";
+import { PriorityQueue } from "../utils/PriorityQueue.js";
 
 interface RoomAgentSessionLogger {
   info(...args: unknown[]): void;
@@ -28,6 +29,7 @@ export interface RoomAgentSessionOptions {
   loopGuardEnabled?: boolean;
   maxNoActionStreak?: number;
   pollIntervalMs?: number;
+  priorityQueue?: PriorityQueue;
   shouldStop?: () => boolean;
   initialState?: RoomSessionState | null;
   onStateChange?: (state: Omit<RoomSessionState, "createdAt" | "updatedAt">) => Promise<void> | void;
@@ -212,7 +214,17 @@ export class RoomAgentSession {
         this.options.logger?.info(`[session] Agent ${this.options.adapter.name} is generating response for room ${this.options.roomId}...`);
         let response: AgentResponse;
         try {
-          response = await this.options.adapter.respond(context);
+          if (this.options.priorityQueue) {
+            // Retrieve priority from context or default to 50
+            const priority = context.priority ?? 50; 
+            response = await this.options.priorityQueue.add(
+              () => this.options.adapter.respond(context),
+              priority,
+              `${this.options.roomId}:${this.options.adapter.name}:${nextDecision.triggeredBy}`
+            );
+          } else {
+            response = await this.options.adapter.respond(context);
+          }
         } catch (error) {
           if (!this.isRecoverableAdapterError(error)) {
             throw error;
