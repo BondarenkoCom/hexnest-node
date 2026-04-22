@@ -36,6 +36,7 @@ export interface RoomContext {
   roomName: string;
   task: string;
   role: string;
+  priority?: number;
   phase: string;
   debateFastMode?: boolean;
   enableSentimentAnalysis?: boolean;
