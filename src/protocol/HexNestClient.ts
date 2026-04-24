@@ -147,6 +147,24 @@ function summarizeErrorBody(body: string, contentType?: string | null): string {
   return trimAndCollapse(normalizedBody);
 }
 
+function buildContextSummary(timeline: RoomContext["timeline"], artifactsCount: number): string {
+  const recentSummaries = timeline
+    .map((event) => trimAndCollapse(String(event.summary || ""), 160))
+    .filter(Boolean)
+    .slice(-3);
+
+  if (recentSummaries.length > 0) {
+    return `Recent summaries: ${recentSummaries.join(" | ")}`;
+  }
+
+  const actionableCount = timeline.filter((event) => {
+    const normalizedIntent = String(event.intent || "").trim().toLowerCase();
+    return Boolean(event.scope === "direct" || event.triggeredBy || ACTIONABLE_INTENTS.has(normalizedIntent));
+  }).length;
+
+  return `timeline=${timeline.length}; actionable=${actionableCount}; artifacts=${artifactsCount}`;
+}
+
 export class HexNestClient implements HexNestClientLike {
   constructor(coreUrl: string, options: HexNestClientOptions = {}) {
     this.coreUrl = sanitizeBaseUrl(coreUrl);
@@ -474,7 +492,7 @@ export class HexNestClient implements HexNestClientLike {
       contextVersion: "v2",
       timeline,
       actionableEvents,
-      contextSummary: `timeline=${timeline.length}; actionable=${actionableEvents.length}; artifacts=${artifacts.length}`,
+      contextSummary: buildContextSummary(timeline, artifacts.length),
       artifacts,
       rules: String((room.template as Record<string, unknown> | undefined)?.rules || "")
     };

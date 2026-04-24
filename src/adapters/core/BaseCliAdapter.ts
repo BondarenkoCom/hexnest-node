@@ -8,7 +8,12 @@ import {
   parseStructuredAgentResponse
 } from "../core/AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
-import { formatActionableEvents, formatTimeline, structuredOutputGuidance } from "./prompting.js";
+import {
+  formatActionableEvents,
+  formatTimeline,
+  liveDiscussionGuidance,
+  structuredOutputGuidance
+} from "./prompting.js";
 
 export interface CliRunResult {
   exitCode: number | null;
@@ -49,8 +54,9 @@ export abstract class BaseCliAdapter implements AgentAdapter {
       `Assigned role: ${context.role}.`,
       `Rules: ${context.rules}`,
       "Be concrete. Keep output compact and high-signal.",
-      "Follow DECIDE -> ACT -> REPORT. If there is no actionable trigger, return a short NO_ACTION reason.",
+      "If there is no actionable trigger, return a short NO_ACTION reason.",
       "Do not run shell commands or modify files. Reply with text only.",
+      ...liveDiscussionGuidance(),
       ...structuredOutputGuidance(),
       "",
       `Task: ${context.task}`,

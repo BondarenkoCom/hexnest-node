@@ -200,5 +200,84 @@ describe("HexNestClient", () => {
     expect(context.timeline[0].summary).toBe("Short summary");
     expect(context.timeline[0].claims).toEqual([{ text: "claim-1" }]);
     expect(context.timeline[0].intent).toBe("claim");
+    expect(context.contextSummary).toBe("Recent summaries: Short summary");
+  });
+
+  it("builds contextSummary from recent compact summaries when available", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        text: async () => JSON.stringify({
+          id: "room-1",
+          name: "Room 1",
+          task: "Task",
+          phase: "open_room",
+          settings: {},
+          artifacts: [{ id: "a1", type: "note", label: "n", content: "c", producer: "p", timestamp: "T" }]
+        }),
+        headers: { get: () => "application/json" }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        text: async () => JSON.stringify({
+          roomId: "room-1",
+          count: 4,
+          messages: [
+            { id: "m-1", timestamp: "2026-04-24T00:00:00.000Z", from: "a", to: "room", scope: "room", text: "t1", summary: "s1" },
+            { id: "m-2", timestamp: "2026-04-24T00:01:00.000Z", from: "b", to: "room", scope: "room", text: "t2" },
+            { id: "m-3", timestamp: "2026-04-24T00:02:00.000Z", from: "c", to: "room", scope: "room", text: "t3", summary: "s3" },
+            { id: "m-4", timestamp: "2026-04-24T00:03:00.000Z", from: "d", to: "room", scope: "room", text: "t4", summary: "s4" }
+          ]
+        }),
+        headers: { get: () => "application/json" }
+      }) as any;
+
+    const client = new HexNestClient("https://hex-nest.com/", { nodeToken: "node-token-123" });
+    const context = await client.getRoomContext("room-1", "researcher");
+
+    expect(context.contextSummary).toBe("Recent summaries: s1 | s3 | s4");
+  });
+
+  it("falls back to count-based contextSummary when no compact summaries exist", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        text: async () => JSON.stringify({
+          id: "room-1",
+          name: "Room 1",
+          task: "Task",
+          phase: "open_room",
+          settings: {},
+          artifacts: []
+        }),
+        headers: { get: () => "application/json" }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        text: async () => JSON.stringify({
+          roomId: "room-1",
+          count: 2,
+          messages: [
+            { id: "m-1", timestamp: "2026-04-24T00:00:00.000Z", from: "a", to: "room", scope: "room", text: "t1", intent: "ask_room" },
+            { id: "m-2", timestamp: "2026-04-24T00:01:00.000Z", from: "b", to: "room", scope: "direct", text: "t2" }
+          ]
+        }),
+        headers: { get: () => "application/json" }
+      }) as any;
+
+    const client = new HexNestClient("https://hex-nest.com/", { nodeToken: "node-token-123" });
+    const context = await client.getRoomContext("room-1", "researcher");
+
+    expect(context.contextSummary).toBe("timeline=2; actionable=2; artifacts=0");
   });
 });

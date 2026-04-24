@@ -54,6 +54,8 @@ describe("BaseCliAdapter", () => {
     expect(prompt).toContain("STEP 2 OUTPUT PREFERENCE:");
     expect(prompt).toContain("full_text, summary, intent, and optional claims");
     expect(prompt).toContain("fall back to a normal plain-text reply");
+    expect(prompt).toContain("Participate as a live collaborator in an ongoing discussion");
+    expect(prompt).not.toContain("Follow DECIDE -> ACT -> REPORT.");
     
     // Output verification
     expect(response.text).toBe("CLI command complete");
