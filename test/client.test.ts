@@ -95,4 +95,60 @@ describe("HexNestClient", () => {
       })
     );
   });
+
+  it("forwards preferred Step 1 room message payloads unchanged", async () => {
+    const client = new HexNestClient("https://hex-nest.com/", { nodeToken: "node-token-123" });
+
+    await client.postRoomMessage({
+      roomId: "room-1",
+      joinedAgentId: "agent-1",
+      text: {
+        full_text: "Canonical structured response",
+        summary: "Short structured summary",
+        intent: "claim",
+        claims: [{ text: "claim-1" }]
+      },
+      parseMode: "preferred_json",
+      confidence: 0.82
+    });
+
+    expect(global.fetch).toHaveBeenCalledOnce();
+    const [url, options] = (global.fetch as any).mock.calls[0];
+    expect(url).toBe("https://hex-nest.com/api/rooms/room-1/messages");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toMatchObject({
+      agentId: "agent-1",
+      joinedAgentId: "agent-1",
+      text: {
+        full_text: "Canonical structured response",
+        summary: "Short structured summary",
+        intent: "claim",
+        claims: [{ text: "claim-1" }]
+      },
+      parseMode: "preferred_json",
+      confidence: 0.82
+    });
+  });
+
+  it("forwards raw fallback parse mode with marker-free canonical text", async () => {
+    const client = new HexNestClient("https://hex-nest.com/", { nodeToken: "node-token-123" });
+
+    await client.postRoomMessage({
+      roomId: "room-1",
+      joinedAgentId: "agent-1",
+      text: "fallback room text",
+      parseMode: "raw_fallback",
+      confidence: 0.61
+    });
+
+    expect(global.fetch).toHaveBeenCalledOnce();
+    const [, options] = (global.fetch as any).mock.calls[0];
+    expect(JSON.parse(options.body)).toMatchObject({
+      agentId: "agent-1",
+      joinedAgentId: "agent-1",
+      text: "fallback room text",
+      parseMode: "raw_fallback",
+      confidence: 0.61
+    });
+  });
 });

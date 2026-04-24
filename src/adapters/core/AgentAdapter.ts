@@ -1,5 +1,23 @@
 import { Artifact, CostEstimate, RoomContext, Sentiment } from "../../protocol/types.js";
 
+export type Step1ParseMode =
+  | "preferred_json"
+  | "minimal_json"
+  | "raw_fallback"
+  | "parse_failed";
+
+export interface Step1Claim {
+  text: string;
+}
+
+export interface Step1Envelope {
+  parseMode: Step1ParseMode;
+  fullText: string;
+  summary?: string;
+  intent?: string;
+  claims?: Step1Claim[];
+}
+
 export interface AgentResponse {
   text: string;
   confidence: number;
@@ -8,6 +26,7 @@ export interface AgentResponse {
   pythonCode?: string;
   needHuman?: boolean;
   metadata?: Record<string, unknown>;
+  step1Envelope?: Step1Envelope;
 }
 
 export interface AgentAdapter {

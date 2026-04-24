@@ -393,6 +393,9 @@ export class HexNestClient implements HexNestClientLike {
     if (input.metadata && typeof input.metadata === "object") {
       body.metadata = input.metadata;
     }
+    if (input.parseMode) {
+      body.parseMode = input.parseMode;
+    }
 
     await this.request(`/api/rooms/${encodeURIComponent(input.roomId)}/messages`, {
       method: "POST",

@@ -419,7 +419,14 @@ export interface CreateCoreRoomInput {
 export interface PostRoomMessageInput {
   roomId: string;
   joinedAgentId: string;
-  text: string;
+  text:
+    | string
+    | {
+        full_text: string;
+        summary: string;
+        intent: string;
+        claims?: Array<{ text: string }>;
+      };
   confidence?: number;
   sentiment?: Sentiment;
   artifacts?: Artifact[];
@@ -427,6 +434,7 @@ export interface PostRoomMessageInput {
   needHuman?: boolean;
   triggeredBy?: string | null;
   metadata?: Record<string, unknown>;
+  parseMode?: "preferred_json" | "minimal_json" | "raw_fallback" | "parse_failed";
 }
 
 export interface User {

@@ -1,4 +1,5 @@
 import { AgentAdapter, AgentResponse } from "../adapters/index.js";
+import { Step1Envelope } from "../adapters/core/AgentAdapter.js";
 import type { RoomCycleOutcome, RoomSessionState, RoomSessionStatus } from "../db/database.js";
 import { HexNestClientLike } from "../protocol/HexNestClient.js";
 import { CoreRoomMessage, RoomContext } from "../protocol/types.js";
@@ -42,6 +43,7 @@ const FAST_MODE_POLL_MS = 900;
 const DEFAULT_AUTONOMOUS_COOLDOWN_MS = 15_000;
 const FAST_MODE_COOLDOWN_MS = 2_500;
 const DEFAULT_MAX_NO_ACTION_STREAK = 3;
+const RAW_FALLBACK_PREFIX = "RAW_FALLBACK:";
 
 export class RoomAgentSession {
   private joinedAgentId: string | null = null;
@@ -319,13 +321,14 @@ export class RoomAgentSession {
     await this.options.client.postRoomMessage({
       roomId: this.options.roomId,
       joinedAgentId: this.joinedAgentId,
-      text: this.decorateResponseText(response),
+      text: this.buildPostedText(response),
       confidence: response.confidence,
       artifacts: response.artifacts,
       pythonCode: response.pythonCode,
       needHuman: response.needHuman,
       sentiment: response.sentiment,
       metadata: response.metadata,
+      parseMode: this.buildParseMode(response),
       triggeredBy
     });
 
@@ -392,6 +395,97 @@ export class RoomAgentSession {
     }
 
     return compact;
+  }
+
+  private buildPostedText(
+    response: AgentResponse
+  ): string | { full_text: string; summary: string; intent: string; claims?: Array<{ text: string }> } {
+    const envelope = this.normalizeStep1Envelope(response.step1Envelope);
+    if (envelope) {
+      if (envelope.parseMode === "raw_fallback" || envelope.parseMode === "parse_failed") {
+        return envelope.fullText;
+      }
+      return {
+        full_text: envelope.fullText,
+        summary: envelope.summary || this.buildFallbackSummary(envelope.fullText),
+        intent: envelope.intent || "unknown",
+        claims: envelope.claims || []
+      };
+    }
+
+    const decoratedText = this.decorateResponseText(response);
+    if (this.looksLikeRawFallback(decoratedText)) {
+      return this.normalizeRawFallbackText(decoratedText);
+    }
+
+    const fullText = this.normalizeRawFallbackText(decoratedText);
+    return {
+      full_text: fullText,
+      summary: this.buildFallbackSummary(fullText),
+      intent: "unknown",
+      claims: []
+    };
+  }
+
+  private buildParseMode(response: AgentResponse): "preferred_json" | "minimal_json" | "raw_fallback" | "parse_failed" {
+    const envelope = this.normalizeStep1Envelope(response.step1Envelope);
+    if (envelope) {
+      return envelope.parseMode;
+    }
+    return this.looksLikeRawFallback(this.decorateResponseText(response)) ? "raw_fallback" : "minimal_json";
+  }
+
+  private normalizeStep1Envelope(envelope: Step1Envelope | undefined): Step1Envelope | null {
+    if (!envelope) {
+      return null;
+    }
+
+    const fullText = this.normalizeRawFallbackText(envelope.fullText);
+    if (!fullText) {
+      return null;
+    }
+
+    const summary = String(envelope.summary || "").trim();
+    const intent = String(envelope.intent || "").trim() || "unknown";
+    const claims = Array.isArray(envelope.claims)
+      ? envelope.claims
+          .map((claim) => ({ text: String(claim?.text || "").trim() }))
+          .filter((claim) => claim.text)
+      : [];
+
+    return {
+      parseMode: envelope.parseMode,
+      fullText,
+      summary: summary || this.buildFallbackSummary(fullText),
+      intent,
+      claims
+    };
+  }
+
+  private normalizeRawFallbackText(text: string): string {
+    const raw = String(text || "").trim();
+    if (!raw) {
+      return "";
+    }
+    if (!raw.startsWith(RAW_FALLBACK_PREFIX)) {
+      return raw;
+    }
+    return raw.slice(RAW_FALLBACK_PREFIX.length).trim();
+  }
+
+  private looksLikeRawFallback(text: string): boolean {
+    return String(text || "").trim().startsWith(RAW_FALLBACK_PREFIX);
+  }
+
+  private buildFallbackSummary(text: string): string {
+    const normalized = String(text || "").replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return "";
+    }
+    if (normalized.length <= 160) {
+      return normalized;
+    }
+    return `${normalized.slice(0, 157).trimEnd()}...`;
   }
 
   private async refreshCursor(): Promise<void> {
