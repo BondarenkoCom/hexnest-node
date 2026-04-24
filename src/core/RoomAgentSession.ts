@@ -408,7 +408,7 @@ export class RoomAgentSession {
       return {
         full_text: envelope.fullText,
         summary: envelope.summary || this.buildFallbackSummary(envelope.fullText),
-        intent: envelope.intent || "unknown",
+        intent: envelope.intent || this.inferFallbackIntent(envelope.fullText),
         claims: envelope.claims || []
       };
     }
@@ -422,7 +422,7 @@ export class RoomAgentSession {
     return {
       full_text: fullText,
       summary: this.buildFallbackSummary(fullText),
-      intent: "unknown",
+      intent: this.inferFallbackIntent(fullText),
       claims: []
     };
   }
@@ -486,6 +486,31 @@ export class RoomAgentSession {
       return normalized;
     }
     return `${normalized.slice(0, 157).trimEnd()}...`;
+  }
+
+  private inferFallbackIntent(text: string): string {
+    const normalized = String(text || "").trim().toLowerCase();
+    if (!normalized) {
+      return "unknown";
+    }
+
+    if (/\?$/.test(normalized) || /^(can|could|should|would|what|why|how|when|where|who)\b/.test(normalized)) {
+      return "question";
+    }
+    if (/\b(i disagree|not true|that is wrong|however|but|risk|concern|problem|fails?)\b/.test(normalized)) {
+      return "critique";
+    }
+    if (/\b(i agree|makes sense|good point|correct|yes)\b/.test(normalized)) {
+      return "agree";
+    }
+    if (/\b(we should|i suggest|recommend|propose|let's|lets)\b/.test(normalized)) {
+      return "propose";
+    }
+    if (/\b(refine|adjust|instead|better approach|alternative)\b/.test(normalized)) {
+      return "refine";
+    }
+
+    return "unknown";
   }
 
   private async refreshCursor(): Promise<void> {

@@ -364,6 +364,85 @@ describe("RoomAgentSession", () => {
     expect(postedBody.parseMode).toBe("raw_fallback");
   });
 
+  it("infers propose intent for plain-text fallback replies when no structured envelope exists", async () => {
+    class ProposeSessionTestAdapter extends SessionTestAdapter {
+      override async respond(): Promise<AgentResponse> {
+        return {
+          text: "We should ship the bridge first and measure the read path before replacing it.",
+          confidence: 0.73
+        };
+      }
+    }
+
+    const adapter = new ProposeSessionTestAdapter();
+    let postedBody: any = null;
+
+    const client = {
+      registerUser: async () => ({ userId: "u", token: "t" }),
+      loginUser: async () => ({ userId: "u", token: "t" }),
+      registerNode: async () => ({ nodeId: "n", nodeToken: "t", status: "approved" as const }),
+      deleteNode: async () => ({ ok: true, nodeId: "n", removed: true }),
+      getNodeStatus: async () => ({ nodeId: "n", approvalStatus: "approved" as const }),
+      heartbeat: async () => ({ ok: true, pendingInvitations: [] }),
+      submitUsage: async () => ({ accepted: 0, totalOwed: 0 }),
+      markOffline: async () => undefined,
+      listRooms: async () => ({ value: [], count: 0 }),
+      createRoom: async () => ({ id: "r", name: "R", task: "t", subnest: "", status: "open", createdAt: "", updatedAt: "", connectedAgents: [] }),
+      getRoom: async () => ({ id: "r", name: "R", task: "t", subnest: "", status: "open", createdAt: "", updatedAt: "", connectedAgents: [], settings: { pythonShellEnabled: false }, pythonJobs: [], timeline: [], artifacts: [] }),
+      getRoomStats: async () => ({ agents: 0, agentNames: [], totalMessages: 0, totalShares: 0, totalViewers: 0, lastActivity: "" }),
+      getRoomConnectBrief: async () => ({}),
+      heartbeatRoom: async () => ({}),
+      forkRoom: async () => ({ id: "r", name: "R", task: "t", subnest: "", status: "open", createdAt: "", updatedAt: "", connectedAgents: [], settings: { pythonShellEnabled: false }, pythonJobs: [], timeline: [], artifacts: [] }),
+      downloadRoomSummary: async () => "",
+      exportRoom: async () => ({}),
+      getRoomMessages: async () => ({
+        roomId: "room-1",
+        count: 1,
+        messages: [
+          {
+            id: "m-direct",
+            timestamp: "2026-04-13T00:00:00.000Z",
+            from: "human",
+            to: "plain-agent",
+            scope: "direct" as const,
+            type: "chat",
+            text: "Please answer"
+          }
+        ]
+      }),
+      joinRoom: async () => ({ ok: true, role: "researcher", agent: { id: "joined-1", name: "plain-agent" } }),
+      postRoomMessage: async (input: any) => {
+        postedBody = input;
+      },
+      getRoomContext: async () => ({
+        roomId: "room-1",
+        roomName: "Room 1",
+        task: "Task",
+        role: "researcher",
+        phase: "open_room",
+        timeline: [],
+        artifacts: [],
+        rules: "Keep concise"
+      })
+    } as any;
+
+    const session = new RoomAgentSession({
+      client,
+      adapter,
+      roomId: "room-1",
+      role: "researcher",
+      autonomous: false
+    });
+
+    await session.run();
+
+    expect(postedBody.text).toMatchObject({
+      full_text: "We should ship the bridge first and measure the read path before replacing it.",
+      intent: "propose"
+    });
+    expect(postedBody.parseMode).toBe("minimal_json");
+  });
+
   it("preserves envelope-declared raw_fallback without rewriting it to preferred_json", async () => {
     const adapter: AgentAdapter = {
       name: "raw-envelope-agent",
