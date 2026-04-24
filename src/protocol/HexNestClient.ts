@@ -426,6 +426,8 @@ export class HexNestClient implements HexNestClientLike {
         intent: value.intent ? String(value.intent) : undefined,
         triggeredBy: value.triggeredBy ? String(value.triggeredBy) : null,
         text: String(value.text || ""),
+        summary: value.summary ? String(value.summary) : undefined,
+        claims: Array.isArray(value.claims) ? (value.claims as Array<{ text: string } | string>) : undefined,
         sentiment:
           value.sentiment && typeof value.sentiment === "object"
             ? (value.sentiment as RoomContext["timeline"][number]["sentiment"])

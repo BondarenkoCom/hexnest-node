@@ -1,4 +1,4 @@
-import { AgentAdapter, AgentResponse, inferConfidence, parseSentimentFromResponse } from "../core/AgentAdapter.js";
+import { AgentAdapter, AgentResponse, inferConfidence, parseStructuredAgentResponse } from "../core/AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
 import { estimateCostWithUsageFallback, UsageSnapshot } from "../core/costing.js";
 import {
@@ -77,12 +77,15 @@ export abstract class BaseDiscussionAdapter implements AgentAdapter {
       throw new Error(`${this.constructor.name} returned an empty response`);
     }
 
-    const parsed = parseSentimentFromResponse(rawText);
+    const parsed = parseStructuredAgentResponse(rawText);
 
     const output: AgentResponse = {
       text: parsed.text,
       confidence: inferConfidence(parsed.text, context.phase)
     };
+    if (parsed.step1Envelope) {
+      output.step1Envelope = parsed.step1Envelope;
+    }
     if (context.enableSentimentAnalysis) {
       output.sentiment = parsed.sentiment;
     }

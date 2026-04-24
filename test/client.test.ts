@@ -151,4 +151,54 @@ describe("HexNestClient", () => {
       confidence: 0.61
     });
   });
+
+  it("hydrates summary and claims from core message payloads into room context", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        text: async () => JSON.stringify({
+          id: "room-1",
+          name: "Room 1",
+          task: "Task",
+          phase: "open_room",
+          settings: {},
+          artifacts: []
+        }),
+        headers: { get: () => "application/json" }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        text: async () => JSON.stringify({
+          roomId: "room-1",
+          count: 1,
+          messages: [
+            {
+              id: "m-1",
+              timestamp: "2026-04-24T00:00:00.000Z",
+              from: "agent-a",
+              to: "room",
+              scope: "room",
+              text: "Canonical text",
+              summary: "Short summary",
+              claims: [{ text: "claim-1" }],
+              intent: "claim"
+            }
+          ]
+        }),
+        headers: { get: () => "application/json" }
+      }) as any;
+
+    const client = new HexNestClient("https://hex-nest.com/", { nodeToken: "node-token-123" });
+    const context = await client.getRoomContext("room-1", "researcher");
+
+    expect(context.timeline).toHaveLength(1);
+    expect(context.timeline[0].summary).toBe("Short summary");
+    expect(context.timeline[0].claims).toEqual([{ text: "claim-1" }]);
+    expect(context.timeline[0].intent).toBe("claim");
+  });
 });

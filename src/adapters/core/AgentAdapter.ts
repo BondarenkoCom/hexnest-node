@@ -115,6 +115,10 @@ export interface ParsedResponse {
   sentiment: Sentiment;
 }
 
+export interface ParsedStructuredResponse extends ParsedResponse {
+  step1Envelope?: Step1Envelope;
+}
+
 /**
  * Parse [SENTIMENT: label] tag from LLM response.
  * Returns cleaned text and extracted sentiment object.
@@ -143,5 +147,192 @@ export function parseSentimentFromResponse(raw: string): ParsedResponse {
       label: "neutral",
       score: 0
     }
+  };
+}
+
+function extractJsonCandidate(text: string): string | null {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return trimmed;
+  }
+
+  const fencedMatches = Array.from(trimmed.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi));
+  for (const match of fencedMatches) {
+    const candidate = String(match[1] || "").trim();
+    if (candidate.startsWith("{") && candidate.endsWith("}")) {
+      return candidate;
+    }
+  }
+
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    const candidate = trimmed.slice(firstBrace, lastBrace + 1).trim();
+    if (candidate.startsWith("{") && candidate.endsWith("}")) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function normalizeStep1Claims(value: unknown): Step1Claim[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((claim) => {
+      if (typeof claim === "string") {
+        return { text: claim.trim() };
+      }
+      if (claim && typeof claim === "object" && "text" in claim) {
+        return { text: String((claim as { text?: unknown }).text || "").trim() };
+      }
+      return null;
+    })
+    .filter((claim): claim is Step1Claim => Boolean(claim?.text));
+}
+
+function parseStep1EnvelopeFromJsonCandidate(candidate: string | null): Step1Envelope | null {
+  if (!candidate) {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(candidate);
+  } catch {
+    return null;
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const fullText = String(record.full_text ?? record.fullText ?? "").trim();
+  if (!fullText) {
+    return null;
+  }
+
+  const summary = String(record.summary ?? "").trim();
+  const intent = String(record.intent ?? "").trim();
+  const claims = normalizeStep1Claims(record.claims);
+
+  return {
+    parseMode: summary && intent ? "preferred_json" : "minimal_json",
+    fullText,
+    ...(summary ? { summary } : {}),
+    ...(intent ? { intent } : {}),
+    ...(claims.length ? { claims } : {})
+  };
+}
+
+function isStructuredLabel(line: string): boolean {
+  return /^(full[_ ]?text|summary|intent|claims)\s*:/i.test(line.trim());
+}
+
+function parseStep1EnvelopeFromLabeledText(text: string): Step1Envelope | null {
+  const lines = String(text || "").split(/\r?\n/);
+  let currentField: "full_text" | "summary" | "intent" | "claims" | null = null;
+  const fullTextLines: string[] = [];
+  const summaryLines: string[] = [];
+  const intentLines: string[] = [];
+  const claims: Step1Claim[] = [];
+
+  const pushClaim = (value: string): void => {
+    const normalized = value.replace(/^[-*•]\s*/, "").trim();
+    if (normalized) {
+      claims.push({ text: normalized });
+    }
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+
+    const fieldMatch = /^(full[_ ]?text|summary|intent|claims)\s*:\s*(.*)$/i.exec(line);
+    if (fieldMatch) {
+      const field = fieldMatch[1].toLowerCase().replace(/\s+/g, "_");
+      const value = String(fieldMatch[2] || "").trim();
+      if (field === "full_text") {
+        currentField = "full_text";
+        if (value) fullTextLines.push(value);
+      } else if (field === "summary") {
+        currentField = "summary";
+        if (value) summaryLines.push(value);
+      } else if (field === "intent") {
+        currentField = "intent";
+        if (value) intentLines.push(value);
+      } else if (field === "claims") {
+        currentField = "claims";
+        if (value) pushClaim(value);
+      }
+      continue;
+    }
+
+    if (currentField === "claims" && /^[-*•]\s+/.test(line)) {
+      pushClaim(line);
+      continue;
+    }
+
+    if (isStructuredLabel(line)) {
+      currentField = null;
+      continue;
+    }
+
+    if (currentField === "full_text") {
+      fullTextLines.push(line);
+    } else if (currentField === "summary") {
+      summaryLines.push(line);
+    } else if (currentField === "intent") {
+      intentLines.push(line);
+    }
+  }
+
+  const fullText = fullTextLines.join(" ").trim();
+  if (!fullText) {
+    return null;
+  }
+
+  const summary = summaryLines.join(" ").trim();
+  const intent = intentLines.join(" ").trim();
+  return {
+    parseMode: summary && intent ? "preferred_json" : "minimal_json",
+    fullText,
+    ...(summary ? { summary } : {}),
+    ...(intent ? { intent } : {}),
+    ...(claims.length ? { claims } : {})
+  };
+}
+
+function parseStep1EnvelopeFromText(text: string): Step1Envelope | null {
+  const fromJson = parseStep1EnvelopeFromJsonCandidate(extractJsonCandidate(text));
+  if (fromJson) {
+    return fromJson;
+  }
+
+  return parseStep1EnvelopeFromLabeledText(text);
+}
+
+export function parseStructuredAgentResponse(raw: string): ParsedStructuredResponse {
+  const parsed = parseSentimentFromResponse(raw);
+  const step1Envelope = parseStep1EnvelopeFromText(parsed.text);
+
+  if (!step1Envelope) {
+    return parsed;
+  }
+
+  return {
+    text: step1Envelope.fullText,
+    sentiment: parsed.sentiment,
+    step1Envelope
   };
 }

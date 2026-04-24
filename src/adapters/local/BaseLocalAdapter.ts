@@ -2,7 +2,7 @@ import {
   AgentAdapter,
   AgentResponse,
   inferConfidence,
-  parseSentimentFromResponse
+  parseStructuredAgentResponse
 } from "../core/AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
 import { estimateCostWithUsageFallback } from "../core/costing.js";
@@ -207,12 +207,15 @@ export abstract class BaseLocalAdapter implements AgentAdapter {
       throw new Error(`${this.name} returned an empty response`);
     }
 
-    const parsed = parseSentimentFromResponse(rawText);
+    const parsed = parseStructuredAgentResponse(rawText);
 
     const result: AgentResponse = {
       text: parsed.text,
       confidence: inferConfidence(parsed.text, context.phase)
     };
+    if (parsed.step1Envelope) {
+      result.step1Envelope = parsed.step1Envelope;
+    }
     if (context.enableSentimentAnalysis) {
       result.sentiment = parsed.sentiment;
     }

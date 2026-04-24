@@ -32,6 +32,51 @@ export function liveDiscussionGuidance(): string[] {
   ];
 }
 
+export function structuredOutputGuidance(): string[] {
+  return [
+    "STEP 2 OUTPUT PREFERENCE:",
+    "When you can do it reliably, structure your reply around these fields: full_text, summary, intent, and optional claims.",
+    "full_text should contain the complete room-visible answer in normal prose.",
+    "summary should be a short compact restatement of the same answer.",
+    "intent should be a short label for the move you are making, such as propose, critique, question, agree, disagree, refine, or unknown.",
+    "claims is optional and should stay minimal; omit it when you are not confident.",
+    "If you cannot produce a stable structured answer, fall back to a normal plain-text reply instead of inventing fields."
+  ];
+}
+
+function normalizeClaims(claims: RoomContext["timeline"][number]["claims"]): string[] {
+  if (!Array.isArray(claims)) {
+    return [];
+  }
+
+  return claims
+    .map((claim) => {
+      if (typeof claim === "string") {
+        return claim.trim();
+      }
+      if (claim && typeof claim === "object" && "text" in claim) {
+        return String(claim.text || "").trim();
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
+function formatCompactMetadata(event: RoomContext["timeline"][number]): string {
+  const parts: string[] = [];
+
+  if (event.summary) {
+    parts.push(`summary=${event.summary}`);
+  }
+
+  const claims = normalizeClaims(event.claims);
+  if (claims.length) {
+    parts.push(`claims=${claims.join(" | ")}`);
+  }
+
+  return parts.length ? ` {${parts.join("; ")}}` : "";
+}
+
 export function formatTimeline(timeline: RoomContext["timeline"], limit = 10): string {
   return timeline
     .slice(-limit)
@@ -39,7 +84,8 @@ export function formatTimeline(timeline: RoomContext["timeline"], limit = 10): s
       const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
       const trigger = event.triggeredBy ? ` trig=${event.triggeredBy}` : "";
       const sentiment = event.sentiment ? ` [mood:${event.sentiment.label}]` : "";
-      return `${event.from} -> ${event.to} [${meta || "chat"}]${trigger}${sentiment}: ${event.text}`;
+      const compact = formatCompactMetadata(event);
+      return `${event.from} -> ${event.to} [${meta || "chat"}]${trigger}${sentiment}: ${event.text}${compact}`;
     })
     .join("\n");
 }
@@ -48,7 +94,8 @@ export function formatActionableEvents(actionableEvents: RoomContext["actionable
   return (actionableEvents || [])
     .map((event) => {
       const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
-      return `- ${event.from} -> ${event.to} [${meta || "chat"}]${event.triggeredBy ? ` trig=${event.triggeredBy}` : ""}: ${event.text}`;
+      const compact = formatCompactMetadata(event);
+      return `- ${event.from} -> ${event.to} [${meta || "chat"}]${event.triggeredBy ? ` trig=${event.triggeredBy}` : ""}: ${event.text}${compact}`;
     })
     .join("\n");
 }
@@ -70,7 +117,8 @@ export function buildDiscussionSystemPrompt(options: {
     ...(options.includePhaseLine ? [options.includePhaseLine] : []),
     `Rules: ${options.rules}`,
     options.styleLine,
-    ...liveDiscussionGuidance()
+    ...liveDiscussionGuidance(),
+    ...structuredOutputGuidance()
   ];
 
   if (options.enableSentimentAnalysis) {
@@ -105,4 +153,3 @@ export function buildDiscussionUserPrompt(options: {
     options.timelineText || "(empty)"
   ].join("\n");
 }
-

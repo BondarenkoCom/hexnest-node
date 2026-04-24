@@ -5,9 +5,10 @@ import {
   estimateTokensFromText,
   estimateUsdFromModel,
   inferConfidence,
-  parseSentimentFromResponse
+  parseStructuredAgentResponse
 } from "../core/AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
+import { formatActionableEvents, formatTimeline, structuredOutputGuidance } from "./prompting.js";
 
 export interface CliRunResult {
   exitCode: number | null;
@@ -40,20 +41,8 @@ export abstract class BaseCliAdapter implements AgentAdapter {
   }
 
   async respond(context: RoomContext): Promise<AgentResponse> {
-    const timeline = context.timeline
-      .slice(-10)
-      .map((event) => {
-        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
-        const trigger = event.triggeredBy ? ` trig=${event.triggeredBy}` : "";
-        return `${event.from} -> ${event.to} [${meta || "chat"}]${trigger}: ${event.text}`;
-      })
-      .join("\n");
-    const actionable = (context.actionableEvents || [])
-      .map((event) => {
-        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
-        return `- ${event.from} -> ${event.to} [${meta || "chat"}]${event.triggeredBy ? ` trig=${event.triggeredBy}` : ""}: ${event.text}`;
-      })
-      .join("\n");
+    const timeline = formatTimeline(context.timeline, 10);
+    const actionable = formatActionableEvents(context.actionableEvents);
 
     const prompt = [
       `You are ${this.name} in HexNest room.`,
@@ -62,6 +51,7 @@ export abstract class BaseCliAdapter implements AgentAdapter {
       "Be concrete. Keep output compact and high-signal.",
       "Follow DECIDE -> ACT -> REPORT. If there is no actionable trigger, return a short NO_ACTION reason.",
       "Do not run shell commands or modify files. Reply with text only.",
+      ...structuredOutputGuidance(),
       "",
       `Task: ${context.task}`,
       `Phase: ${context.phase}`,
@@ -76,12 +66,15 @@ export abstract class BaseCliAdapter implements AgentAdapter {
     ].join("\n");
 
     const rawText = await this.executeCli(prompt);
-    const parsed = parseSentimentFromResponse(rawText);
+    const parsed = parseStructuredAgentResponse(rawText);
     
     const output: AgentResponse = {
       text: parsed.text,
       confidence: inferConfidence(parsed.text, context.phase)
     };
+    if (parsed.step1Envelope) {
+      output.step1Envelope = parsed.step1Envelope;
+    }
     if (context.enableSentimentAnalysis) {
       output.sentiment = parsed.sentiment;
     }

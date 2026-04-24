@@ -54,10 +54,125 @@ describe("BaseDiscussionAdapter", () => {
     // System prompt verification
     expect(system).toContain("Assigned role: test-role.");
     expect(system).toContain("Be concrete and simple.");
+    expect(system).toContain("STEP 2 OUTPUT PREFERENCE:");
+    expect(system).toContain("full_text, summary, intent, and optional claims");
+    expect(system).toContain("fall back to a normal plain-text reply");
+    expect(user).toContain("Actionable events:");
     
     // Output verification
     expect(response.text).toBe("Test response");
     expect(response.confidence).toBeGreaterThan(0);
+  });
+
+  it("includes compact summary and claims in the discussion user prompt", async () => {
+    const adapter = new TestDiscussionAdapter();
+
+    await adapter.respond({
+      roomId: "r1",
+      roomName: "Test Room",
+      task: "Test task",
+      role: "test-role",
+      phase: "open_room",
+      rules: "",
+      actionableEvents: [
+        {
+          id: "a1",
+          timestamp: "T1",
+          phase: "open_room",
+          from: "agent-a",
+          to: "room",
+          scope: "room",
+          intent: "critique",
+          text: "This plan needs a smaller rollout slice.",
+          summary: "Smaller rollout slice needed.",
+          claims: [{ text: "Large rollout increases coordination risk." }]
+        }
+      ],
+      timeline: [
+        {
+          id: "m1",
+          timestamp: "T2",
+          phase: "open_room",
+          from: "agent-b",
+          to: "room",
+          scope: "room",
+          intent: "propose",
+          text: "Ship the bridge first and measure.",
+          summary: "Ship the bridge first.",
+          claims: ["Bridge-first rollout lowers migration risk."]
+        }
+      ],
+      artifacts: [],
+    });
+
+    const { user } = adapter.executeCompletionCalls[0];
+    expect(user).toContain("Ship the bridge first and measure. {summary=Ship the bridge first.; claims=Bridge-first rollout lowers migration risk.}");
+    expect(user).toContain("This plan needs a smaller rollout slice. {summary=Smaller rollout slice needed.; claims=Large rollout increases coordination risk.}");
+  });
+
+  it("extracts step1 envelope from a structured json response", async () => {
+    const adapter = new TestDiscussionAdapter();
+    adapter.mockResponse = JSON.stringify({
+      full_text: "We should ship the bridge first.",
+      summary: "Ship the bridge first.",
+      intent: "propose",
+      claims: [{ text: "Bridge rollout reduces migration risk." }]
+    });
+
+    const response = await adapter.respond({
+      roomId: "r1",
+      roomName: "Test Room",
+      task: "Test task",
+      role: "test-role",
+      phase: "open_room",
+      rules: "",
+      timeline: [],
+      artifacts: [],
+    });
+
+    expect(response.text).toBe("We should ship the bridge first.");
+    expect(response.step1Envelope).toEqual({
+      parseMode: "preferred_json",
+      fullText: "We should ship the bridge first.",
+      summary: "Ship the bridge first.",
+      intent: "propose",
+      claims: [{ text: "Bridge rollout reduces migration risk." }]
+    });
+  });
+
+  it("extracts step1 envelope from labeled structured text", async () => {
+    const adapter = new TestDiscussionAdapter();
+    adapter.mockResponse = [
+      "full_text: We should keep Step 2 incremental.",
+      "summary: Keep Step 2 incremental.",
+      "intent: refine",
+      "claims:",
+      "- Prompt changes should stay low-risk.",
+      "- Runtime parsing should tolerate weak structure."
+    ].join("\n");
+
+    const response = await adapter.respond({
+      roomId: "r1",
+      roomName: "Test Room",
+      task: "Test task",
+      role: "test-role",
+      phase: "open_room",
+      rules: "",
+      timeline: [],
+      artifacts: [],
+    });
+
+    expect(response.text).toBe("We should keep Step 2 incremental.");
+    expect(response.step1Envelope).toEqual({
+      parseMode: "preferred_json",
+      fullText: "We should keep Step 2 incremental.",
+      summary: "Keep Step 2 incremental.",
+      intent: "refine",
+      claims: [
+        { text: "Prompt changes should stay low-risk." },
+        { text: "Runtime parsing should tolerate weak structure." }
+      ]
+    });
   });
   
   it("estimates costs based on historical usage properly", async () => {

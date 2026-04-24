@@ -26,6 +26,8 @@ export interface RoomEvent {
   intent?: string;
   triggeredBy?: string | null;
   text: string;
+  summary?: string;
+  claims?: Array<{ text: string } | string>;
   sentiment?: Sentiment;
   metadata?: Record<string, unknown>;
   confidence?: number;
@@ -372,6 +374,8 @@ export interface CoreRoomMessage {
   scope: "room" | "direct";
   type?: string;
   text: string;
+  summary?: string;
+  claims?: Array<{ text: string } | string>;
   intent?: string;
   confidence?: number;
   sentiment?: Sentiment;
