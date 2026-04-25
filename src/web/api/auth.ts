@@ -51,11 +51,12 @@ export function authRouter(context: WebServerContext): Router {
       const authResponse = await client.loginUser({ email, password });
       console.log("[auth] Login successful for", email, "userId:", authResponse.userId);
 
+      const userToken = authResponse.accessToken || authResponse.token;
       // Save token to database instead of .env
       context.db.setNodeConfig("user_email", email);
-      context.db.setNodeConfig("user_token", authResponse.token);
-      setNodeWebSession(res, authResponse.token);
-      const connection = await reconnectNodeAfterAuth(context, authResponse.token, email);
+      context.db.setNodeConfig("user_token", userToken);
+      setNodeWebSession(res, userToken);
+      const connection = await reconnectNodeAfterAuth(context, userToken, email);
 
       res.json({
         success: true,
@@ -100,9 +101,10 @@ export function authRouter(context: WebServerContext): Router {
       context.db.setNodeConfig("operator_name", name);
       context.db.setNodeConfig("node_name", nodeName);
       context.db.setNodeConfig("user_email", email);
-      context.db.setNodeConfig("user_token", authResponse.token);
-      setNodeWebSession(res, authResponse.token);
-      const connection = await reconnectNodeAfterAuth(context, authResponse.token, email);
+      const userToken = authResponse.accessToken || authResponse.token;
+      context.db.setNodeConfig("user_token", userToken);
+      setNodeWebSession(res, userToken);
+      const connection = await reconnectNodeAfterAuth(context, userToken, email);
 
       res.json({
         success: true,
