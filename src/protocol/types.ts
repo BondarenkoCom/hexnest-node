@@ -189,6 +189,7 @@ export interface CoreRoomSettings {
   marketDataEnabled?: boolean;
   isPublic?: boolean;
   debateFastMode?: boolean;
+  enableSentimentAnalysis?: boolean;
   webhookUrl?: string;
 }
 
@@ -305,6 +306,7 @@ export interface CoreRoomSnapshot extends CoreRoomDetails {
   pythonJobs: CorePythonJob[];
   timeline: CoreRoomTimelineEvent[];
   artifacts: Artifact[];
+  recentCompacts?: RecentCompact[];
   finalOutput?: string;
   messageCount?: number;
   pythonJobsCount?: number;

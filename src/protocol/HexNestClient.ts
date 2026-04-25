@@ -166,11 +166,11 @@ function buildContextSummary(timeline: RoomContext["timeline"], artifactsCount: 
   return `timeline=${timeline.length}; actionable=${actionableCount}; artifacts=${artifactsCount}`;
 }
 
-function buildRecentCompacts(room: Record<string, unknown>): RecentCompact[] {
+function buildRecentCompacts(room: CoreRoomSnapshot): RecentCompact[] {
   const rawRecentCompacts = Array.isArray(room.recentCompacts) ? room.recentCompacts : [];
   return rawRecentCompacts
     .map((item) => {
-      const value = item as Record<string, unknown>;
+      const value = item as RecentCompact;
       const compact: RecentCompact = {
         messageId: String(value.messageId || ""),
         intent: String(value.intent || "unknown"),
@@ -447,7 +447,7 @@ export class HexNestClient implements HexNestClientLike {
   async getRoomContext(roomId: string, role: string): Promise<RoomContext> {
     const encodedRoomId = encodeURIComponent(roomId);
     const [room, messages] = await Promise.all([
-      this.request<Record<string, unknown>>(`/api/rooms/${encodedRoomId}`, { authRequired: true }),
+      this.getRoom(roomId),
       this.request<Record<string, unknown>>(`/api/rooms/${encodedRoomId}/messages?limit=30`, { authRequired: true })
     ]);
 
@@ -491,18 +491,17 @@ export class HexNestClient implements HexNestClientLike {
       .slice(-6);
 
     const rawArtifacts = Array.isArray(room.artifacts) ? room.artifacts : [];
-    const artifacts = rawArtifacts.map((item, index) => {
-      const value = item as Record<string, unknown>;
-      return {
-        id: String(value.id || `artifact-${index}`),
-        type: (String(value.type || "note") as "synthesis" | "critique" | "note" | "data"),
-        label: String(value.label || ""),
-        content: String(value.content || ""),
-        producer: String(value.producer || ""),
-        timestamp: String(value.timestamp || "")
-      };
-    });
+    const artifacts = rawArtifacts.map((item, index) => ({
+      id: String(item?.id || `artifact-${index}`),
+      type: (String(item?.type || "note") as "synthesis" | "critique" | "note" | "data"),
+      label: String(item?.label || ""),
+      content: String(item?.content || ""),
+      producer: String(item?.producer || ""),
+      timestamp: String(item?.timestamp || "")
+    }));
     const recentCompacts = buildRecentCompacts(room);
+    const settings = room.settings;
+    const template = room.template;
 
     return {
       roomId,
@@ -510,15 +509,15 @@ export class HexNestClient implements HexNestClientLike {
       task: String(room.task || ""),
       role,
       phase: String(room.phase || "open_room"),
-      debateFastMode: Boolean((room.settings as Record<string, unknown> | undefined)?.debateFastMode),
-      enableSentimentAnalysis: Boolean((room.settings as Record<string, unknown> | undefined)?.enableSentimentAnalysis),
+      debateFastMode: Boolean(settings?.debateFastMode),
+      enableSentimentAnalysis: Boolean(settings?.enableSentimentAnalysis),
       contextVersion: "v2",
       timeline,
       actionableEvents,
       recentCompacts,
       contextSummary: buildContextSummary(timeline, artifacts.length),
       artifacts,
-      rules: String((room.template as Record<string, unknown> | undefined)?.rules || "")
+      rules: String(template?.rules || "")
     };
   }
 
