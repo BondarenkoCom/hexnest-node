@@ -512,7 +512,7 @@ export function loadConfig(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = pro
     ),
     enableInternalReviewWorkerBridge: parseBoolean(
       env.HEXNEST_ENABLE_INTERNAL_REVIEW_WORKER_BRIDGE,
-      true
+      false
     )
   };
 }
