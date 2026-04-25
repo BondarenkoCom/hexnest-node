@@ -91,6 +91,9 @@ function formatRecentCompact(item: NonNullable<RoomContext["recentCompacts"]>[nu
 
   parts.push(`intent=${item.intent}`);
   parts.push(`source=${item.representationSource}`);
+  if (typeof item.score === "number") {
+    parts.push(`score=${item.score}`);
+  }
   return `- ${item.messageId}${parts.length ? ` {${parts.join("; ")}}` : ""}`;
 }
 

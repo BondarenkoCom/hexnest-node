@@ -94,7 +94,8 @@ describe("BaseDiscussionAdapter", () => {
           summary: "Compact bridge summary",
           claims: ["Bridge-first rollout lowers coordination risk."],
           intent: "propose",
-          representationSource: "self_declared"
+          representationSource: "self_declared",
+          score: 0.82
         }
       ],
       timeline: [
@@ -116,7 +117,7 @@ describe("BaseDiscussionAdapter", () => {
 
     const { user } = adapter.executeCompletionCalls[0];
     expect(user).toContain("Recent compacts:");
-    expect(user).toContain("- m1 {summary=Compact bridge summary; claims=Bridge-first rollout lowers coordination risk.; intent=propose; source=self_declared}");
+    expect(user).toContain("- m1 {summary=Compact bridge summary; claims=Bridge-first rollout lowers coordination risk.; intent=propose; source=self_declared; score=0.82}");
     expect(user).toContain("Ship the bridge first and measure. {summary=Ship the bridge first.; claims=Bridge-first rollout lowers migration risk.}");
     expect(user).toContain("This plan needs a smaller rollout slice. {summary=Smaller rollout slice needed.; claims=Large rollout increases coordination risk.}");
   });

@@ -39,6 +39,7 @@ export interface RecentCompact {
   claims?: Array<{ text: string } | string>;
   intent: string;
   representationSource: string;
+  score?: number;
 }
 
 export interface RoomContext {

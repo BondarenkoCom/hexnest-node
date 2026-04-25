@@ -172,7 +172,8 @@ describe("HexNestClient", () => {
               summary: "Compact room summary",
               claims: [{ text: "claim-1" }],
               intent: "propose",
-              representationSource: "self_declared"
+              representationSource: "self_declared",
+              score: 0.91
             }
           ]
         }),
@@ -215,7 +216,8 @@ describe("HexNestClient", () => {
         summary: "Compact room summary",
         claims: [{ text: "claim-1" }],
         intent: "propose",
-        representationSource: "self_declared"
+        representationSource: "self_declared",
+        score: 0.91
       }
     ]);
     expect(context.contextSummary).toBe("Recent summaries: Short summary");

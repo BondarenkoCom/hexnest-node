@@ -92,7 +92,8 @@ describe("BaseCliAdapter", () => {
           summary: "Compact bridge summary",
           claims: [{ text: "Bridge-first rollout lowers coordination risk." }],
           intent: "propose",
-          representationSource: "reviewed"
+          representationSource: "reviewed",
+          score: 0.93
         }
       ],
       timeline: [
@@ -114,7 +115,7 @@ describe("BaseCliAdapter", () => {
 
     const prompt = adapter.executeCliCalls[0];
     expect(prompt).toContain("Recent compacts:");
-    expect(prompt).toContain("- m1 {summary=Compact bridge summary; claims=Bridge-first rollout lowers coordination risk.; intent=propose; source=reviewed}");
+    expect(prompt).toContain("- m1 {summary=Compact bridge summary; claims=Bridge-first rollout lowers coordination risk.; intent=propose; source=reviewed; score=0.93}");
     expect(prompt).toContain("Use the bridge path before replacing reads. {summary=Bridge before replacing reads.; claims=Bridge-first rollout protects the legacy path.}");
     expect(prompt).toContain("Can we reduce rollout scope first? {summary=Reduce rollout scope first.; claims=Smaller rollout is easier to verify.}");
   });

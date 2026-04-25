@@ -204,6 +204,9 @@ function buildRecentCompacts(room: CoreRoomSnapshot): RecentCompact[] {
       if (Array.isArray(value.claims)) {
         compact.claims = value.claims as Array<{ text: string } | string>;
       }
+      if (typeof value.score === "number") {
+        compact.score = value.score;
+      }
       return compact;
     })
     .filter((item) => Boolean(item.messageId));
