@@ -27,6 +27,35 @@ class FakeAdapter implements AgentAdapter {
   }
 }
 
+class ReviewAdapter implements AgentAdapter {
+  name = "reviewer-agent";
+  modelId = "review-model";
+  capabilities = ["review", "analysis"];
+  supportedRoles = ["reviewer", "critic"];
+
+  async respond(_context: RoomContext): Promise<AgentResponse> {
+    return {
+      text: "Reviewed room message",
+      confidence: 0.9,
+      step1Envelope: {
+        parseMode: "preferred_json",
+        fullText: "Reviewed room message",
+        summary: "Adapter-reviewed summary",
+        intent: "critique",
+        claims: [{ text: "claim-from-review" }]
+      }
+    };
+  }
+
+  async estimateCost(_context: RoomContext, _responseText?: string): Promise<CostEstimate> {
+    return {
+      inputTokens: 10,
+      outputTokens: 4,
+      estimatedCostUsd: 0.02
+    };
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -49,6 +78,7 @@ function makeNodeConfig(overrides: Partial<NodeConfig> = {}): NodeConfig {
     agentAlertsMinCycles: 10,
     agentAlertsMaxNoActionRate: 0.75,
     agentAlertsMaxReentryRate: 0.35,
+    enableInternalReviewWorkerBridge: true,
     ...overrides
   };
 }
@@ -600,5 +630,148 @@ describe("NodeRuntime", () => {
 
     expect(calls.startReviewJob).toBe(1);
     expect(calls.completeReviewJob).toBe(1);
+  });
+
+  it("prefers a reviewer-like adapter for Step 4 review jobs when available", async () => {
+    let queued = true;
+
+    const client = {
+      registerNode: async () => ({ nodeId: "node-1", nodeToken: "token-1", status: "approved" as const }),
+      getNodeStatus: async () => ({
+        nodeId: "node-1",
+        approvalStatus: "approved" as const,
+        status: "online" as const,
+        lastHeartbeatAt: null,
+        lastHeartbeatStatus: null
+      }),
+      heartbeat: async () => ({ ok: true, pendingInvitations: [] }),
+      submitUsage: async () => ({ accepted: 0, totalOwed: 0 }),
+      markOffline: async () => undefined,
+      getReviewJobs: async () => {
+        if (!queued) {
+          return { nodeId: "node-1", count: 0, jobs: [] };
+        }
+        queued = false;
+        return {
+          nodeId: "node-1",
+          count: 1,
+          jobs: [
+            {
+              id: "job-2",
+              roomId: "room-1",
+              messageId: "m-2",
+              jobKind: "review" as const,
+              status: "queued" as const,
+              targetSourceHint: "system_minimal",
+              requestedBy: "rooms.post_message.review",
+              requestedAt: "2026-04-25T01:00:00.000Z",
+              priority: 0,
+              inputJson: {
+                fullText: "Short source message."
+              }
+            }
+          ]
+        };
+      },
+      startReviewJob: async () => ({ ok: true, job: {} }),
+      completeReviewJob: async (_nodeId: string, _jobId: string, payload: any) => {
+        expect(payload.summary).toBe("Adapter-reviewed summary");
+        expect(payload.intent).toBe("critique");
+        expect(payload.claims).toEqual([{ text: "claim-from-review" }]);
+        expect(payload.rawResult.mode).toBe("step4_adapter_review");
+        expect(payload.rawResult.adapter).toBe("reviewer-agent");
+        return { ok: true, artifact: {} };
+      },
+      failReviewJob: async () => ({ ok: true, job: {} }),
+      joinRoom: async () => ({ roomId: "room-1", joinedAgent: { id: "joined-1", name: "fake-agent" } }),
+      postRoomMessage: async () => undefined,
+      getRoomContext: async (_roomId: string, role: string) => ({
+        roomId: "room-1",
+        roomName: "Room 1",
+        task: "Research market dynamics",
+        role,
+        phase: "independent_answers",
+        timeline: [],
+        artifacts: [],
+        rules: "Cite sources."
+      })
+    };
+
+    const runtime = new NodeRuntime(makeNodeConfig(), [new FakeAdapter(), new ReviewAdapter()], {
+      clientFactory: () => client as any
+    });
+
+    await runtime.start();
+    await sleep(40);
+    await runtime.stop();
+  });
+
+  it("does not process review jobs when the internal bridge is disabled", async () => {
+    const calls = {
+      startReviewJob: 0,
+      completeReviewJob: 0
+    };
+    const client = {
+      registerNode: async () => ({ nodeId: "node-1", nodeToken: "token-1", status: "approved" as const }),
+      getNodeStatus: async () => ({
+        nodeId: "node-1",
+        approvalStatus: "approved" as const,
+        status: "online" as const,
+        lastHeartbeatAt: null,
+        lastHeartbeatStatus: null
+      }),
+      heartbeat: async () => ({ ok: true, pendingInvitations: [] }),
+      submitUsage: async () => ({ accepted: 0, totalOwed: 0 }),
+      markOffline: async () => undefined,
+      getReviewJobs: async () => ({
+        nodeId: "node-1",
+        count: 1,
+        jobs: [
+          {
+            id: "job-1",
+            roomId: "room-1",
+            messageId: "m-1",
+            jobKind: "review" as const,
+            status: "queued" as const,
+            targetSourceHint: "system_minimal",
+            requestedBy: "rooms.post_message.review",
+            requestedAt: "2026-04-25T01:00:00.000Z",
+            priority: 0
+          }
+        ]
+      }),
+      startReviewJob: async () => {
+        calls.startReviewJob += 1;
+        return { ok: true, job: {} };
+      },
+      completeReviewJob: async () => {
+        calls.completeReviewJob += 1;
+        return { ok: true, artifact: {} };
+      },
+      failReviewJob: async () => ({ ok: true, job: {} }),
+      joinRoom: async () => ({ roomId: "room-1", joinedAgent: { id: "joined-1", name: "fake-agent" } }),
+      postRoomMessage: async () => undefined,
+      getRoomContext: async (_roomId: string, role: string) => ({
+        roomId: "room-1",
+        roomName: "Room 1",
+        task: "Research market dynamics",
+        role,
+        phase: "independent_answers",
+        timeline: [],
+        artifacts: [],
+        rules: "Cite sources."
+      })
+    };
+
+    const runtime = new NodeRuntime(makeNodeConfig({ enableInternalReviewWorkerBridge: false }), [new FakeAdapter()], {
+      clientFactory: () => client as any
+    });
+
+    await runtime.start();
+    await sleep(40);
+    await runtime.stop();
+
+    expect(calls.startReviewJob).toBe(0);
+    expect(calls.completeReviewJob).toBe(0);
   });
 });

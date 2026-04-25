@@ -898,6 +898,10 @@ export class NodeRuntime {
   }
 
   private async processQueuedReviewJobs(): Promise<void> {
+    if (!this.config.enableInternalReviewWorkerBridge) {
+      return;
+    }
+
     if (this.reviewJobsInFlight) {
       return this.reviewJobsInFlight;
     }
@@ -963,7 +967,7 @@ export class NodeRuntime {
         workerName: this.config.nodeName,
         workerModel: this.primaryAdapterModelId()
       });
-      await client.completeReviewJob(this.nodeId, job.id, this.buildStubReviewResult(job));
+      await client.completeReviewJob(this.nodeId, job.id, await this.buildReviewJobResult(job));
       this.recordActivity("info", `Processed ${job.jobKind} review job ${job.id}`);
     } catch (error) {
       this.logger.warn(`[node] review job failed id=${job.id}:`, this.err(error));
@@ -975,6 +979,33 @@ export class NodeRuntime {
         this.logger.warn(`[node] failed to mark review job as failed id=${job.id}:`, this.err(failError));
       }
     }
+  }
+
+  private async buildReviewJobResult(job: PendingReviewJob): Promise<{
+    representationSource?: "reviewed" | "recovered";
+    summary?: string;
+    intent?: string;
+    claims?: unknown[];
+    createdAt: string;
+    rawResult: Record<string, unknown>;
+  }> {
+    const adapter = this.selectReviewAdapter();
+    if (!adapter) {
+      return this.buildStubReviewResult(job);
+    }
+
+    try {
+      const context = this.buildReviewJobContext(job, adapter.name);
+      const response = await adapter.respond(context);
+      const fromAdapter = this.normalizeReviewResultFromAdapter(job, adapter.name, response);
+      if (fromAdapter) {
+        return fromAdapter;
+      }
+    } catch (error) {
+      this.logger.warn(`[node] adapter review failed id=${job.id} adapter=${adapter.name}:`, this.err(error));
+    }
+
+    return this.buildStubReviewResult(job);
   }
 
   private buildStubReviewResult(job: PendingReviewJob): {
@@ -1012,6 +1043,141 @@ export class NodeRuntime {
         mode: "step4_stub_worker",
         jobKind: job.jobKind,
         targetSourceHint: job.targetSourceHint
+      }
+    };
+  }
+
+  private selectReviewAdapter(): AgentAdapter | null {
+    const adapters = [...this.adapters.values()];
+    if (!adapters.length) {
+      return null;
+    }
+
+    const scoreAdapter = (adapter: AgentAdapter): number => {
+      let score = 0;
+      const roles = adapter.supportedRoles.map((value) => String(value || "").toLowerCase());
+      const capabilities = adapter.capabilities.map((value) => String(value || "").toLowerCase());
+      const name = String(adapter.name || "").toLowerCase();
+
+      if (roles.some((value) => /\b(review|reviewer|critic|skeptic|validator|audit|qa|risk|security)\b/.test(value))) {
+        score += 5;
+      }
+      if (capabilities.some((value) => /\b(review|critique|analysis|reasoning|audit|validation)\b/.test(value))) {
+        score += 3;
+      }
+      if (/\b(review|reviewer|critic|skeptic|validator|audit|qa|risk|security)\b/.test(name)) {
+        score += 2;
+      }
+      return score;
+    };
+
+    return adapters
+      .map((adapter) => ({ adapter, score: scoreAdapter(adapter) }))
+      .sort((left, right) => right.score - left.score)[0]?.adapter || null;
+  }
+
+  private buildReviewJobContext(job: PendingReviewJob, adapterName: string): RoomContext {
+    const input =
+      job.inputJson && typeof job.inputJson === "object"
+        ? job.inputJson as Record<string, unknown>
+        : {};
+    const fullText = String(input.fullText || "").trim();
+    const rawPayload = input.rawPayload;
+    const sourceSummary = String(input.summary || "").trim();
+    const sourceIntent = String(input.intent || "").trim();
+    const sourceText =
+      fullText
+      || (typeof rawPayload === "string" ? rawPayload.trim() : "")
+      || "(empty review payload)";
+
+    return {
+      roomId: job.roomId,
+      roomName: `review:${job.roomId}`,
+      task:
+        job.jobKind === "recovery"
+          ? "Recover a compact representation from a weak or raw room message. Keep it faithful to the source text."
+          : "Review a weak compact representation and return a tighter compact representation faithful to the source text.",
+      role: "reviewer",
+      phase: "worker_review",
+      contextVersion: "v2",
+      timeline: [
+        {
+          id: job.messageId,
+          timestamp: job.requestedAt,
+          phase: "worker_review",
+          from: "room_message",
+          to: adapterName,
+          scope: "direct",
+          type: "review_job",
+          intent: sourceIntent || (job.jobKind === "recovery" ? "recover" : "review"),
+          text: sourceText,
+          ...(sourceSummary ? { summary: sourceSummary } : {}),
+          ...(Array.isArray(input.claims) ? { claims: input.claims as Array<{ text: string } | string> } : {}),
+          metadata: {
+            reviewJobId: job.id,
+            targetSourceHint: job.targetSourceHint,
+            jobKind: job.jobKind,
+            requestedBy: job.requestedBy
+          }
+        }
+      ],
+      actionableEvents: [],
+      recentCompacts: [],
+      contextSummary:
+        job.jobKind === "recovery"
+          ? "Recover a compact summary and intent from the source text."
+          : "Tighten and normalize the compact summary and intent from the source text.",
+      artifacts: [],
+      rules: [
+        "Return a faithful compact representation of the provided source text.",
+        "Do not invent facts or claims not grounded in the source text.",
+        "Prefer structured output with full_text, summary, intent, and optional claims."
+      ].join(" "),
+      responseConstraint: {
+        type: "chars",
+        value: 2000
+      }
+    };
+  }
+
+  private normalizeReviewResultFromAdapter(
+    job: PendingReviewJob,
+    adapterName: string,
+    response: AgentResponse
+  ): {
+    representationSource?: "reviewed" | "recovered";
+    summary?: string;
+    intent?: string;
+    claims?: unknown[];
+    createdAt: string;
+    rawResult: Record<string, unknown>;
+  } | null {
+    const envelope = response.step1Envelope;
+    const summary =
+      String(envelope?.summary || "").trim()
+      || this.compactText(response.text, 240);
+    const intent =
+      String(envelope?.intent || "").trim().toLowerCase()
+      || this.inferReviewIntent(response.text);
+    const claims =
+      Array.isArray(envelope?.claims) && envelope!.claims.length > 0
+        ? envelope!.claims.map((claim) => ({ text: String(claim.text || "").trim() })).filter((claim) => claim.text)
+        : undefined;
+
+    if (!summary && !intent) {
+      return null;
+    }
+
+    return {
+      representationSource: job.jobKind === "recovery" ? "recovered" : "reviewed",
+      ...(summary ? { summary } : {}),
+      ...(intent ? { intent } : {}),
+      ...(claims && claims.length > 0 ? { claims } : {}),
+      createdAt: new Date(this.now()).toISOString(),
+      rawResult: {
+        mode: "step4_adapter_review",
+        adapter: adapterName,
+        parseMode: envelope?.parseMode || null
       }
     };
   }
