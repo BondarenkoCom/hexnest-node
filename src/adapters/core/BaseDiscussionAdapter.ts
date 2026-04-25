@@ -5,6 +5,7 @@ import {
   buildDiscussionSystemPrompt,
   buildDiscussionUserPrompt,
   formatActionableEvents,
+  formatRecentCompacts,
   formatTimeline
 } from "../core/prompting.js";
 
@@ -66,6 +67,7 @@ export abstract class BaseDiscussionAdapter implements AgentAdapter {
       phase: context.phase,
       contextVersion: context.contextVersion,
       contextSummary: context.contextSummary,
+      recentCompactsText: formatRecentCompacts(context.recentCompacts),
       actionableText: actionable,
       timelineText: timeline,
       timelineLabel: this.getTimelineLabel()

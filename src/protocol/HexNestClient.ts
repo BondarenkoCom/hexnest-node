@@ -22,6 +22,7 @@ import {
   RegisterNodeRequest,
   RegisterNodeResponse,
   RoomContext,
+  RecentCompact,
   SubmitUsageResponse,
   UsageRecord,
   AgentDescriptor
@@ -163,6 +164,27 @@ function buildContextSummary(timeline: RoomContext["timeline"], artifactsCount: 
   }).length;
 
   return `timeline=${timeline.length}; actionable=${actionableCount}; artifacts=${artifactsCount}`;
+}
+
+function buildRecentCompacts(room: Record<string, unknown>): RecentCompact[] {
+  const rawRecentCompacts = Array.isArray(room.recentCompacts) ? room.recentCompacts : [];
+  return rawRecentCompacts
+    .map((item) => {
+      const value = item as Record<string, unknown>;
+      const compact: RecentCompact = {
+        messageId: String(value.messageId || ""),
+        intent: String(value.intent || "unknown"),
+        representationSource: String(value.representationSource || "self_declared")
+      };
+      if (value.summary) {
+        compact.summary = String(value.summary);
+      }
+      if (Array.isArray(value.claims)) {
+        compact.claims = value.claims as Array<{ text: string } | string>;
+      }
+      return compact;
+    })
+    .filter((item) => Boolean(item.messageId));
 }
 
 export class HexNestClient implements HexNestClientLike {
@@ -480,6 +502,7 @@ export class HexNestClient implements HexNestClientLike {
         timestamp: String(value.timestamp || "")
       };
     });
+    const recentCompacts = buildRecentCompacts(room);
 
     return {
       roomId,
@@ -492,6 +515,7 @@ export class HexNestClient implements HexNestClientLike {
       contextVersion: "v2",
       timeline,
       actionableEvents,
+      recentCompacts,
       contextSummary: buildContextSummary(timeline, artifacts.length),
       artifacts,
       rules: String((room.template as Record<string, unknown> | undefined)?.rules || "")

@@ -10,6 +10,7 @@ import {
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
 import {
   formatActionableEvents,
+  formatRecentCompacts,
   formatTimeline,
   liveDiscussionGuidance,
   structuredOutputGuidance
@@ -63,6 +64,7 @@ export abstract class BaseCliAdapter implements AgentAdapter {
       `Phase: ${context.phase}`,
       `ContextVersion: ${context.contextVersion || "v1"}`,
       `Summary: ${context.contextSummary || "n/a"}`,
+      ...(context.recentCompacts?.length ? ["Recent compacts:", formatRecentCompacts(context.recentCompacts)] : []),
       "",
       "Actionable events:",
       actionable || "(none)",

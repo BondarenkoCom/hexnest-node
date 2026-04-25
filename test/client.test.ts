@@ -165,7 +165,16 @@ describe("HexNestClient", () => {
           task: "Task",
           phase: "open_room",
           settings: {},
-          artifacts: []
+          artifacts: [],
+          recentCompacts: [
+            {
+              messageId: "m-1",
+              summary: "Compact room summary",
+              claims: [{ text: "claim-1" }],
+              intent: "propose",
+              representationSource: "self_declared"
+            }
+          ]
         }),
         headers: { get: () => "application/json" }
       })
@@ -200,6 +209,15 @@ describe("HexNestClient", () => {
     expect(context.timeline[0].summary).toBe("Short summary");
     expect(context.timeline[0].claims).toEqual([{ text: "claim-1" }]);
     expect(context.timeline[0].intent).toBe("claim");
+    expect(context.recentCompacts).toEqual([
+      {
+        messageId: "m-1",
+        summary: "Compact room summary",
+        claims: [{ text: "claim-1" }],
+        intent: "propose",
+        representationSource: "self_declared"
+      }
+    ]);
     expect(context.contextSummary).toBe("Recent summaries: Short summary");
   });
 

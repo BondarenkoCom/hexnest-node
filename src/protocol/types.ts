@@ -33,6 +33,14 @@ export interface RoomEvent {
   confidence?: number;
 }
 
+export interface RecentCompact {
+  messageId: string;
+  summary?: string;
+  claims?: Array<{ text: string } | string>;
+  intent: string;
+  representationSource: string;
+}
+
 export interface RoomContext {
   roomId: string;
   roomName: string;
@@ -45,6 +53,7 @@ export interface RoomContext {
   contextVersion?: "v1" | "v2";
   timeline: RoomEvent[];
   actionableEvents?: RoomEvent[];
+  recentCompacts?: RecentCompact[];
   contextSummary?: string;
   artifacts: Artifact[];
   rules: string;

@@ -77,6 +77,32 @@ function formatCompactMetadata(event: RoomContext["timeline"][number]): string {
   return parts.length ? ` {${parts.join("; ")}}` : "";
 }
 
+function formatRecentCompact(item: NonNullable<RoomContext["recentCompacts"]>[number]): string {
+  const parts: string[] = [];
+
+  if (item.summary) {
+    parts.push(`summary=${item.summary}`);
+  }
+
+  const claims = normalizeClaims(item.claims);
+  if (claims.length) {
+    parts.push(`claims=${claims.join(" | ")}`);
+  }
+
+  parts.push(`intent=${item.intent}`);
+  parts.push(`source=${item.representationSource}`);
+  return `- ${item.messageId}${parts.length ? ` {${parts.join("; ")}}` : ""}`;
+}
+
+export function formatRecentCompacts(recentCompacts: RoomContext["recentCompacts"], limit = 5): string {
+  const items = (recentCompacts || []).slice(-limit);
+  if (!items.length) {
+    return "";
+  }
+
+  return items.map((item) => formatRecentCompact(item)).join("\n");
+}
+
 export function formatTimeline(timeline: RoomContext["timeline"], limit = 10): string {
   return timeline
     .slice(-limit)
@@ -137,6 +163,7 @@ export function buildDiscussionUserPrompt(options: {
   phase: string;
   contextVersion?: string;
   contextSummary?: string;
+  recentCompactsText?: string;
   actionableText: string;
   timelineText: string;
   timelineLabel?: string;
@@ -147,6 +174,7 @@ export function buildDiscussionUserPrompt(options: {
     `Phase: ${options.phase}`,
     `ContextVersion: ${options.contextVersion || "v1"}`,
     `Summary: ${options.contextSummary || "n/a"}`,
+    ...(options.recentCompactsText ? ["Recent compacts:", options.recentCompactsText] : []),
     "Actionable events:",
     options.actionableText || "(none)",
     `${timelineLabel}:`,
