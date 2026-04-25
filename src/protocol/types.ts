@@ -151,6 +151,76 @@ export interface SubmitUsageResponse {
   totalOwed: number;
 }
 
+export type ReviewJobKind = "review" | "recovery";
+export type ReviewJobStatus = "queued" | "running" | "finished" | "failed";
+export type ReviewResultSource = "reviewed" | "recovered";
+
+export interface PendingReviewJob {
+  id: string;
+  roomId: string;
+  messageId: string;
+  jobKind: ReviewJobKind;
+  status: ReviewJobStatus;
+  targetSourceHint: string;
+  requestedBy: string;
+  requestedAt: string;
+  priority: number;
+  workerNodeId?: string;
+  workerName?: string;
+  workerModel?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  error?: string;
+  inputJson?: unknown;
+  resultArtifactId?: string;
+}
+
+export interface ReviewJobsResponse {
+  nodeId: string;
+  count: number;
+  jobs: PendingReviewJob[];
+}
+
+export interface ReviewJobArtifact {
+  id: string;
+  jobId: string;
+  roomId: string;
+  messageId: string;
+  representationSource: ReviewResultSource;
+  schemaVersion: number;
+  summary?: string;
+  intent?: string;
+  claims?: unknown[];
+  score?: number;
+  createdAt: string;
+  rawResult?: unknown;
+}
+
+export interface ReviewJobStartResponse {
+  ok: boolean;
+  job: PendingReviewJob;
+}
+
+export interface ReviewJobCompleteInput {
+  representationSource?: ReviewResultSource;
+  summary?: string;
+  intent?: string;
+  claims?: unknown[];
+  score?: number;
+  createdAt?: string;
+  rawResult?: unknown;
+}
+
+export interface ReviewJobCompleteResponse {
+  ok: boolean;
+  artifact: ReviewJobArtifact;
+}
+
+export interface ReviewJobFailResponse {
+  ok: boolean;
+  job: PendingReviewJob;
+}
+
 export interface JoinRoomResponse {
   ok: boolean;
   alreadyJoined?: boolean;

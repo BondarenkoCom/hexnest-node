@@ -518,5 +518,87 @@ describe("NodeRuntime", () => {
 
     await runtime.stop();
   });
-});
 
+  it("processes queued Step 4 review jobs during heartbeat cycles", async () => {
+    const calls = {
+      startReviewJob: 0,
+      completeReviewJob: 0
+    };
+    let queued = true;
+
+    const client = {
+      registerNode: async () => ({ nodeId: "node-1", nodeToken: "token-1", status: "approved" as const }),
+      getNodeStatus: async () => ({
+        nodeId: "node-1",
+        approvalStatus: "approved" as const,
+        status: "online" as const,
+        lastHeartbeatAt: null,
+        lastHeartbeatStatus: null
+      }),
+      heartbeat: async () => ({ ok: true, pendingInvitations: [] }),
+      submitUsage: async () => ({ accepted: 0, totalOwed: 0 }),
+      markOffline: async () => undefined,
+      getReviewJobs: async () => {
+        if (!queued) {
+          return { nodeId: "node-1", count: 0, jobs: [] };
+        }
+        queued = false;
+        return {
+          nodeId: "node-1",
+          count: 1,
+          jobs: [
+            {
+              id: "job-1",
+              roomId: "room-1",
+              messageId: "m-1",
+              jobKind: "review" as const,
+              status: "queued" as const,
+              targetSourceHint: "system_minimal",
+              requestedBy: "rooms.post_message.review",
+              requestedAt: "2026-04-25T01:00:00.000Z",
+              priority: 0,
+              inputJson: {
+                fullText: "We should test the rollback plan next.",
+                intent: "unknown"
+              }
+            }
+          ]
+        };
+      },
+      startReviewJob: async () => {
+        calls.startReviewJob += 1;
+        return { ok: true, job: {} };
+      },
+      completeReviewJob: async (_nodeId: string, _jobId: string, payload: any) => {
+        calls.completeReviewJob += 1;
+        expect(payload.summary).toContain("rollback plan");
+        expect(payload.intent).toBe("propose");
+        return { ok: true, artifact: {} };
+      },
+      failReviewJob: async () => ({ ok: true, job: {} }),
+      joinRoom: async () => ({ roomId: "room-1", joinedAgent: { id: "joined-1", name: "fake-agent" } }),
+      postRoomMessage: async () => undefined,
+      getRoomContext: async (_roomId: string, role: string) => ({
+        roomId: "room-1",
+        roomName: "Room 1",
+        task: "Research market dynamics",
+        role,
+        phase: "independent_answers",
+        timeline: [],
+        artifacts: [],
+        rules: "Cite sources."
+      })
+    };
+
+    const runtime = new NodeRuntime(makeNodeConfig(), [new FakeAdapter()], {
+      clientFactory: () => client as any
+    });
+
+    await runtime.start();
+    await sleep(40);
+    await runtime.stop();
+
+    expect(calls.startReviewJob).toBe(1);
+    expect(calls.completeReviewJob).toBe(1);
+  });
+});

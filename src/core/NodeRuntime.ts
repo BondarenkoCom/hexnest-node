@@ -10,6 +10,7 @@ import {
   NodeApprovalStatusResponse,
   NodeStatus,
   PendingInvitation,
+  PendingReviewJob,
   RegisterNodeRequest,
   RoomContext,
   UsageRecord
@@ -58,6 +59,7 @@ export interface NodeRuntimeDependencies {
 export class NodeRuntime {
   private static readonly MAX_INVITATION_ATTEMPTS = 3;
   private static readonly INVITATION_RETRY_BASE_MS = 2_000;
+  private static readonly REVIEW_JOB_BATCH_LIMIT = 3;
 
   private readonly meter = new CommissionMeter();
   private readonly adapters = new Map<string, AgentAdapter>();
@@ -77,6 +79,7 @@ export class NodeRuntime {
   private activeRoomRuns = new Map<string, Promise<void>>();
   private roomStopRequests = new Set<string>();
   private usageSubmitInFlight: Promise<void> | null = null;
+  private reviewJobsInFlight: Promise<void> | null = null;
   private invitationAttempts = new Map<string, number>();
   private invitationRetryTimers = new Map<string, NodeJS.Timeout>();
   private isRunning = false;
@@ -870,6 +873,7 @@ export class NodeRuntime {
       async (response) => {
         this.lastHeartbeatAt = this.now();
         await this.processInvitations(response.pendingInvitations || []);
+        await this.processQueuedReviewJobs();
       },
       async (error) => {
         await this.handleCoreNodeDeletion(error, "heartbeat");
@@ -893,6 +897,165 @@ export class NodeRuntime {
     return true;
   }
 
+  private async processQueuedReviewJobs(): Promise<void> {
+    if (this.reviewJobsInFlight) {
+      return this.reviewJobsInFlight;
+    }
+
+    const client = this.authedClient as (HexNestClientLike & {
+      getReviewJobs?: HexNestClientLike["getReviewJobs"];
+      startReviewJob?: HexNestClientLike["startReviewJob"];
+      completeReviewJob?: HexNestClientLike["completeReviewJob"];
+      failReviewJob?: HexNestClientLike["failReviewJob"];
+    }) | null;
+
+    if (
+      !client
+      || typeof client.getReviewJobs !== "function"
+      || typeof client.startReviewJob !== "function"
+      || typeof client.completeReviewJob !== "function"
+      || typeof client.failReviewJob !== "function"
+    ) {
+      return;
+    }
+
+    const run = this.processQueuedReviewJobsOnce(client).finally(() => {
+      if (this.reviewJobsInFlight === run) {
+        this.reviewJobsInFlight = null;
+      }
+    });
+    this.reviewJobsInFlight = run;
+    return run;
+  }
+
+  private async processQueuedReviewJobsOnce(
+    client: HexNestClientLike & {
+      getReviewJobs: HexNestClientLike["getReviewJobs"];
+      startReviewJob: HexNestClientLike["startReviewJob"];
+      completeReviewJob: HexNestClientLike["completeReviewJob"];
+      failReviewJob: HexNestClientLike["failReviewJob"];
+    }
+  ): Promise<void> {
+    if (!this.nodeId || !this.coreConnected || this.stopRequested) {
+      return;
+    }
+
+    const pending = await client.getReviewJobs(this.nodeId, NodeRuntime.REVIEW_JOB_BATCH_LIMIT);
+    for (const job of pending.jobs || []) {
+      await this.processReviewJob(client, job);
+    }
+  }
+
+  private async processReviewJob(
+    client: HexNestClientLike & {
+      startReviewJob: HexNestClientLike["startReviewJob"];
+      completeReviewJob: HexNestClientLike["completeReviewJob"];
+      failReviewJob: HexNestClientLike["failReviewJob"];
+    },
+    job: PendingReviewJob
+  ): Promise<void> {
+    if (!this.nodeId) {
+      return;
+    }
+
+    try {
+      await client.startReviewJob(this.nodeId, job.id, {
+        workerName: this.config.nodeName,
+        workerModel: this.primaryAdapterModelId()
+      });
+      await client.completeReviewJob(this.nodeId, job.id, this.buildStubReviewResult(job));
+      this.recordActivity("info", `Processed ${job.jobKind} review job ${job.id}`);
+    } catch (error) {
+      this.logger.warn(`[node] review job failed id=${job.id}:`, this.err(error));
+      try {
+        await client.failReviewJob(this.nodeId, job.id, {
+          error: this.err(error)
+        });
+      } catch (failError) {
+        this.logger.warn(`[node] failed to mark review job as failed id=${job.id}:`, this.err(failError));
+      }
+    }
+  }
+
+  private buildStubReviewResult(job: PendingReviewJob): {
+    representationSource?: "reviewed" | "recovered";
+    summary?: string;
+    intent?: string;
+    claims?: unknown[];
+    createdAt: string;
+    rawResult: Record<string, unknown>;
+  } {
+    const input =
+      job.inputJson && typeof job.inputJson === "object"
+        ? job.inputJson as Record<string, unknown>
+        : {};
+    const fullText = String(input.fullText || "").trim();
+    const rawPayload = input.rawPayload;
+    const hintedSummary = String(input.summary || "").trim();
+    const hintedIntent = String(input.intent || "").trim().toLowerCase();
+    const claims = Array.isArray(input.claims) ? input.claims : undefined;
+    const summary =
+      hintedSummary
+      || this.compactText(fullText, 240)
+      || (typeof rawPayload === "string" ? this.compactText(rawPayload, 240) : undefined);
+    const intent =
+      (hintedIntent && hintedIntent !== "unknown" ? hintedIntent : "")
+      || this.inferReviewIntent(fullText || summary || "");
+
+    return {
+      representationSource: job.jobKind === "recovery" ? "recovered" : "reviewed",
+      ...(summary ? { summary } : {}),
+      ...(intent ? { intent } : {}),
+      ...(claims && claims.length > 0 ? { claims } : {}),
+      createdAt: new Date(this.now()).toISOString(),
+      rawResult: {
+        mode: "step4_stub_worker",
+        jobKind: job.jobKind,
+        targetSourceHint: job.targetSourceHint
+      }
+    };
+  }
+
+  private primaryAdapterModelId(): string | undefined {
+    for (const adapter of this.adapters.values()) {
+      const modelId = String(adapter.modelId || "").trim();
+      if (modelId) {
+        return modelId;
+      }
+    }
+    return undefined;
+  }
+
+  private compactText(value: string, maxLength: number): string | undefined {
+    const normalized = String(value || "").replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return undefined;
+    }
+    return normalized.length > maxLength
+      ? `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`
+      : normalized;
+  }
+
+  private inferReviewIntent(value: string): string {
+    const text = String(value || "").trim().toLowerCase();
+    if (!text) {
+      return "unknown";
+    }
+    if (text.includes("?") || /\b(what|why|how|should|could|can|would)\b/.test(text)) {
+      return "question";
+    }
+    if (/\b(i agree|agree with|yes,|correct)\b/.test(text)) {
+      return "agree";
+    }
+    if (/\b(however|but|although|problem|issue|risk|concern|disagree|counter)\b/.test(text)) {
+      return "critique";
+    }
+    if (/\b(refine|improve|adjust|revise|update)\b/.test(text)) {
+      return "refine";
+    }
+    return "propose";
+  }
+
   private async disconnectFromCore(clearHeartbeatState = false): Promise<void> {
     this.coreConnectionGeneration += 1;
     this.heartbeat?.stop();
@@ -908,6 +1071,7 @@ export class NodeRuntime {
 
     this.authedClient = null;
     this.coreConnected = false;
+    this.reviewJobsInFlight = null;
     if (clearHeartbeatState) {
       this.lastHeartbeatAt = null;
     }
@@ -1243,5 +1407,3 @@ export class NodeRuntime {
     return error instanceof Error ? error.message : String(error);
   }
 }
-
-

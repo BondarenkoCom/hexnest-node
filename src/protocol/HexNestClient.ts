@@ -18,9 +18,15 @@ import {
   NodeApprovalStatusResponse,
   HeartbeatResponse,
   JoinRoomResponse,
+  PendingReviewJob,
   PostRoomMessageInput,
   RegisterNodeRequest,
   RegisterNodeResponse,
+  ReviewJobCompleteInput,
+  ReviewJobCompleteResponse,
+  ReviewJobFailResponse,
+  ReviewJobsResponse,
+  ReviewJobStartResponse,
   RoomContext,
   RecentCompact,
   SubmitUsageResponse,
@@ -58,6 +64,22 @@ export interface HexNestClientLike {
   heartbeat(nodeId: string, payload: HeartbeatPayload): Promise<HeartbeatResponse>;
   submitUsage(nodeId: string, records: UsageRecord[]): Promise<SubmitUsageResponse>;
   markOffline(nodeId: string): Promise<void>;
+  getReviewJobs(nodeId: string, limit?: number): Promise<ReviewJobsResponse>;
+  startReviewJob(
+    nodeId: string,
+    jobId: string,
+    payload?: { startedAt?: string; workerName?: string; workerModel?: string }
+  ): Promise<ReviewJobStartResponse>;
+  completeReviewJob(
+    nodeId: string,
+    jobId: string,
+    payload: ReviewJobCompleteInput
+  ): Promise<ReviewJobCompleteResponse>;
+  failReviewJob(
+    nodeId: string,
+    jobId: string,
+    payload?: { error?: string; finishedAt?: string }
+  ): Promise<ReviewJobFailResponse>;
   listRooms(limit?: number): Promise<CoreRoomsListResponse>;
   createRoom(payload: CreateCoreRoomInput): Promise<CoreCreateRoomResponse>;
   getRoomWebhookSigningKey(roomId: string): Promise<{ ok: boolean; roomId: string; roomWebhook: CoreRoomWebhookInfo }>;
@@ -258,6 +280,63 @@ export class HexNestClient implements HexNestClientLike {
       authRequired: true,
       body: {}
     });
+  }
+
+  async getReviewJobs(nodeId: string, limit = 10): Promise<ReviewJobsResponse> {
+    const params = new URLSearchParams();
+    if (Number.isFinite(limit) && limit > 0) {
+      params.set("limit", String(Math.min(50, Math.max(1, Math.floor(limit)))));
+    }
+    const suffix = params.size > 0 ? `?${params.toString()}` : "";
+    return this.request<ReviewJobsResponse>(`/api/nodes/${encodeURIComponent(nodeId)}/review-jobs${suffix}`, {
+      method: "GET",
+      authRequired: true
+    });
+  }
+
+  async startReviewJob(
+    nodeId: string,
+    jobId: string,
+    payload: { startedAt?: string; workerName?: string; workerModel?: string } = {}
+  ): Promise<ReviewJobStartResponse> {
+    return this.request<ReviewJobStartResponse>(
+      `/api/nodes/${encodeURIComponent(nodeId)}/review-jobs/${encodeURIComponent(jobId)}/start`,
+      {
+        method: "POST",
+        authRequired: true,
+        body: payload
+      }
+    );
+  }
+
+  async completeReviewJob(
+    nodeId: string,
+    jobId: string,
+    payload: ReviewJobCompleteInput
+  ): Promise<ReviewJobCompleteResponse> {
+    return this.request<ReviewJobCompleteResponse>(
+      `/api/nodes/${encodeURIComponent(nodeId)}/review-jobs/${encodeURIComponent(jobId)}/complete`,
+      {
+        method: "POST",
+        authRequired: true,
+        body: payload
+      }
+    );
+  }
+
+  async failReviewJob(
+    nodeId: string,
+    jobId: string,
+    payload: { error?: string; finishedAt?: string } = {}
+  ): Promise<ReviewJobFailResponse> {
+    return this.request<ReviewJobFailResponse>(
+      `/api/nodes/${encodeURIComponent(nodeId)}/review-jobs/${encodeURIComponent(jobId)}/fail`,
+      {
+        method: "POST",
+        authRequired: true,
+        body: payload
+      }
+    );
   }
 
   async listRooms(limit = 50): Promise<CoreRoomsListResponse> {
