@@ -175,7 +175,37 @@ describe("HexNestClient", () => {
               representationSource: "self_declared",
               score: 0.91
             }
-          ]
+          ],
+          memoryArtifacts: [
+            {
+              id: "mem-1",
+              artifactKind: "segment_summary",
+              summary: "Segment memory summary",
+              highlights: ["h1"],
+              openQuestions: ["q1"],
+              createdAt: "2026-04-25T05:00:00.000Z"
+            }
+          ],
+          claimContext: {
+            claims: [
+              {
+                id: "claim-1",
+                canonicalText: "Cache update reduced latency.",
+                canonicalKey: "cache update reduced latency",
+                evidenceCount: 2,
+                updatedAt: "2026-04-25T05:02:00.000Z"
+              }
+            ],
+            relations: [
+              {
+                id: "rel-1",
+                fromClaimId: "claim-1",
+                toClaimId: "claim-2",
+                relationType: "supports",
+                updatedAt: "2026-04-25T05:03:00.000Z"
+              }
+            ]
+          }
         }),
         headers: { get: () => "application/json" }
       })
@@ -220,135 +250,36 @@ describe("HexNestClient", () => {
         score: 0.91
       }
     ]);
-    expect(context.contextSummary).toBe("Recent summaries: Short summary");
-  });
-
-  it("fetches pending review jobs with node auth", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      text: async () => JSON.stringify({
-        nodeId: "node-1",
-        count: 1,
-        jobs: [
-          {
-            id: "job-1",
-            roomId: "room-1",
-            messageId: "m-1",
-            jobKind: "review",
-            status: "queued",
-            targetSourceHint: "system_minimal",
-            requestedBy: "rooms.post_message.review",
-            requestedAt: "2026-04-25T01:00:00.000Z",
-            priority: 0
-          }
-        ]
-      }),
-      headers: { get: () => "application/json" }
-    }) as any;
-
-    const client = new HexNestClient("https://hex-nest.com/", { nodeToken: "node-token-123" });
-    const result = await client.getReviewJobs("node-1", 5);
-
-    const [url, options] = (global.fetch as any).mock.calls[0];
-    expect(url).toBe("https://hex-nest.com/api/nodes/node-1/review-jobs?limit=5");
-    expect(options.method).toBe("GET");
-    expect(options.headers.Authorization).toBe("Bearer node-token-123");
-    expect(result.jobs[0].id).toBe("job-1");
-  });
-
-  it("posts review job lifecycle events with node auth", async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: "OK",
-        text: async () => JSON.stringify({
-          ok: true,
-          job: {
-            id: "job-1",
-            roomId: "room-1",
-            messageId: "m-1",
-            jobKind: "review",
-            status: "running",
-            targetSourceHint: "system_minimal",
-            requestedBy: "rooms.post_message.review",
-            requestedAt: "2026-04-25T01:00:00.000Z",
-            priority: 0,
-            workerNodeId: "node-1"
-          }
-        }),
-        headers: { get: () => "application/json" }
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: "OK",
-        text: async () => JSON.stringify({
-          ok: true,
-          artifact: {
-            id: "artifact-1",
-            jobId: "job-1",
-            roomId: "room-1",
-            messageId: "m-1",
-            representationSource: "reviewed",
-            schemaVersion: 1,
-            summary: "Reviewed summary",
-            createdAt: "2026-04-25T01:01:00.000Z"
-          }
-        }),
-        headers: { get: () => "application/json" }
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: "OK",
-        text: async () => JSON.stringify({
-          ok: true,
-          job: {
-            id: "job-1",
-            roomId: "room-1",
-            messageId: "m-1",
-            jobKind: "review",
-            status: "failed",
-            targetSourceHint: "system_minimal",
-            requestedBy: "rooms.post_message.review",
-            requestedAt: "2026-04-25T01:00:00.000Z",
-            priority: 0,
-            workerNodeId: "node-1",
-            error: "timeout"
-          }
-        }),
-        headers: { get: () => "application/json" }
-      }) as any;
-
-    const client = new HexNestClient("https://hex-nest.com/", { nodeToken: "node-token-123" });
-    await client.startReviewJob("node-1", "job-1", { workerModel: "review-model-v1" });
-    await client.completeReviewJob("node-1", "job-1", {
-      summary: "Reviewed summary",
-      intent: "propose",
-      claims: ["claim-1"]
-    });
-    await client.failReviewJob("node-1", "job-1", { error: "timeout" });
-
-    const startCall = (global.fetch as any).mock.calls[0];
-    expect(startCall[0]).toBe("https://hex-nest.com/api/nodes/node-1/review-jobs/job-1/start");
-    expect(startCall[1].headers.Authorization).toBe("Bearer node-token-123");
-    expect(JSON.parse(startCall[1].body)).toMatchObject({ workerModel: "review-model-v1" });
-
-    const completeCall = (global.fetch as any).mock.calls[1];
-    expect(completeCall[0]).toBe("https://hex-nest.com/api/nodes/node-1/review-jobs/job-1/complete");
-    expect(JSON.parse(completeCall[1].body)).toMatchObject({
-      summary: "Reviewed summary",
-      intent: "propose",
-      claims: ["claim-1"]
-    });
-
-    const failCall = (global.fetch as any).mock.calls[2];
-    expect(failCall[0]).toBe("https://hex-nest.com/api/nodes/node-1/review-jobs/job-1/fail");
-    expect(JSON.parse(failCall[1].body)).toMatchObject({ error: "timeout" });
+    expect(context.memoryArtifacts).toEqual([
+      {
+        id: "mem-1",
+        artifactKind: "segment_summary",
+        summary: "Segment memory summary",
+        highlights: ["h1"],
+        openQuestions: ["q1"],
+        createdAt: "2026-04-25T05:00:00.000Z"
+      }
+    ]);
+    expect(context.normalizedClaims).toEqual([
+      {
+        id: "claim-1",
+        canonicalText: "Cache update reduced latency.",
+        canonicalKey: "cache update reduced latency",
+        evidenceCount: 2,
+        updatedAt: "2026-04-25T05:02:00.000Z"
+      }
+    ]);
+    expect(context.claimRelations).toEqual([
+      {
+        id: "rel-1",
+        fromClaimId: "claim-1",
+        toClaimId: "claim-2",
+        relationType: "supports",
+        updatedAt: "2026-04-25T05:03:00.000Z",
+        provenanceJson: undefined
+      }
+    ]);
+    expect(context.contextSummary).toBe("Recent summaries: Short summary | Memory: Segment memory summary | Claims: 1; relations: 1");
   });
 
   it("builds contextSummary from recent compact summaries when available", async () => {

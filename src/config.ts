@@ -43,7 +43,6 @@ export interface NodeConfig {
   agentAlertsMinCycles: number;
   agentAlertsMaxNoActionRate: number;
   agentAlertsMaxReentryRate: number;
-  enableInternalReviewWorkerBridge: boolean;
 }
 
 interface YamlNodeConfig {
@@ -509,10 +508,6 @@ export function loadConfig(db: DatabaseService, baseEnv: NodeJS.ProcessEnv = pro
     agentAlertsMaxReentryRate: parseRatio(
       agentAlertsMaxReentryRateDb ?? env.HEXNEST_AGENT_ALERTS_MAX_REENTRY_RATE,
       0.35
-    ),
-    enableInternalReviewWorkerBridge: parseBoolean(
-      env.HEXNEST_ENABLE_INTERNAL_REVIEW_WORKER_BRIDGE,
-      false
     )
   };
 }

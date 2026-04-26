@@ -10,6 +10,8 @@ import {
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
 import {
   formatActionableEvents,
+  formatClaimContext,
+  formatMemoryArtifacts,
   formatRecentCompacts,
   formatTimeline,
   liveDiscussionGuidance,
@@ -65,6 +67,10 @@ export abstract class BaseCliAdapter implements AgentAdapter {
       `ContextVersion: ${context.contextVersion || "v1"}`,
       `Summary: ${context.contextSummary || "n/a"}`,
       ...(context.recentCompacts?.length ? ["Recent compacts:", formatRecentCompacts(context.recentCompacts)] : []),
+      ...(context.memoryArtifacts?.length ? ["Derived memory artifacts:", formatMemoryArtifacts(context.memoryArtifacts)] : []),
+      ...((context.normalizedClaims?.length || context.claimRelations?.length)
+        ? ["Claim-aware context:", formatClaimContext(context.normalizedClaims, context.claimRelations)]
+        : []),
       "",
       "Actionable events:",
       actionable || "(none)",

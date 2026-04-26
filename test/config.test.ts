@@ -17,7 +17,6 @@ describe("config", () => {
         "HEXNEST_NODE_NAME=env-node",
         "HEXNEST_OPERATOR_NAME=env-operator",
         "HEXNEST_AUTO_ACCEPT_INVITES=false",
-        "HEXNEST_ENABLE_INTERNAL_REVIEW_WORKER_BRIDGE=false",
         "OPENAI_API_KEY=sk-test",
         "OPENAI_MODEL=gpt-5-mini"
       ].join("\n"),
@@ -53,7 +52,6 @@ describe("config", () => {
     expect(config.operatorName).toBe("env-operator");
     expect(config.heartbeatIntervalMs).toBe(12345);
     expect(config.autoAcceptInvites).toBe(false);
-    expect(config.enableInternalReviewWorkerBridge).toBe(false);
     expect(adapters.some((item) => item.name === "yaml-openai")).toBe(true);
     expect(adapters.some((item) => item.name === "yaml-codex")).toBe(true);
   });

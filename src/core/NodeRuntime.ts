@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { AgentAdapter, AgentResponse } from "../adapters/index.js";
+import { AgentAdapter } from "../adapters/index.js";
 import { NodeConfig } from "../config.js";
 import { CoreApiError, HexNestClient, HexNestClientLike, isCoreApiError } from "../protocol/HexNestClient.js";
 import {
@@ -10,7 +10,6 @@ import {
   NodeApprovalStatusResponse,
   NodeStatus,
   PendingInvitation,
-  PendingReviewJob,
   RegisterNodeRequest,
   RoomContext,
   UsageRecord
@@ -59,7 +58,6 @@ export interface NodeRuntimeDependencies {
 export class NodeRuntime {
   private static readonly MAX_INVITATION_ATTEMPTS = 3;
   private static readonly INVITATION_RETRY_BASE_MS = 2_000;
-  private static readonly REVIEW_JOB_BATCH_LIMIT = 3;
 
   private readonly meter = new CommissionMeter();
   private readonly adapters = new Map<string, AgentAdapter>();
@@ -79,7 +77,6 @@ export class NodeRuntime {
   private activeRoomRuns = new Map<string, Promise<void>>();
   private roomStopRequests = new Set<string>();
   private usageSubmitInFlight: Promise<void> | null = null;
-  private reviewJobsInFlight: Promise<void> | null = null;
   private invitationAttempts = new Map<string, number>();
   private invitationRetryTimers = new Map<string, NodeJS.Timeout>();
   private isRunning = false;
@@ -873,7 +870,6 @@ export class NodeRuntime {
       async (response) => {
         this.lastHeartbeatAt = this.now();
         await this.processInvitations(response.pendingInvitations || []);
-        await this.processQueuedReviewJobs();
       },
       async (error) => {
         await this.handleCoreNodeDeletion(error, "heartbeat");
@@ -897,331 +893,6 @@ export class NodeRuntime {
     return true;
   }
 
-  private async processQueuedReviewJobs(): Promise<void> {
-    if (!this.config.enableInternalReviewWorkerBridge) {
-      return;
-    }
-
-    if (this.reviewJobsInFlight) {
-      return this.reviewJobsInFlight;
-    }
-
-    const client = this.authedClient as (HexNestClientLike & {
-      getReviewJobs?: HexNestClientLike["getReviewJobs"];
-      startReviewJob?: HexNestClientLike["startReviewJob"];
-      completeReviewJob?: HexNestClientLike["completeReviewJob"];
-      failReviewJob?: HexNestClientLike["failReviewJob"];
-    }) | null;
-
-    if (
-      !client
-      || typeof client.getReviewJobs !== "function"
-      || typeof client.startReviewJob !== "function"
-      || typeof client.completeReviewJob !== "function"
-      || typeof client.failReviewJob !== "function"
-    ) {
-      return;
-    }
-
-    const run = this.processQueuedReviewJobsOnce(client).finally(() => {
-      if (this.reviewJobsInFlight === run) {
-        this.reviewJobsInFlight = null;
-      }
-    });
-    this.reviewJobsInFlight = run;
-    return run;
-  }
-
-  private async processQueuedReviewJobsOnce(
-    client: HexNestClientLike & {
-      getReviewJobs: HexNestClientLike["getReviewJobs"];
-      startReviewJob: HexNestClientLike["startReviewJob"];
-      completeReviewJob: HexNestClientLike["completeReviewJob"];
-      failReviewJob: HexNestClientLike["failReviewJob"];
-    }
-  ): Promise<void> {
-    if (!this.nodeId || !this.coreConnected || this.stopRequested) {
-      return;
-    }
-
-    const pending = await client.getReviewJobs(this.nodeId, NodeRuntime.REVIEW_JOB_BATCH_LIMIT);
-    for (const job of pending.jobs || []) {
-      await this.processReviewJob(client, job);
-    }
-  }
-
-  private async processReviewJob(
-    client: HexNestClientLike & {
-      startReviewJob: HexNestClientLike["startReviewJob"];
-      completeReviewJob: HexNestClientLike["completeReviewJob"];
-      failReviewJob: HexNestClientLike["failReviewJob"];
-    },
-    job: PendingReviewJob
-  ): Promise<void> {
-    if (!this.nodeId) {
-      return;
-    }
-
-    try {
-      await client.startReviewJob(this.nodeId, job.id, {
-        workerName: this.config.nodeName,
-        workerModel: this.primaryAdapterModelId()
-      });
-      await client.completeReviewJob(this.nodeId, job.id, await this.buildReviewJobResult(job));
-      this.recordActivity("info", `Processed ${job.jobKind} review job ${job.id}`);
-    } catch (error) {
-      this.logger.warn(`[node] review job failed id=${job.id}:`, this.err(error));
-      try {
-        await client.failReviewJob(this.nodeId, job.id, {
-          error: this.err(error)
-        });
-      } catch (failError) {
-        this.logger.warn(`[node] failed to mark review job as failed id=${job.id}:`, this.err(failError));
-      }
-    }
-  }
-
-  private async buildReviewJobResult(job: PendingReviewJob): Promise<{
-    representationSource?: "reviewed" | "recovered";
-    summary?: string;
-    intent?: string;
-    claims?: unknown[];
-    createdAt: string;
-    rawResult: Record<string, unknown>;
-  }> {
-    const adapter = this.selectReviewAdapter();
-    if (!adapter) {
-      return this.buildStubReviewResult(job);
-    }
-
-    try {
-      const context = this.buildReviewJobContext(job, adapter.name);
-      const response = await adapter.respond(context);
-      const fromAdapter = this.normalizeReviewResultFromAdapter(job, adapter.name, response);
-      if (fromAdapter) {
-        return fromAdapter;
-      }
-    } catch (error) {
-      this.logger.warn(`[node] adapter review failed id=${job.id} adapter=${adapter.name}:`, this.err(error));
-    }
-
-    return this.buildStubReviewResult(job);
-  }
-
-  private buildStubReviewResult(job: PendingReviewJob): {
-    representationSource?: "reviewed" | "recovered";
-    summary?: string;
-    intent?: string;
-    claims?: unknown[];
-    createdAt: string;
-    rawResult: Record<string, unknown>;
-  } {
-    const input =
-      job.inputJson && typeof job.inputJson === "object"
-        ? job.inputJson as Record<string, unknown>
-        : {};
-    const fullText = String(input.fullText || "").trim();
-    const rawPayload = input.rawPayload;
-    const hintedSummary = String(input.summary || "").trim();
-    const hintedIntent = String(input.intent || "").trim().toLowerCase();
-    const claims = Array.isArray(input.claims) ? input.claims : undefined;
-    const summary =
-      hintedSummary
-      || this.compactText(fullText, 240)
-      || (typeof rawPayload === "string" ? this.compactText(rawPayload, 240) : undefined);
-    const intent =
-      (hintedIntent && hintedIntent !== "unknown" ? hintedIntent : "")
-      || this.inferReviewIntent(fullText || summary || "");
-
-    return {
-      representationSource: job.jobKind === "recovery" ? "recovered" : "reviewed",
-      ...(summary ? { summary } : {}),
-      ...(intent ? { intent } : {}),
-      ...(claims && claims.length > 0 ? { claims } : {}),
-      createdAt: new Date(this.now()).toISOString(),
-      rawResult: {
-        mode: "step4_stub_worker",
-        jobKind: job.jobKind,
-        targetSourceHint: job.targetSourceHint
-      }
-    };
-  }
-
-  private selectReviewAdapter(): AgentAdapter | null {
-    const adapters = [...this.adapters.values()];
-    if (!adapters.length) {
-      return null;
-    }
-
-    const scoreAdapter = (adapter: AgentAdapter): number => {
-      let score = 0;
-      const roles = adapter.supportedRoles.map((value) => String(value || "").toLowerCase());
-      const capabilities = adapter.capabilities.map((value) => String(value || "").toLowerCase());
-      const name = String(adapter.name || "").toLowerCase();
-
-      if (roles.some((value) => /\b(review|reviewer|critic|skeptic|validator|audit|qa|risk|security)\b/.test(value))) {
-        score += 5;
-      }
-      if (capabilities.some((value) => /\b(review|critique|analysis|reasoning|audit|validation)\b/.test(value))) {
-        score += 3;
-      }
-      if (/\b(review|reviewer|critic|skeptic|validator|audit|qa|risk|security)\b/.test(name)) {
-        score += 2;
-      }
-      return score;
-    };
-
-    return adapters
-      .map((adapter) => ({ adapter, score: scoreAdapter(adapter) }))
-      .sort((left, right) => right.score - left.score)[0]?.adapter || null;
-  }
-
-  private buildReviewJobContext(job: PendingReviewJob, adapterName: string): RoomContext {
-    const input =
-      job.inputJson && typeof job.inputJson === "object"
-        ? job.inputJson as Record<string, unknown>
-        : {};
-    const fullText = String(input.fullText || "").trim();
-    const rawPayload = input.rawPayload;
-    const sourceSummary = String(input.summary || "").trim();
-    const sourceIntent = String(input.intent || "").trim();
-    const sourceText =
-      fullText
-      || (typeof rawPayload === "string" ? rawPayload.trim() : "")
-      || "(empty review payload)";
-
-    return {
-      roomId: job.roomId,
-      roomName: `review:${job.roomId}`,
-      task:
-        job.jobKind === "recovery"
-          ? "Recover a compact representation from a weak or raw room message. Keep it faithful to the source text."
-          : "Review a weak compact representation and return a tighter compact representation faithful to the source text.",
-      role: "reviewer",
-      phase: "worker_review",
-      contextVersion: "v2",
-      timeline: [
-        {
-          id: job.messageId,
-          timestamp: job.requestedAt,
-          phase: "worker_review",
-          from: "room_message",
-          to: adapterName,
-          scope: "direct",
-          type: "review_job",
-          intent: sourceIntent || (job.jobKind === "recovery" ? "recover" : "review"),
-          text: sourceText,
-          ...(sourceSummary ? { summary: sourceSummary } : {}),
-          ...(Array.isArray(input.claims) ? { claims: input.claims as Array<{ text: string } | string> } : {}),
-          metadata: {
-            reviewJobId: job.id,
-            targetSourceHint: job.targetSourceHint,
-            jobKind: job.jobKind,
-            requestedBy: job.requestedBy
-          }
-        }
-      ],
-      actionableEvents: [],
-      recentCompacts: [],
-      contextSummary:
-        job.jobKind === "recovery"
-          ? "Recover a compact summary and intent from the source text."
-          : "Tighten and normalize the compact summary and intent from the source text.",
-      artifacts: [],
-      rules: [
-        "Return a faithful compact representation of the provided source text.",
-        "Do not invent facts or claims not grounded in the source text.",
-        "Prefer structured output with full_text, summary, intent, and optional claims."
-      ].join(" "),
-      responseConstraint: {
-        type: "chars",
-        value: 2000
-      }
-    };
-  }
-
-  private normalizeReviewResultFromAdapter(
-    job: PendingReviewJob,
-    adapterName: string,
-    response: AgentResponse
-  ): {
-    representationSource?: "reviewed" | "recovered";
-    summary?: string;
-    intent?: string;
-    claims?: unknown[];
-    createdAt: string;
-    rawResult: Record<string, unknown>;
-  } | null {
-    const envelope = response.step1Envelope;
-    const summary =
-      String(envelope?.summary || "").trim()
-      || this.compactText(response.text, 240);
-    const intent =
-      String(envelope?.intent || "").trim().toLowerCase()
-      || this.inferReviewIntent(response.text);
-    const claims =
-      Array.isArray(envelope?.claims) && envelope!.claims.length > 0
-        ? envelope!.claims.map((claim) => ({ text: String(claim.text || "").trim() })).filter((claim) => claim.text)
-        : undefined;
-
-    if (!summary && !intent) {
-      return null;
-    }
-
-    return {
-      representationSource: job.jobKind === "recovery" ? "recovered" : "reviewed",
-      ...(summary ? { summary } : {}),
-      ...(intent ? { intent } : {}),
-      ...(claims && claims.length > 0 ? { claims } : {}),
-      createdAt: new Date(this.now()).toISOString(),
-      rawResult: {
-        mode: "step4_adapter_review",
-        adapter: adapterName,
-        parseMode: envelope?.parseMode || null
-      }
-    };
-  }
-
-  private primaryAdapterModelId(): string | undefined {
-    for (const adapter of this.adapters.values()) {
-      const modelId = String(adapter.modelId || "").trim();
-      if (modelId) {
-        return modelId;
-      }
-    }
-    return undefined;
-  }
-
-  private compactText(value: string, maxLength: number): string | undefined {
-    const normalized = String(value || "").replace(/\s+/g, " ").trim();
-    if (!normalized) {
-      return undefined;
-    }
-    return normalized.length > maxLength
-      ? `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`
-      : normalized;
-  }
-
-  private inferReviewIntent(value: string): string {
-    const text = String(value || "").trim().toLowerCase();
-    if (!text) {
-      return "unknown";
-    }
-    if (text.includes("?") || /\b(what|why|how|should|could|can|would)\b/.test(text)) {
-      return "question";
-    }
-    if (/\b(i agree|agree with|yes,|correct)\b/.test(text)) {
-      return "agree";
-    }
-    if (/\b(however|but|although|problem|issue|risk|concern|disagree|counter)\b/.test(text)) {
-      return "critique";
-    }
-    if (/\b(refine|improve|adjust|revise|update)\b/.test(text)) {
-      return "refine";
-    }
-    return "propose";
-  }
-
   private async disconnectFromCore(clearHeartbeatState = false): Promise<void> {
     this.coreConnectionGeneration += 1;
     this.heartbeat?.stop();
@@ -1237,7 +908,6 @@ export class NodeRuntime {
 
     this.authedClient = null;
     this.coreConnected = false;
-    this.reviewJobsInFlight = null;
     if (clearHeartbeatState) {
       this.lastHeartbeatAt = null;
     }

@@ -42,6 +42,42 @@ export interface RecentCompact {
   score?: number;
 }
 
+export interface RoomMemoryArtifact {
+  id: string;
+  artifactKind: "segment_summary" | "room_snapshot";
+  summary: string;
+  highlights?: string[];
+  openQuestions?: string[];
+  phaseHint?: string;
+  coverageStartMessageId?: string;
+  coverageEndMessageId?: string;
+  coverageCount?: number;
+  createdAt: string;
+  sourceMeta?: {
+    phase?: string;
+    emphasis?: string;
+    rank?: number;
+    policyVersion?: string;
+  };
+}
+
+export interface NormalizedClaim {
+  id: string;
+  canonicalText: string;
+  canonicalKey: string;
+  evidenceCount: number;
+  updatedAt: string;
+}
+
+export interface ClaimRelation {
+  id: string;
+  fromClaimId: string;
+  toClaimId: string;
+  relationType: "supports" | "opposes" | "refines";
+  updatedAt: string;
+  provenanceJson?: unknown;
+}
+
 export interface RoomContext {
   roomId: string;
   roomName: string;
@@ -55,6 +91,9 @@ export interface RoomContext {
   timeline: RoomEvent[];
   actionableEvents?: RoomEvent[];
   recentCompacts?: RecentCompact[];
+  memoryArtifacts?: RoomMemoryArtifact[];
+  normalizedClaims?: NormalizedClaim[];
+  claimRelations?: ClaimRelation[];
   contextSummary?: string;
   artifacts: Artifact[];
   rules: string;
@@ -150,76 +189,6 @@ export interface NodeApprovalStatusResponse {
 export interface SubmitUsageResponse {
   accepted: number;
   totalOwed: number;
-}
-
-export type ReviewJobKind = "review" | "recovery";
-export type ReviewJobStatus = "queued" | "running" | "finished" | "failed";
-export type ReviewResultSource = "reviewed" | "recovered";
-
-export interface PendingReviewJob {
-  id: string;
-  roomId: string;
-  messageId: string;
-  jobKind: ReviewJobKind;
-  status: ReviewJobStatus;
-  targetSourceHint: string;
-  requestedBy: string;
-  requestedAt: string;
-  priority: number;
-  workerNodeId?: string;
-  workerName?: string;
-  workerModel?: string;
-  startedAt?: string;
-  finishedAt?: string;
-  error?: string;
-  inputJson?: unknown;
-  resultArtifactId?: string;
-}
-
-export interface ReviewJobsResponse {
-  nodeId: string;
-  count: number;
-  jobs: PendingReviewJob[];
-}
-
-export interface ReviewJobArtifact {
-  id: string;
-  jobId: string;
-  roomId: string;
-  messageId: string;
-  representationSource: ReviewResultSource;
-  schemaVersion: number;
-  summary?: string;
-  intent?: string;
-  claims?: unknown[];
-  score?: number;
-  createdAt: string;
-  rawResult?: unknown;
-}
-
-export interface ReviewJobStartResponse {
-  ok: boolean;
-  job: PendingReviewJob;
-}
-
-export interface ReviewJobCompleteInput {
-  representationSource?: ReviewResultSource;
-  summary?: string;
-  intent?: string;
-  claims?: unknown[];
-  score?: number;
-  createdAt?: string;
-  rawResult?: unknown;
-}
-
-export interface ReviewJobCompleteResponse {
-  ok: boolean;
-  artifact: ReviewJobArtifact;
-}
-
-export interface ReviewJobFailResponse {
-  ok: boolean;
-  job: PendingReviewJob;
 }
 
 export interface JoinRoomResponse {
@@ -378,6 +347,11 @@ export interface CoreRoomSnapshot extends CoreRoomDetails {
   timeline: CoreRoomTimelineEvent[];
   artifacts: Artifact[];
   recentCompacts?: RecentCompact[];
+  memoryArtifacts?: RoomMemoryArtifact[];
+  claimContext?: {
+    claims?: NormalizedClaim[];
+    relations?: ClaimRelation[];
+  };
   finalOutput?: string;
   messageCount?: number;
   pythonJobsCount?: number;
@@ -479,6 +453,11 @@ export interface CoreRoomMessagesResponse {
   count: number;
   messages: CoreRoomMessage[];
   scope?: string;
+  memoryContext?: RoomMemoryArtifact[];
+  claimContext?: {
+    claims?: NormalizedClaim[];
+    relations?: ClaimRelation[];
+  };
 }
 
 export interface CoreRoomHeartbeatResponse {

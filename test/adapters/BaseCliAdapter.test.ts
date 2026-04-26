@@ -96,6 +96,34 @@ describe("BaseCliAdapter", () => {
           score: 0.93
         }
       ],
+      memoryArtifacts: [
+        {
+          id: "mem-1",
+          artifactKind: "room_snapshot",
+          summary: "Room snapshot summary",
+          highlights: ["h1"],
+          openQuestions: ["q1"],
+          createdAt: "2026-04-25T05:00:00.000Z"
+        }
+      ],
+      normalizedClaims: [
+        {
+          id: "claim-1",
+          canonicalText: "Bridge-first rollout lowers coordination risk.",
+          canonicalKey: "bridge-first rollout lowers coordination risk",
+          evidenceCount: 3,
+          updatedAt: "2026-04-25T05:01:00.000Z"
+        }
+      ],
+      claimRelations: [
+        {
+          id: "rel-1",
+          fromClaimId: "claim-1",
+          toClaimId: "claim-2",
+          relationType: "supports",
+          updatedAt: "2026-04-25T05:02:00.000Z"
+        }
+      ],
       timeline: [
         {
           id: "m1",
@@ -115,6 +143,11 @@ describe("BaseCliAdapter", () => {
 
     const prompt = adapter.executeCliCalls[0];
     expect(prompt).toContain("Recent compacts:");
+    expect(prompt).toContain("Derived memory artifacts:");
+    expect(prompt).toContain("Claim-aware context:");
+    expect(prompt).toContain("- claim-1: Bridge-first rollout lowers coordination risk. {evidence=3}");
+    expect(prompt).toContain("- claim-1 supports claim-2");
+    expect(prompt).toContain("- Room snapshot summary {kind=room_snapshot; highlights=h1; open=q1}");
     expect(prompt).toContain("- m1 {summary=Compact bridge summary; claims=Bridge-first rollout lowers coordination risk.; intent=propose; source=reviewed; score=0.93}");
     expect(prompt).toContain("Use the bridge path before replacing reads. {summary=Bridge before replacing reads.; claims=Bridge-first rollout protects the legacy path.}");
     expect(prompt).toContain("Can we reduce rollout scope first? {summary=Reduce rollout scope first.; claims=Smaller rollout is easier to verify.}");

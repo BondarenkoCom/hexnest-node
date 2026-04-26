@@ -247,7 +247,7 @@ export function roomsRouter(context: WebServerContext) {
 
   router.post("/", async (req: Request, res: Response) => {
     try {
-      const task = normalizeText(req.body?.task, 100000); // Higher limit for admin proxying
+      const task = normalizeText(req.body?.task, 100000); // Keep high limit for large room bootstrap tasks
       if (!task) {
         res.status(400).json({ success: false, error: "task is required" });
         return;

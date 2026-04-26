@@ -12,22 +12,19 @@ import {
   CoreRoomStats,
   CoreRoomWebhookInfo,
   CoreRoomsListResponse,
+  ClaimRelation,
   CreateCoreRoomInput,
+  NormalizedClaim,
   DeleteNodeResponse,
   HeartbeatPayload,
   NodeApprovalStatusResponse,
   HeartbeatResponse,
   JoinRoomResponse,
-  PendingReviewJob,
   PostRoomMessageInput,
   RegisterNodeRequest,
   RegisterNodeResponse,
-  ReviewJobCompleteInput,
-  ReviewJobCompleteResponse,
-  ReviewJobFailResponse,
-  ReviewJobsResponse,
-  ReviewJobStartResponse,
   RoomContext,
+  RoomMemoryArtifact,
   RecentCompact,
   SubmitUsageResponse,
   UsageRecord,
@@ -64,22 +61,6 @@ export interface HexNestClientLike {
   heartbeat(nodeId: string, payload: HeartbeatPayload): Promise<HeartbeatResponse>;
   submitUsage(nodeId: string, records: UsageRecord[]): Promise<SubmitUsageResponse>;
   markOffline(nodeId: string): Promise<void>;
-  getReviewJobs(nodeId: string, limit?: number): Promise<ReviewJobsResponse>;
-  startReviewJob(
-    nodeId: string,
-    jobId: string,
-    payload?: { startedAt?: string; workerName?: string; workerModel?: string }
-  ): Promise<ReviewJobStartResponse>;
-  completeReviewJob(
-    nodeId: string,
-    jobId: string,
-    payload: ReviewJobCompleteInput
-  ): Promise<ReviewJobCompleteResponse>;
-  failReviewJob(
-    nodeId: string,
-    jobId: string,
-    payload?: { error?: string; finishedAt?: string }
-  ): Promise<ReviewJobFailResponse>;
   listRooms(limit?: number): Promise<CoreRoomsListResponse>;
   createRoom(payload: CreateCoreRoomInput): Promise<CoreCreateRoomResponse>;
   getRoomWebhookSigningKey(roomId: string): Promise<{ ok: boolean; roomId: string; roomWebhook: CoreRoomWebhookInfo }>;
@@ -188,6 +169,24 @@ function buildContextSummary(timeline: RoomContext["timeline"], artifactsCount: 
   return `timeline=${timeline.length}; actionable=${actionableCount}; artifacts=${artifactsCount}`;
 }
 
+function buildMemorySummary(memoryArtifacts: RoomMemoryArtifact[]): string {
+  const summaries = memoryArtifacts
+    .map((item) => trimAndCollapse(String(item.summary || ""), 140))
+    .filter(Boolean)
+    .slice(0, 2);
+  if (!summaries.length) {
+    return "";
+  }
+  return `Memory: ${summaries.join(" | ")}`;
+}
+
+function buildClaimSummary(claims: NormalizedClaim[], relations: ClaimRelation[]): string {
+  if (!claims.length && !relations.length) {
+    return "";
+  }
+  return `Claims: ${claims.length}; relations: ${relations.length}`;
+}
+
 function buildRecentCompacts(room: CoreRoomSnapshot): RecentCompact[] {
   const rawRecentCompacts = Array.isArray(room.recentCompacts) ? room.recentCompacts : [];
   return rawRecentCompacts
@@ -210,6 +209,91 @@ function buildRecentCompacts(room: CoreRoomSnapshot): RecentCompact[] {
       return compact;
     })
     .filter((item) => Boolean(item.messageId));
+}
+
+function buildMemoryArtifacts(room: CoreRoomSnapshot): RoomMemoryArtifact[] {
+  const raw = Array.isArray(room.memoryArtifacts) ? room.memoryArtifacts : [];
+  return raw
+    .map((item) => {
+      const value = item as RoomMemoryArtifact;
+      const artifactKind = value.artifactKind === "room_snapshot" ? "room_snapshot" : "segment_summary";
+      const summary = String(value.summary || "").trim();
+      if (!summary) {
+        return null;
+      }
+      const parsed: RoomMemoryArtifact = {
+        id: String(value.id || ""),
+        artifactKind,
+        summary,
+        createdAt: String(value.createdAt || "")
+      };
+      if (Array.isArray(value.highlights)) {
+        parsed.highlights = value.highlights.map((entry) => String(entry)).filter(Boolean);
+      }
+      if (Array.isArray(value.openQuestions)) {
+        parsed.openQuestions = value.openQuestions.map((entry) => String(entry)).filter(Boolean);
+      }
+      if (value.phaseHint) parsed.phaseHint = String(value.phaseHint);
+      if (value.coverageStartMessageId) parsed.coverageStartMessageId = String(value.coverageStartMessageId);
+      if (value.coverageEndMessageId) parsed.coverageEndMessageId = String(value.coverageEndMessageId);
+      if (typeof value.coverageCount === "number") parsed.coverageCount = value.coverageCount;
+      if (value.sourceMeta && typeof value.sourceMeta === "object") {
+        parsed.sourceMeta = {
+          phase: value.sourceMeta.phase ? String(value.sourceMeta.phase) : undefined,
+          emphasis: value.sourceMeta.emphasis ? String(value.sourceMeta.emphasis) : undefined,
+          rank: typeof value.sourceMeta.rank === "number" ? value.sourceMeta.rank : undefined,
+          policyVersion: value.sourceMeta.policyVersion ? String(value.sourceMeta.policyVersion) : undefined
+        };
+      }
+      return parsed;
+    })
+    .filter((item): item is RoomMemoryArtifact => Boolean(item && item.id));
+}
+
+function buildNormalizedClaims(raw: unknown): NormalizedClaim[] {
+  const list = Array.isArray(raw) ? raw : [];
+  return list
+    .map((item) => {
+      const value = item as Record<string, unknown>;
+      const id = String(value.id || "").trim();
+      const canonicalText = String(value.canonicalText || value.canonical_text || "").trim();
+      if (!id || !canonicalText) return null;
+      return {
+        id,
+        canonicalText,
+        canonicalKey: String(value.canonicalKey || value.canonical_key || "").trim() || canonicalText.toLowerCase(),
+        evidenceCount: Number(value.evidenceCount || value.evidence_count || 0),
+        updatedAt: String(value.updatedAt || value.updated_at || "")
+      } as NormalizedClaim;
+    })
+    .filter((item): item is NormalizedClaim => Boolean(item));
+}
+
+function buildClaimRelations(raw: unknown): ClaimRelation[] {
+  const list = Array.isArray(raw) ? raw : [];
+  return list
+    .map((item) => {
+      const value = item as Record<string, unknown>;
+      const relationTypeRaw = String(value.relationType || value.relation_type || "").trim().toLowerCase();
+      const relationType =
+        relationTypeRaw === "supports" || relationTypeRaw === "opposes" || relationTypeRaw === "refines"
+          ? relationTypeRaw
+          : null;
+      if (!relationType) return null;
+      const id = String(value.id || "").trim();
+      const fromClaimId = String(value.fromClaimId || value.from_claim_id || "").trim();
+      const toClaimId = String(value.toClaimId || value.to_claim_id || "").trim();
+      if (!id || !fromClaimId || !toClaimId) return null;
+      return {
+        id,
+        fromClaimId,
+        toClaimId,
+        relationType,
+        updatedAt: String(value.updatedAt || value.updated_at || ""),
+        provenanceJson: value.provenanceJson ?? value.provenance_json
+      } as ClaimRelation;
+    })
+    .filter((item): item is ClaimRelation => Boolean(item));
 }
 
 export class HexNestClient implements HexNestClientLike {
@@ -283,63 +367,6 @@ export class HexNestClient implements HexNestClientLike {
       authRequired: true,
       body: {}
     });
-  }
-
-  async getReviewJobs(nodeId: string, limit = 10): Promise<ReviewJobsResponse> {
-    const params = new URLSearchParams();
-    if (Number.isFinite(limit) && limit > 0) {
-      params.set("limit", String(Math.min(50, Math.max(1, Math.floor(limit)))));
-    }
-    const suffix = params.size > 0 ? `?${params.toString()}` : "";
-    return this.request<ReviewJobsResponse>(`/api/nodes/${encodeURIComponent(nodeId)}/review-jobs${suffix}`, {
-      method: "GET",
-      authRequired: true
-    });
-  }
-
-  async startReviewJob(
-    nodeId: string,
-    jobId: string,
-    payload: { startedAt?: string; workerName?: string; workerModel?: string } = {}
-  ): Promise<ReviewJobStartResponse> {
-    return this.request<ReviewJobStartResponse>(
-      `/api/nodes/${encodeURIComponent(nodeId)}/review-jobs/${encodeURIComponent(jobId)}/start`,
-      {
-        method: "POST",
-        authRequired: true,
-        body: payload
-      }
-    );
-  }
-
-  async completeReviewJob(
-    nodeId: string,
-    jobId: string,
-    payload: ReviewJobCompleteInput
-  ): Promise<ReviewJobCompleteResponse> {
-    return this.request<ReviewJobCompleteResponse>(
-      `/api/nodes/${encodeURIComponent(nodeId)}/review-jobs/${encodeURIComponent(jobId)}/complete`,
-      {
-        method: "POST",
-        authRequired: true,
-        body: payload
-      }
-    );
-  }
-
-  async failReviewJob(
-    nodeId: string,
-    jobId: string,
-    payload: { error?: string; finishedAt?: string } = {}
-  ): Promise<ReviewJobFailResponse> {
-    return this.request<ReviewJobFailResponse>(
-      `/api/nodes/${encodeURIComponent(nodeId)}/review-jobs/${encodeURIComponent(jobId)}/fail`,
-      {
-        method: "POST",
-        authRequired: true,
-        body: payload
-      }
-    );
   }
 
   async listRooms(limit = 50): Promise<CoreRoomsListResponse> {
@@ -582,8 +609,14 @@ export class HexNestClient implements HexNestClientLike {
       timestamp: String(item?.timestamp || "")
     }));
     const recentCompacts = buildRecentCompacts(room);
+    const memoryArtifacts = buildMemoryArtifacts(room);
+    const normalizedClaims = buildNormalizedClaims((room as any).claimContext?.claims || (messages as any).claimContext?.claims);
+    const claimRelations = buildClaimRelations((room as any).claimContext?.relations || (messages as any).claimContext?.relations);
     const settings = room.settings;
     const template = room.template;
+    const contextSummaryBase = buildContextSummary(timeline, artifacts.length);
+    const memorySummary = buildMemorySummary(memoryArtifacts);
+    const claimSummary = buildClaimSummary(normalizedClaims, claimRelations);
 
     return {
       roomId,
@@ -597,7 +630,10 @@ export class HexNestClient implements HexNestClientLike {
       timeline,
       actionableEvents,
       recentCompacts,
-      contextSummary: buildContextSummary(timeline, artifacts.length),
+      ...(memoryArtifacts.length ? { memoryArtifacts } : {}),
+      ...(normalizedClaims.length ? { normalizedClaims } : {}),
+      ...(claimRelations.length ? { claimRelations } : {}),
+      contextSummary: [contextSummaryBase, memorySummary, claimSummary].filter(Boolean).join(" | "),
       artifacts,
       rules: String(template?.rules || "")
     };

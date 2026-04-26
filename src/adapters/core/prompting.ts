@@ -97,6 +97,23 @@ function formatRecentCompact(item: NonNullable<RoomContext["recentCompacts"]>[nu
   return `- ${item.messageId}${parts.length ? ` {${parts.join("; ")}}` : ""}`;
 }
 
+function formatMemoryArtifact(item: NonNullable<RoomContext["memoryArtifacts"]>[number]): string {
+  const parts: string[] = [`kind=${item.artifactKind}`];
+  if (Array.isArray(item.highlights) && item.highlights.length) {
+    parts.push(`highlights=${item.highlights.join(" | ")}`);
+  }
+  if (Array.isArray(item.openQuestions) && item.openQuestions.length) {
+    parts.push(`open=${item.openQuestions.join(" | ")}`);
+  }
+  if (item.phaseHint) {
+    parts.push(`phase=${item.phaseHint}`);
+  }
+  if (typeof item.coverageCount === "number") {
+    parts.push(`coverage=${item.coverageCount}`);
+  }
+  return `- ${item.summary}${parts.length ? ` {${parts.join("; ")}}` : ""}`;
+}
+
 export function formatRecentCompacts(recentCompacts: RoomContext["recentCompacts"], limit = 5): string {
   const items = (recentCompacts || []).slice(-limit);
   if (!items.length) {
@@ -104,6 +121,33 @@ export function formatRecentCompacts(recentCompacts: RoomContext["recentCompacts
   }
 
   return items.map((item) => formatRecentCompact(item)).join("\n");
+}
+
+export function formatMemoryArtifacts(memoryArtifacts: RoomContext["memoryArtifacts"], limit = 3): string {
+  const items = (memoryArtifacts || []).slice(0, limit);
+  if (!items.length) {
+    return "";
+  }
+  return items.map((item) => formatMemoryArtifact(item)).join("\n");
+}
+
+export function formatClaimContext(
+  normalizedClaims: RoomContext["normalizedClaims"],
+  claimRelations: RoomContext["claimRelations"],
+  claimLimit = 6,
+  relationLimit = 8
+): string {
+  const claims = (normalizedClaims || []).slice(0, claimLimit);
+  const relations = (claimRelations || []).slice(0, relationLimit);
+  if (!claims.length && !relations.length) {
+    return "";
+  }
+  const claimLines = claims.map((claim) => `- ${claim.id}: ${claim.canonicalText} {evidence=${claim.evidenceCount}}`);
+  const relationLines = relations.map((rel) => `- ${rel.fromClaimId} ${rel.relationType} ${rel.toClaimId}`);
+  return [
+    ...(claimLines.length ? ["Claims:", ...claimLines] : []),
+    ...(relationLines.length ? ["Relations:", ...relationLines] : [])
+  ].join("\n");
 }
 
 export function formatTimeline(timeline: RoomContext["timeline"], limit = 10): string {
@@ -167,6 +211,8 @@ export function buildDiscussionUserPrompt(options: {
   contextVersion?: string;
   contextSummary?: string;
   recentCompactsText?: string;
+  memoryArtifactsText?: string;
+  claimContextText?: string;
   actionableText: string;
   timelineText: string;
   timelineLabel?: string;
@@ -178,6 +224,8 @@ export function buildDiscussionUserPrompt(options: {
     `ContextVersion: ${options.contextVersion || "v1"}`,
     `Summary: ${options.contextSummary || "n/a"}`,
     ...(options.recentCompactsText ? ["Recent compacts:", options.recentCompactsText] : []),
+    ...(options.memoryArtifactsText ? ["Derived memory artifacts:", options.memoryArtifactsText] : []),
+    ...(options.claimContextText ? ["Claim-aware context:", options.claimContextText] : []),
     "Actionable events:",
     options.actionableText || "(none)",
     `${timelineLabel}:`,

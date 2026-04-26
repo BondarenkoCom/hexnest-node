@@ -98,6 +98,34 @@ describe("BaseDiscussionAdapter", () => {
           score: 0.82
         }
       ],
+      memoryArtifacts: [
+        {
+          id: "mem-1",
+          artifactKind: "segment_summary",
+          summary: "Segment memory summary",
+          highlights: ["h1"],
+          openQuestions: ["q1"],
+          createdAt: "2026-04-25T05:00:00.000Z"
+        }
+      ],
+      normalizedClaims: [
+        {
+          id: "claim-1",
+          canonicalText: "Bridge rollout lowers migration risk.",
+          canonicalKey: "bridge rollout lowers migration risk",
+          evidenceCount: 2,
+          updatedAt: "2026-04-25T05:01:00.000Z"
+        }
+      ],
+      claimRelations: [
+        {
+          id: "rel-1",
+          fromClaimId: "claim-1",
+          toClaimId: "claim-2",
+          relationType: "supports",
+          updatedAt: "2026-04-25T05:02:00.000Z"
+        }
+      ],
       timeline: [
         {
           id: "m1",
@@ -117,6 +145,13 @@ describe("BaseDiscussionAdapter", () => {
 
     const { user } = adapter.executeCompletionCalls[0];
     expect(user).toContain("Recent compacts:");
+    expect(user).toContain("Derived memory artifacts:");
+    expect(user).toContain("Claim-aware context:");
+    expect(user).toContain("Claims:");
+    expect(user).toContain("- claim-1: Bridge rollout lowers migration risk. {evidence=2}");
+    expect(user).toContain("Relations:");
+    expect(user).toContain("- claim-1 supports claim-2");
+    expect(user).toContain("- Segment memory summary {kind=segment_summary; highlights=h1; open=q1}");
     expect(user).toContain("- m1 {summary=Compact bridge summary; claims=Bridge-first rollout lowers coordination risk.; intent=propose; source=self_declared; score=0.82}");
     expect(user).toContain("Ship the bridge first and measure. {summary=Ship the bridge first.; claims=Bridge-first rollout lowers migration risk.}");
     expect(user).toContain("This plan needs a smaller rollout slice. {summary=Smaller rollout slice needed.; claims=Large rollout increases coordination risk.}");
