@@ -523,7 +523,8 @@ export interface AuthLoginRequest {
 
 export interface AuthResponse {
   userId: string;
-  token: string;
+  token: string;       // legacy
+  accessToken: string; // current core field
   expiresAt: string;
   user: User;
 }
