@@ -12,6 +12,7 @@ import {
   formatActionableEvents,
   formatTimeline
 } from "../core/prompting.js";
+import { traceNodeModelError, traceNodeModelSuccess } from "../../utils/model-trace.js";
 
 interface CachedResponse {
   value: AgentResponse;
@@ -156,7 +157,7 @@ export abstract class BaseLocalAdapter implements AgentAdapter {
     const actionable = formatActionableEvents(
       isSlowModelMode ? (context.actionableEvents || []).slice(-4) : context.actionableEvents
     );
-    const prompt = buildDiscussionUserPrompt({
+    let finalPrompt = buildDiscussionUserPrompt({
       task: context.task,
       phase: context.phase,
       contextVersion: context.contextVersion,
@@ -172,12 +173,12 @@ export abstract class BaseLocalAdapter implements AgentAdapter {
         ? Math.max(128, Math.min(this.maxOutputTokens, 420))
         : this.maxOutputTokens;
       const initialTimeoutMs = isSlowModelMode ? Math.max(this.timeoutMs, 120_000) : this.timeoutMs;
-      response = await this.executeRequest(system, prompt, initialMaxTokens, initialTimeoutMs);
+      response = await this.executeRequest(system, finalPrompt, initialMaxTokens, initialTimeoutMs);
     } catch (error: any) {
       if (this.isTimeoutError(error)) {
         const compactTimeline = formatTimeline(context.timeline, 4);
         const compactActionable = formatActionableEvents((context.actionableEvents || []).slice(-3));
-        const compactPrompt = buildDiscussionUserPrompt({
+        finalPrompt = buildDiscussionUserPrompt({
           task: context.task,
           phase: context.phase,
           contextVersion: context.contextVersion,
@@ -191,8 +192,24 @@ export abstract class BaseLocalAdapter implements AgentAdapter {
         console.warn(
           `[${this.name}] primary request timed out (${this.timeoutMs}ms), retrying with compact context and max_tokens=${reducedMaxTokens}`
         );
-        response = await this.executeRequest(system, compactPrompt, reducedMaxTokens, retryTimeoutMs);
+        response = await this.executeRequest(system, finalPrompt, reducedMaxTokens, retryTimeoutMs);
       } else {
+        traceNodeModelError(
+          {
+            adapter: this.name,
+            model: this.modelId,
+            transport: "local",
+            roomId: context.roomId,
+            role: context.role,
+            phase: context.phase,
+            prompt: {
+              format: "system-user",
+              system,
+              user: finalPrompt
+            }
+          },
+          error
+        );
         throw error;
       }
     }
@@ -204,8 +221,39 @@ export abstract class BaseLocalAdapter implements AgentAdapter {
 
     const rawText = await this.extractTextFromResponse(response);
     if (!rawText) {
+      traceNodeModelError(
+        {
+          adapter: this.name,
+          model: this.modelId,
+          transport: "local",
+          roomId: context.roomId,
+          role: context.role,
+          phase: context.phase,
+          prompt: {
+            format: "system-user",
+            system,
+            user: finalPrompt
+          }
+        },
+        new Error(`${this.name} returned an empty response`)
+      );
       throw new Error(`${this.name} returned an empty response`);
     }
+
+    traceNodeModelSuccess({
+      adapter: this.name,
+      model: this.modelId,
+      transport: "local",
+      roomId: context.roomId,
+      role: context.role,
+      phase: context.phase,
+      prompt: {
+        format: "system-user",
+        system,
+        user: finalPrompt
+      },
+      response: rawText
+    });
 
     const parsed = parseStructuredAgentResponse(rawText);
 

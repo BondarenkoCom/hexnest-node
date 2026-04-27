@@ -10,6 +10,7 @@ import {
   formatRecentCompacts,
   formatTimeline
 } from "../core/prompting.js";
+import { traceNodeModelError, traceNodeModelSuccess } from "../../utils/model-trace.js";
 
 /**
  * Base abstract class for AgentAdapters that use text-based LLMs.
@@ -77,25 +78,60 @@ export abstract class BaseDiscussionAdapter implements AgentAdapter {
       timelineLabel: this.getTimelineLabel()
     });
 
-    const rawText = await this.executeCompletion(systemPrompt, userPrompt, context);
+    try {
+      const rawText = await this.executeCompletion(systemPrompt, userPrompt, context);
 
-    if (!rawText) {
-      throw new Error(`${this.constructor.name} returned an empty response`);
-    }
+      if (!rawText) {
+        throw new Error(`${this.constructor.name} returned an empty response`);
+      }
 
-    const parsed = parseStructuredAgentResponse(rawText);
+      traceNodeModelSuccess({
+        adapter: this.name,
+        model: this.modelId,
+        transport: "discussion",
+        roomId: context.roomId,
+        role: context.role,
+        phase: context.phase,
+        prompt: {
+          format: "system-user",
+          system: systemPrompt,
+          user: userPrompt
+        },
+        response: rawText
+      });
 
-    const output: AgentResponse = {
-      text: parsed.text,
-      confidence: inferConfidence(parsed.text, context.phase)
-    };
-    if (parsed.step1Envelope) {
-      output.step1Envelope = parsed.step1Envelope;
+      const parsed = parseStructuredAgentResponse(rawText);
+
+      const output: AgentResponse = {
+        text: parsed.text,
+        confidence: inferConfidence(parsed.text, context.phase)
+      };
+      if (parsed.step1Envelope) {
+        output.step1Envelope = parsed.step1Envelope;
+      }
+      if (context.enableSentimentAnalysis) {
+        output.sentiment = parsed.sentiment;
+      }
+      return output;
+    } catch (error) {
+      traceNodeModelError(
+        {
+          adapter: this.name,
+          model: this.modelId,
+          transport: "discussion",
+          roomId: context.roomId,
+          role: context.role,
+          phase: context.phase,
+          prompt: {
+            format: "system-user",
+            system: systemPrompt,
+            user: userPrompt
+          }
+        },
+        error
+      );
+      throw error;
     }
-    if (context.enableSentimentAnalysis) {
-      output.sentiment = parsed.sentiment;
-    }
-    return output;
   }
 
   async estimateCost(context: RoomContext, responseText = ""): Promise<CostEstimate> {

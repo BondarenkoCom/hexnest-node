@@ -17,6 +17,7 @@ import {
   liveDiscussionGuidance,
   structuredOutputGuidance
 } from "./prompting.js";
+import { traceNodeModelError, traceNodeModelSuccess } from "../../utils/model-trace.js";
 
 export interface CliRunResult {
   exitCode: number | null;
@@ -79,20 +80,53 @@ export abstract class BaseCliAdapter implements AgentAdapter {
       timeline || "(empty)"
     ].join("\n");
 
-    const rawText = await this.executeCli(prompt);
-    const parsed = parseStructuredAgentResponse(rawText);
-    
-    const output: AgentResponse = {
-      text: parsed.text,
-      confidence: inferConfidence(parsed.text, context.phase)
-    };
-    if (parsed.step1Envelope) {
-      output.step1Envelope = parsed.step1Envelope;
+    try {
+      const rawText = await this.executeCli(prompt);
+      traceNodeModelSuccess({
+        adapter: this.name,
+        model: this.modelId,
+        transport: "cli",
+        roomId: context.roomId,
+        role: context.role,
+        phase: context.phase,
+        prompt: {
+          format: "single",
+          text: prompt
+        },
+        response: rawText
+      });
+
+      const parsed = parseStructuredAgentResponse(rawText);
+
+      const output: AgentResponse = {
+        text: parsed.text,
+        confidence: inferConfidence(parsed.text, context.phase)
+      };
+      if (parsed.step1Envelope) {
+        output.step1Envelope = parsed.step1Envelope;
+      }
+      if (context.enableSentimentAnalysis) {
+        output.sentiment = parsed.sentiment;
+      }
+      return output;
+    } catch (error) {
+      traceNodeModelError(
+        {
+          adapter: this.name,
+          model: this.modelId,
+          transport: "cli",
+          roomId: context.roomId,
+          role: context.role,
+          phase: context.phase,
+          prompt: {
+            format: "single",
+            text: prompt
+          }
+        },
+        error
+      );
+      throw error;
     }
-    if (context.enableSentimentAnalysis) {
-      output.sentiment = parsed.sentiment;
-    }
-    return output;
   }
 
   async estimateCost(context: RoomContext, responseText = ""): Promise<CostEstimate> {
