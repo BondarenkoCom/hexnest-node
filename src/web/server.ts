@@ -78,8 +78,8 @@ export function createWebServer(context: WebServerContext): Express {
   const app = express();
 
   // Middleware
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: "2mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
   // No-cache middleware for index.html (always fresh)
   app.use((req: Request, res: Response, next: NextFunction) => {

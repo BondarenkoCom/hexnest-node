@@ -75,8 +75,12 @@ function sendCoreClientError(res: Response, error: unknown): boolean {
   return true;
 }
 
-function normalizeText(value: unknown, maxLength: number): string {
-  return String(value || "").trim().slice(0, maxLength);
+function normalizeText(value: unknown, maxLength?: number): string {
+  const text = String(value || "").trim();
+  if (maxLength === undefined) {
+    return text;
+  }
+  return text.slice(0, maxLength);
 }
 
 function normalizeBoolean(value: unknown, fallback: boolean): boolean {
@@ -645,7 +649,7 @@ export function roomsRouter(context: WebServerContext) {
     try {
       const roomId = normalizeText(req.params.roomId, 120);
       const joinedAgentId = normalizeText(req.body?.joinedAgentId || req.body?.agentId, 120);
-      const text = normalizeText(req.body?.text, 4000);
+      const text = normalizeText(req.body?.text);
       const confidence = typeof req.body?.confidence === "number" ? req.body.confidence : undefined;
       const sentiment = normalizeSentiment(req.body?.sentiment);
 
