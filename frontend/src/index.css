@@ -1,61 +1,30 @@
-
-      @import "tailwindcss";
-
-@theme {
-  --color-void: #04060a;
-  --color-void-dark: #020405;
-  --color-deep: #07111b;
-  --color-deep-2: #10273f;
-  --color-panel: rgba(3, 14, 22, 0.92);
-
-  --color-line: rgba(74, 217, 255, 0.34);
-  --color-line-soft: rgba(74, 217, 255, 0.18);
-
-  --color-text: #eef5ff;
-  --color-text-muted: #9dbdd8;
-
-  --color-cyan: #4ad9ff;
-  --color-cyan-soft: #67e7ff;
-
-  --color-blood: #a20f52;
-  --color-blood-soft: #ff6eb3;
-
-  --color-warn: #ffc06e;
-  --color-error: #ff6e8b;
-  --color-success: #7ef7c8;
-
-  --color-pink-400: #f472b6;
-  --color-pink-500: #ec4899;
-  --color-emerald-400: #34d399;
-  --color-emerald-500: #10b981;
-  --color-amber-400: #fbbf24;
-  --color-amber-500: #f59e0b;
-  --color-red-500: #ef4444;
-}
+@import "@hexnest/ui/styles.css";
 
 :root {
-        --void: #04060a;
-        --deep: #07111b;
-        --deep-2: #10273f;
-        --panel: rgba(3, 14, 22, 0.92);
-        --line: rgba(74, 217, 255, 0.34);
-        --line-soft: rgba(74, 217, 255, 0.18);
-        --text: #eef5ff;
-        --muted: #9dbdd8;
-        --cyan: #4ad9ff;
-        --cyan-soft: #67e7ff;
-        --blood: #a20f52;
-        --blood-soft: #ff6eb3;
-        --warn: #ffc06e;
+  /* Aliases to --hxn-* tokens */
+  --void: var(--hxn-void);
+  --deep: var(--hxn-surface);
+  --deep-2: var(--hxn-surface-raised);
+  --panel: var(--hxn-panel);
+  --line: var(--hxn-border-strong);
+  --line-soft: var(--hxn-border);
+  --text: var(--hxn-text);
+  --muted: var(--hxn-muted);
+  --cyan: var(--hxn-cyan);
+  --cyan-soft: var(--hxn-cyan-soft);
+  --blood: var(--hxn-blood);
+  --blood-soft: var(--hxn-blood-soft);
+  --warn: var(--hxn-gold);
+  --font-mono: var(--hxn-font-mono);
 
-        --fs-xs: 0.82rem;
-        --fs-sm: 0.92rem;
-        --fs-base: 1.05rem;
-        --fs-md: 1.15rem;
-        --fs-lg: 1.35rem;
-        --lh: 1.55;
-        --font-mono: "IBM Plex Mono", monospace;
-      }
+  /* Font sizes */
+  --fs-xs: 0.82rem;
+  --fs-sm: 0.92rem;
+  --fs-base: 1.05rem;
+  --fs-md: 1.15rem;
+  --fs-lg: 1.35rem;
+  --lh: 1.55;
+}
 
       * {
         box-sizing: border-box;
@@ -65,7 +34,7 @@
       body {
         margin: 0;
         min-height: 100%;
-        font-family: "Oxanium", sans-serif;
+        font-family: var(--hxn-font-mono);
         font-size: 16px;
         color: var(--text);
         line-height: var(--lh);

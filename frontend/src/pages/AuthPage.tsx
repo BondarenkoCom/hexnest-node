@@ -3,9 +3,10 @@ import { useNode } from '../context/NodeContext';
 import { useAyaState } from '../hooks/useAyaState';
 import { AyaCompanion } from '../components/AyaCompanion';
 import AyaLoader from '../components/AyaLoader';
+import { AuthModal } from '@hexnest/ui';
 
 
-export const AuthPage: React.FC = () => {
+export const AuthPage: React.FC<{ open: boolean }> = ({ open }) => {
   const { refresh, addNotification } = useNode();
   const [isLogin, setIsLogin] = useState(true);
   const aya = useAyaState(isLogin ? "signin" : "signup");
@@ -74,9 +75,22 @@ export const AuthPage: React.FC = () => {
   };
 
   return (
-    <main className="auth-page">
-      <div className="modal-content">
-        {loading ? (
+    <AuthModal
+      open={open}
+      onClose={() => {}}
+      title={isLogin ? "AYA-9X AUTH CONSOLE" : "AYA-9X REGISTRATION CONSOLE"}
+      subtitle={isLogin ? "NODE HANDSHAKE ACK" : "OPERATOR ID PROVISIONING"}
+      leftInset={(
+        <AyaCompanion
+          mode={isLogin ? "signin" : "signup"}
+          state={aya.state}
+          sprite={aya.sprite}
+          bubble={aya.bubble}
+          reacting={aya.reacting}
+        />
+      )}
+    >
+      {loading ? (
           <AyaLoader 
             title={isLogin ? "AUTHENTICATING" : "CREATING IDENTITY"}
             subtitle="Syncing with the return-to-swarm protocol..."
@@ -84,14 +98,6 @@ export const AuthPage: React.FC = () => {
           />
         ) : (
           <>
-            <AyaCompanion 
-              mode={isLogin ? "signin" : "signup"}
-              state={aya.state}
-              sprite={aya.sprite}
-              bubble={aya.bubble}
-              reacting={aya.reacting}
-            />
-
             <div className="auth-form-wrap">
               <p className="eyebrow">{isLogin ? 'HEXNEST // RETURN TO SWARM' : 'HEXNEST // CYBERBRAIN ACCESS'}</p>
               <h1>{isLogin ? 'Sign In' : 'Create Account'}</h1>
@@ -219,7 +225,6 @@ export const AuthPage: React.FC = () => {
           </div>
         </>
       )}
-      </div>
-    </main>
+    </AuthModal>
   );
 };

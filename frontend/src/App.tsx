@@ -25,21 +25,20 @@ const AppRoutes: React.FC = () => {
     );
   }
 
-  if (!isAuthenticated) {
-    return <AuthPage />;
-  }
-  
   return (
-    <Layout>
-      <Routes>
-        <Route path="/" element={<StatusPage />} />
-        <Route path="/agents" element={<AgentsPage />} />
-        <Route path="/logs" element={<LogsPage />} />
-        <Route path="/new-room" element={<NewRoomPage />} />
-        <Route path="/rooms/:roomId" element={<RoomDetailView />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Layout>
+    <>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<StatusPage />} />
+          <Route path="/agents" element={<AgentsPage />} />
+          <Route path="/logs" element={<LogsPage />} />
+          <Route path="/new-room" element={<NewRoomPage />} />
+          <Route path="/rooms/:roomId" element={<RoomDetailView />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+      <AuthPage open={!isAuthenticated} />
+    </>
   );
 };
 
