@@ -164,6 +164,7 @@ async function registerNode(
     operatorName: string;
     operatorEmail: string;
     agentCapabilities: string[];
+    reuseNodeId?: string;
   }
 ): Promise<NodeRegisterResponse> {
   return requestJson<NodeRegisterResponse>(`${coreUrl}/api/nodes/register`, {

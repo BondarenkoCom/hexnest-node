@@ -164,6 +164,7 @@ export interface RegisterNodeRequest {
   operatorEmail?: string;
   agentCapabilities: string[];
   callbackUrl?: string;
+  reuseNodeId?: string;
 }
 
 export interface RegisterNodeResponse {
