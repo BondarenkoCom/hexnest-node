@@ -137,6 +137,7 @@ describe("RoomAgentSession", () => {
         role: "researcher",
         joinedAgentId: "joined-1",
         lastSeenMessageId: "missing-id",
+        lastRespondedAt: Date.now() - 120_000,
         autonomous: true,
         status: "idle",
         createdAt: Date.now(),
@@ -800,4 +801,5 @@ describe("RoomAgentSession", () => {
     expect(reasons).toContain("policy_rejected_unseen_messages");
     expect(reasons).not.toContain("unchanged_room_fingerprint");
   });
+
 });

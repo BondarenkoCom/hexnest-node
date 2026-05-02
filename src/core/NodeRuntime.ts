@@ -465,27 +465,42 @@ export class NodeRuntime {
     if (modelConfig?.agentMode === "manual") {
       throw new Error(`Agent ${agentName} is in manual mode and cannot restart an autonomous room session`);
     }
-    if (!String(existingSession.joinedAgentId || "").trim()) {
-      throw new Error(`Room session for ${agentName} has no joined agent id`);
+
+    const adapter = this.adapters.get(agentName);
+    if (!adapter) {
+      throw new Error(`Unknown runtime adapter: ${agentName}`);
     }
 
     await this.stopRoomSession(roomId, agentName, { clearAutonomous: false });
 
     const refreshed = this.database?.getRoomSession(roomId, agentName) || existingSession;
     const joinedAgentId = String(refreshed.joinedAgentId || existingSession.joinedAgentId || "").trim();
-    if (!joinedAgentId) {
-      throw new Error(`Room session for ${agentName} lost joined agent id during restart`);
+    if (joinedAgentId) {
+      this.logger.info(`[node] restarting local room session on existing join room=${roomId} agent=${agentName}`);
+      return this.startManualRoomSession(
+        roomId,
+        agentName,
+        refreshed.role,
+        joinedAgentId,
+        taskHint
+      );
     }
 
-    this.logger.info(`[node] restarting local room session on existing join room=${roomId} agent=${agentName}`);
-
-    return this.startManualRoomSession(
-      roomId,
-      agentName,
-      refreshed.role,
-      joinedAgentId,
-      taskHint
+    const autonomous = modelConfig?.agentMode === "autonomous";
+    const runId = `${roomId}:${agentName}`;
+    const alreadyRunning = this.activeRoomRuns.has(runId);
+    const runtimeRole = String(refreshed.role || existingSession.role || "participant").trim() || "participant";
+    this.logger.warn(
+      `[node] restarting local room session without persisted joined agent id; rejoin required room=${roomId} agent=${agentName}`
     );
+
+    const run = this.startRoomRun(runId, () =>
+      this.runRoomSession(roomId, runtimeRole, taskHint, adapter, refreshed, autonomous)
+    );
+    return {
+      started: Boolean(run),
+      alreadyRunning
+    };
   }
 
   getState(): {

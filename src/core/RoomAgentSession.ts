@@ -1,7 +1,7 @@
 import { AgentAdapter, AgentResponse } from "../adapters/index.js";
 import { Step1Envelope } from "../adapters/core/AgentAdapter.js";
 import type { RoomCycleOutcome, RoomSessionState, RoomSessionStatus } from "../db/database.js";
-import { HexNestClientLike } from "../protocol/HexNestClient.js";
+import { CoreApiError, HexNestClientLike } from "../protocol/HexNestClient.js";
 import { CoreRoomMessage, RoomContext } from "../protocol/types.js";
 import { evaluateRoomAgentPolicy } from "./RoomAgentPolicy.js";
 import { PriorityQueue } from "../utils/PriorityQueue.js";
@@ -42,6 +42,7 @@ const DEFAULT_POLL_MS = 8_000;
 const FAST_MODE_POLL_MS = 900;
 const DEFAULT_AUTONOMOUS_COOLDOWN_MS = 15_000;
 const FAST_MODE_COOLDOWN_MS = 2_500;
+const DEFAULT_SOFT_TRIGGER_COOLDOWN_MS = 60_000;
 const DEFAULT_MAX_NO_ACTION_STREAK = 3;
 const RAW_FALLBACK_PREFIX = "RAW_FALLBACK:";
 
@@ -112,10 +113,6 @@ export class RoomAgentSession {
     } catch (error: any) {
       const msg = error.message || String(error);
       this.options.logger?.error(`[session] critical failure room=${this.options.roomId} agent=${this.options.adapter.name}: ${msg}`);
-      if (msg.includes("401") || error?.status === 401) {
-        this.joinedAgentId = null;
-        this.joinedAgentName = null;
-      }
       await this.emitState("error");
       throw error;
     }
@@ -126,11 +123,20 @@ export class RoomAgentSession {
       return;
     }
 
-    const joined = await this.options.client.joinRoom(
-      this.options.roomId,
-      this.options.adapter.name,
-      this.options.role
-    );
+    let joined;
+    try {
+      joined = await this.options.client.joinRoom(
+        this.options.roomId,
+        this.options.adapter.name,
+        this.options.role
+      );
+    } catch (error) {
+      const recovered = await this.tryRecoverJoinedAgentIdFromRoom(error);
+      if (!recovered) {
+        throw error;
+      }
+      return;
+    }
     const joinedAny = joined as unknown as {
       agent?: { id?: string; name?: string };
       joinedAgent?: { id?: string; name?: string };
@@ -143,6 +149,34 @@ export class RoomAgentSession {
     this.joinedAgentId = resolvedId;
     this.joinedAgentName = String(resolvedAgent?.name || this.options.adapter.name).trim() || this.options.adapter.name;
     await this.emitState("joined");
+  }
+
+  private async tryRecoverJoinedAgentIdFromRoom(error: unknown): Promise<boolean> {
+    if (!(error instanceof CoreApiError) || error.details.status !== 409) {
+      return false;
+    }
+    const message = String(error.message || "").toLowerCase();
+    if (!message.includes("agent name already taken")) {
+      return false;
+    }
+
+    const room = await this.options.client.getRoom(this.options.roomId);
+    const connected = Array.isArray(room.connectedAgents) ? room.connectedAgents : [];
+    const agent = connected.find((entry) => {
+      return String(entry.name || "").trim().toLowerCase() === this.options.adapter.name.toLowerCase();
+    });
+    const recoveredId = String(agent?.id || "").trim();
+    if (!recoveredId) {
+      return false;
+    }
+
+    this.joinedAgentId = recoveredId;
+    this.joinedAgentName = String(agent?.name || this.options.adapter.name).trim() || this.options.adapter.name;
+    this.options.logger?.warn(
+      `[session] recovered joined agent id from room roster after join conflict room=${this.options.roomId} agent=${this.options.adapter.name}`
+    );
+    await this.emitState("joined");
+    return true;
   }
 
   private async runInitialTurn(): Promise<void> {
@@ -213,39 +247,24 @@ export class RoomAgentSession {
 
       if (nextDecision) {
         await this.emitState("responding");
-        this.options.logger?.info(`[session] Agent ${this.options.adapter.name} is generating response for room ${this.options.roomId}...`);
-        let response: AgentResponse;
-        try {
-          if (this.options.priorityQueue) {
-            // Retrieve priority from context or default to 50
-            const priority = context.priority ?? 50; 
-            response = await this.options.priorityQueue.add(
-              () => this.options.adapter.respond(context),
-              priority,
-              `${this.options.roomId}:${this.options.adapter.name}:${nextDecision.triggeredBy}`
-            );
-          } else {
-            response = await this.options.adapter.respond(context);
-          }
-        } catch (error) {
-          if (!this.isRecoverableAdapterError(error)) {
-            throw error;
-          }
-          this.options.logger?.warn(
-            `[session] recoverable adapter error room=${this.options.roomId} agent=${this.options.adapter.name}; marking no-action and retrying next cycle`
-          );
+        const acted = await this.respondAndPostTurn(context, nextDecision.triggeredBy, nextDecision.reason, roomFingerprint);
+        if (!acted) {
           await this.recordNoAction("adapter_recoverable", roomFingerprint);
           await this.sleep(pollIntervalMs);
           continue;
         }
-        this.options.logger?.info(`[session] Agent ${this.options.adapter.name} response generated, posting to room...`);
-        await this.postTurn(context, response, nextDecision.triggeredBy, nextDecision.reason);
-        this.lastCycleOutcome = "acted";
-        this.lastNoActionReason = null;
-        this.noActionStreak = 0;
-        this.lastRoomFingerprint = roomFingerprint;
-        await this.refreshCursor();
-        await this.emitState("idle");
+        continue;
+      }
+
+      const softDecision = this.pickSoftFallbackTrigger(unseen, context.phase, context.role);
+      if (softDecision) {
+        await this.emitState("responding");
+        const acted = await this.respondAndPostTurn(context, softDecision.triggeredBy, softDecision.reason, roomFingerprint);
+        if (!acted) {
+          await this.recordNoAction("adapter_recoverable", roomFingerprint);
+          await this.sleep(pollIntervalMs);
+          continue;
+        }
         continue;
       }
 
@@ -257,6 +276,87 @@ export class RoomAgentSession {
 
       await this.sleep(pollIntervalMs);
     }
+  }
+
+  private pickSoftFallbackTrigger(
+    unseen: CoreRoomMessage[],
+    roomPhase: string,
+    roomRole: string
+  ): { triggeredBy: string; reason: string } | null {
+    if (!this.options.autonomous) {
+      return null;
+    }
+
+    const normalizedPhase = String(roomPhase || "").trim().toLowerCase();
+    if (normalizedPhase.includes("human_gate") || normalizedPhase.includes("approval")) {
+      return null;
+    }
+
+    const now = Date.now();
+    if (this.lastRespondedAt && now - this.lastRespondedAt < DEFAULT_SOFT_TRIGGER_COOLDOWN_MS) {
+      return null;
+    }
+
+    const normalizedRole = String(roomRole || "").trim().toLowerCase();
+    if (normalizedRole.includes("observer") || normalizedRole.includes("auditor")) {
+      return null;
+    }
+
+    for (let index = unseen.length - 1; index >= 0; index -= 1) {
+      const message = unseen[index];
+      if (!message?.id) continue;
+      if (String(message.type || "").trim().toLowerCase() === "system") continue;
+      const sender = String(message.from || "").trim();
+      if (!sender) continue;
+      if (sender === this.options.adapter.name || (this.joinedAgentName && sender === this.joinedAgentName)) continue;
+      if (message.scope === "direct") continue;
+
+      return {
+        triggeredBy: message.id,
+        reason: "autonomous soft room fallback trigger"
+      };
+    }
+
+    return null;
+  }
+
+  private async respondAndPostTurn(
+    context: RoomContext,
+    triggeredBy: string,
+    reason: string,
+    roomFingerprint: string
+  ): Promise<boolean> {
+    this.options.logger?.info(`[session] Agent ${this.options.adapter.name} is generating response for room ${this.options.roomId}...`);
+    let response: AgentResponse;
+    try {
+      if (this.options.priorityQueue) {
+        const priority = context.priority ?? 50;
+        response = await this.options.priorityQueue.add(
+          () => this.options.adapter.respond(context),
+          priority,
+          `${this.options.roomId}:${this.options.adapter.name}:${triggeredBy}`
+        );
+      } else {
+        response = await this.options.adapter.respond(context);
+      }
+    } catch (error) {
+      if (!this.isRecoverableAdapterError(error)) {
+        throw error;
+      }
+      this.options.logger?.warn(
+        `[session] recoverable adapter error room=${this.options.roomId} agent=${this.options.adapter.name}; marking no-action and retrying next cycle`
+      );
+      return false;
+    }
+    this.options.logger?.info(`[session] Agent ${this.options.adapter.name} response generated, posting to room...`);
+    await this.postTurn(context, response, triggeredBy, reason);
+    this.lastCycleOutcome = "acted";
+    this.lastNoActionReason = null;
+    this.noActionStreak = 0;
+    this.lastRoomFingerprint = roomFingerprint;
+    await this.refreshCursor();
+    await this.emitState("idle");
+    return true;
   }
 
   private pickNextTrigger(

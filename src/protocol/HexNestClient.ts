@@ -793,7 +793,7 @@ export class HexNestClient implements HexNestClientLike {
         signal: controller.signal
       });
 
-      console.log(`[HexNestClient] ${options.method || "GET"} ${path} auth=${options.authRequired ? "YES" : "NO"} status=${response.status}`);
+      // console.log(`[HexNestClient] ${options.method || "GET"} ${path} auth=${options.authRequired ? "YES" : "NO"} status=${response.status}`);
 
       if (!response.ok) {
         const body = await response.text();
