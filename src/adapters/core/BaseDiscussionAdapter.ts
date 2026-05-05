@@ -1,12 +1,16 @@
-import { AgentAdapter, AgentResponse, inferConfidence, parseSentimentFromResponse } from "../core/AgentAdapter.js";
+import { AgentAdapter, AgentResponse, inferConfidence, parseStructuredAgentResponse } from "../core/AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
 import { estimateCostWithUsageFallback, UsageSnapshot } from "../core/costing.js";
 import {
   buildDiscussionSystemPrompt,
   buildDiscussionUserPrompt,
   formatActionableEvents,
+  formatClaimContext,
+  formatMemoryArtifacts,
+  formatRecentCompacts,
   formatTimeline
 } from "../core/prompting.js";
+import { traceNodeModelError, traceNodeModelSuccess } from "../../utils/model-trace.js";
 
 /**
  * Base abstract class for AgentAdapters that use text-based LLMs.
@@ -66,27 +70,68 @@ export abstract class BaseDiscussionAdapter implements AgentAdapter {
       phase: context.phase,
       contextVersion: context.contextVersion,
       contextSummary: context.contextSummary,
+      recentCompactsText: formatRecentCompacts(context.recentCompacts),
+      memoryArtifactsText: formatMemoryArtifacts(context.memoryArtifacts),
+      claimContextText: formatClaimContext(context.normalizedClaims, context.claimRelations),
       actionableText: actionable,
       timelineText: timeline,
       timelineLabel: this.getTimelineLabel()
     });
 
-    const rawText = await this.executeCompletion(systemPrompt, userPrompt, context);
+    try {
+      const rawText = await this.executeCompletion(systemPrompt, userPrompt, context);
 
-    if (!rawText) {
-      throw new Error(`${this.constructor.name} returned an empty response`);
+      if (!rawText) {
+        throw new Error(`${this.constructor.name} returned an empty response`);
+      }
+
+      traceNodeModelSuccess({
+        adapter: this.name,
+        model: this.modelId,
+        transport: "discussion",
+        roomId: context.roomId,
+        role: context.role,
+        phase: context.phase,
+        prompt: {
+          format: "system-user",
+          system: systemPrompt,
+          user: userPrompt
+        },
+        response: rawText
+      });
+
+      const parsed = parseStructuredAgentResponse(rawText);
+
+      const output: AgentResponse = {
+        text: parsed.text,
+        confidence: inferConfidence(parsed.text, context.phase)
+      };
+      if (parsed.step1Envelope) {
+        output.step1Envelope = parsed.step1Envelope;
+      }
+      if (context.enableSentimentAnalysis) {
+        output.sentiment = parsed.sentiment;
+      }
+      return output;
+    } catch (error) {
+      traceNodeModelError(
+        {
+          adapter: this.name,
+          model: this.modelId,
+          transport: "discussion",
+          roomId: context.roomId,
+          role: context.role,
+          phase: context.phase,
+          prompt: {
+            format: "system-user",
+            system: systemPrompt,
+            user: userPrompt
+          }
+        },
+        error
+      );
+      throw error;
     }
-
-    const parsed = parseSentimentFromResponse(rawText);
-
-    const output: AgentResponse = {
-      text: parsed.text,
-      confidence: inferConfidence(parsed.text, context.phase)
-    };
-    if (context.enableSentimentAnalysis) {
-      output.sentiment = parsed.sentiment;
-    }
-    return output;
   }
 
   async estimateCost(context: RoomContext, responseText = ""): Promise<CostEstimate> {

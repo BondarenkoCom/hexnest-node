@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { AgentAdapter, AgentResponse } from "../adapters/index.js";
+import { AgentAdapter } from "../adapters/index.js";
 import { NodeConfig } from "../config.js";
-import { CoreApiError, HexNestClient, HexNestClientLike, isCoreApiError } from "../protocol/HexNestClient.js";
+import { HexNestClient, HexNestClientLike, isCoreApiError } from "../protocol/HexNestClient.js";
 import {
   AgentDescriptor,
   HeartbeatPayload,
@@ -203,11 +203,7 @@ export class NodeRuntime {
       throw new Error("Core connection is not configured in node settings");
     }
 
-    const wasConnected = this.coreConnected;
     await this.disconnectFromCore(false);
-    if (providedUserToken && this.nodeId && this.nodeToken && !wasConnected) {
-      await this.resetLocalIdentity("refreshing pending node identity after user auth");
-    }
 
     try {
       await this.connectToCore();
@@ -396,6 +392,14 @@ export class NodeRuntime {
     roomId: string,
     agentName: string
   ): Promise<{ stopped: boolean; hadActiveRun: boolean }> {
+    return this.stopRoomSession(roomId, agentName, { clearAutonomous: true });
+  }
+
+  private async stopRoomSession(
+    roomId: string,
+    agentName: string,
+    options: { clearAutonomous: boolean }
+  ): Promise<{ stopped: boolean; hadActiveRun: boolean }> {
     if (!this.isRunning) {
       throw new Error("Node is not running");
     }
@@ -409,12 +413,15 @@ export class NodeRuntime {
     const activeRun = this.activeRoomRuns.get(runId);
     const hadActiveRun = Boolean(activeRun);
     this.roomStopRequests.add(runId);
-    this.database?.upsertRoomSession({
-      ...existingSession,
-      status: "stopped",
-      autonomous: false,
-      updatedAt: this.now()
-    });
+
+    if (options.clearAutonomous) {
+      this.database?.upsertRoomSession({
+        ...existingSession,
+        status: "stopped",
+        autonomous: false,
+        updatedAt: this.now()
+      });
+    }
 
     if (activeRun) {
       try {
@@ -424,13 +431,16 @@ export class NodeRuntime {
       }
     }
 
-    this.database?.upsertRoomSession({
-      ...existingSession,
-      status: "stopped",
-      autonomous: false,
-      updatedAt: this.now()
-    });
-    this.recordActivity("warn", `Stopped room session for ${agentName} in room ${roomId}`);
+    if (options.clearAutonomous) {
+      this.database?.upsertRoomSession({
+        ...existingSession,
+        status: "stopped",
+        autonomous: false,
+        updatedAt: this.now()
+      });
+      this.recordActivity("warn", `Stopped room session for ${agentName} in room ${roomId}`);
+    }
+
     return { stopped: true, hadActiveRun };
   }
 
@@ -455,64 +465,42 @@ export class NodeRuntime {
     if (modelConfig?.agentMode === "manual") {
       throw new Error(`Agent ${agentName} is in manual mode and cannot restart an autonomous room session`);
     }
-    if (!String(existingSession.joinedAgentId || "").trim()) {
-      throw new Error(`Room session for ${agentName} has no joined agent id`);
+
+    const adapter = this.adapters.get(agentName);
+    if (!adapter) {
+      throw new Error(`Unknown runtime adapter: ${agentName}`);
     }
 
-    await this.stopManualRoomSession(roomId, agentName);
-    
+    await this.stopRoomSession(roomId, agentName, { clearAutonomous: false });
+
     const refreshed = this.database?.getRoomSession(roomId, agentName) || existingSession;
-    this.logger.info(`[node] requesting fresh join for restart room=${roomId} agent=${agentName}`);
-    
-    if (!this.authedClient) throw new Error("Client not connected");
-    const joined = await this.joinRoomWithRoleFallback(roomId, agentName, refreshed.role);
-    
-    // prominent logging
-    console.log("====================================================================");
-    this.logger.info(`[DIAGNOSTIC] Join Response for ${agentName}: ${JSON.stringify(joined)}`);
-    console.log("====================================================================");
-    
-    // Try to find the agent object in common locations
-    const agentData = (joined as any)?.agent || (joined as any)?.joinedAgent || (joined as any)?.data?.agent || (joined as any)?.data?.joinedAgent;
-    const agentId = agentData?.id || (joined as any)?.id || (joined as any)?.data?.id;
-
-    if (!agentId) {
-      throw new Error(`Failed to join room: Core API response missing agent ID. Response: ${JSON.stringify(joined)}`);
+    const joinedAgentId = String(refreshed.joinedAgentId || existingSession.joinedAgentId || "").trim();
+    if (joinedAgentId) {
+      this.logger.info(`[node] restarting local room session on existing join room=${roomId} agent=${agentName}`);
+      return this.startManualRoomSession(
+        roomId,
+        agentName,
+        refreshed.role,
+        joinedAgentId,
+        taskHint
+      );
     }
-    
-    return this.startManualRoomSession(
-      roomId,
-      agentName,
-      refreshed.role,
-      agentId,
-      taskHint
+
+    const autonomous = modelConfig?.agentMode === "autonomous";
+    const runId = `${roomId}:${agentName}`;
+    const alreadyRunning = this.activeRoomRuns.has(runId);
+    const runtimeRole = String(refreshed.role || existingSession.role || "participant").trim() || "participant";
+    this.logger.warn(
+      `[node] restarting local room session without persisted joined agent id; rejoin required room=${roomId} agent=${agentName}`
     );
-  }
 
-  private async joinRoomWithRoleFallback(
-    roomId: string,
-    agentName: string,
-    role?: string
-  ): Promise<Awaited<ReturnType<HexNestClientLike["joinRoom"]>>> {
-    if (!this.authedClient) {
-      throw new Error("Authenticated client is not initialized");
-    }
-    const normalizedRole = String(role || "").trim();
-    try {
-      return await this.authedClient.joinRoom(roomId, agentName, normalizedRole || undefined);
-    } catch (error) {
-      if (
-        normalizedRole
-        && error instanceof CoreApiError
-        && /role can be set only when room is created from a template/i.test(error.message)
-      ) {
-        this.logger.warn(
-          `[node] core rejected role="${normalizedRole}" for room=${roomId}; retrying join without role`
-        );
-        return this.authedClient.joinRoom(roomId, agentName, undefined);
-      }
-      throw error;
-    }
+    const run = this.startRoomRun(runId, () =>
+      this.runRoomSession(roomId, runtimeRole, taskHint, adapter, refreshed, autonomous)
+    );
+    return {
+      started: Boolean(run),
+      alreadyRunning
+    };
   }
 
   getState(): {
@@ -1243,5 +1231,3 @@ export class NodeRuntime {
     return error instanceof Error ? error.message : String(error);
   }
 }
-
-

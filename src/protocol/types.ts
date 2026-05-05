@@ -26,9 +26,56 @@ export interface RoomEvent {
   intent?: string;
   triggeredBy?: string | null;
   text: string;
+  summary?: string;
+  claims?: Array<{ text: string } | string>;
   sentiment?: Sentiment;
   metadata?: Record<string, unknown>;
   confidence?: number;
+}
+
+export interface RecentCompact {
+  messageId: string;
+  summary?: string;
+  claims?: Array<{ text: string } | string>;
+  intent: string;
+  representationSource: string;
+  score?: number;
+}
+
+export interface RoomMemoryArtifact {
+  id: string;
+  artifactKind: "segment_summary" | "room_snapshot";
+  summary: string;
+  highlights?: string[];
+  openQuestions?: string[];
+  phaseHint?: string;
+  coverageStartMessageId?: string;
+  coverageEndMessageId?: string;
+  coverageCount?: number;
+  createdAt: string;
+  sourceMeta?: {
+    phase?: string;
+    emphasis?: string;
+    rank?: number;
+    policyVersion?: string;
+  };
+}
+
+export interface NormalizedClaim {
+  id: string;
+  canonicalText: string;
+  canonicalKey: string;
+  evidenceCount: number;
+  updatedAt: string;
+}
+
+export interface ClaimRelation {
+  id: string;
+  fromClaimId: string;
+  toClaimId: string;
+  relationType: "supports" | "opposes" | "refines";
+  updatedAt: string;
+  provenanceJson?: unknown;
 }
 
 export interface RoomContext {
@@ -43,6 +90,10 @@ export interface RoomContext {
   contextVersion?: "v1" | "v2";
   timeline: RoomEvent[];
   actionableEvents?: RoomEvent[];
+  recentCompacts?: RecentCompact[];
+  memoryArtifacts?: RoomMemoryArtifact[];
+  normalizedClaims?: NormalizedClaim[];
+  claimRelations?: ClaimRelation[];
   contextSummary?: string;
   artifacts: Artifact[];
   rules: string;
@@ -113,6 +164,7 @@ export interface RegisterNodeRequest {
   operatorEmail?: string;
   agentCapabilities: string[];
   callbackUrl?: string;
+  reuseNodeId?: string;
 }
 
 export interface RegisterNodeResponse {
@@ -178,6 +230,7 @@ export interface CoreRoomSettings {
   marketDataEnabled?: boolean;
   isPublic?: boolean;
   debateFastMode?: boolean;
+  enableSentimentAnalysis?: boolean;
   webhookUrl?: string;
 }
 
@@ -294,6 +347,12 @@ export interface CoreRoomSnapshot extends CoreRoomDetails {
   pythonJobs: CorePythonJob[];
   timeline: CoreRoomTimelineEvent[];
   artifacts: Artifact[];
+  recentCompacts?: RecentCompact[];
+  memoryArtifacts?: RoomMemoryArtifact[];
+  claimContext?: {
+    claims?: NormalizedClaim[];
+    relations?: ClaimRelation[];
+  };
   finalOutput?: string;
   messageCount?: number;
   pythonJobsCount?: number;
@@ -372,6 +431,8 @@ export interface CoreRoomMessage {
   scope: "room" | "direct";
   type?: string;
   text: string;
+  summary?: string;
+  claims?: Array<{ text: string } | string>;
   intent?: string;
   confidence?: number;
   sentiment?: Sentiment;
@@ -393,6 +454,11 @@ export interface CoreRoomMessagesResponse {
   count: number;
   messages: CoreRoomMessage[];
   scope?: string;
+  memoryContext?: RoomMemoryArtifact[];
+  claimContext?: {
+    claims?: NormalizedClaim[];
+    relations?: ClaimRelation[];
+  };
 }
 
 export interface CoreRoomHeartbeatResponse {
@@ -419,7 +485,14 @@ export interface CreateCoreRoomInput {
 export interface PostRoomMessageInput {
   roomId: string;
   joinedAgentId: string;
-  text: string;
+  text:
+    | string
+    | {
+        full_text: string;
+        summary: string;
+        intent: string;
+        claims?: Array<{ text: string }>;
+      };
   confidence?: number;
   sentiment?: Sentiment;
   artifacts?: Artifact[];
@@ -427,6 +500,7 @@ export interface PostRoomMessageInput {
   needHuman?: boolean;
   triggeredBy?: string | null;
   metadata?: Record<string, unknown>;
+  parseMode?: "preferred_json" | "minimal_json" | "raw_fallback" | "parse_failed";
 }
 
 export interface User {

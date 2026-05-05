@@ -9,6 +9,7 @@ export class CodexAdapter extends BaseCliAdapter {
   private readonly codexPath: string;
   private readonly sandbox: string;
   private readonly cliModel: string;
+  private readonly trace: boolean;
 
   constructor(
     options: {
@@ -32,6 +33,7 @@ export class CodexAdapter extends BaseCliAdapter {
     this.cliModel = rawModel;
     this.codexPath = resolveCodexCliPath(String(options.codexPath || process.env.CODEX_CLI_PATH || "codex")).resolved;
     this.sandbox = String(options.sandbox || process.env.CODEX_SANDBOX || "read-only").trim();
+    this.trace = String(process.env.HEXNEST_CODEX_TRACE || "").trim() === "1";
   }
 
   protected async executeCli(prompt: string): Promise<string> {
@@ -51,6 +53,13 @@ export class CodexAdapter extends BaseCliAdapter {
     args.push("-");
 
     try {
+      if (this.trace) {
+        const max = Math.max(256, Number(process.env.HEXNEST_CODEX_TRACE_MAX_CHARS || 8000));
+        const snippet = prompt.length > max ? `${prompt.slice(0, max)}\n...<truncated>...` : prompt;
+        console.log(
+          `[codex-cli] request model=${this.cliModel || "default"} sandbox=${this.sandbox} cmd=${this.codexPath} args=${JSON.stringify(args)} promptChars=${prompt.length}\n${snippet}`
+        );
+      }
       const result = await this.runCommand(this.codexPath, args, prompt);
       if (result.exitCode !== 0) {
         const errorBody = (result.stderr || result.stdout || "").trim();
@@ -64,10 +73,14 @@ export class CodexAdapter extends BaseCliAdapter {
       if (!text) {
         throw new Error("Codex CLI returned an empty response");
       }
+      if (this.trace) {
+        const max = Math.max(256, Number(process.env.HEXNEST_CODEX_TRACE_MAX_CHARS || 8000));
+        const snippet = text.length > max ? `${text.slice(0, max)}\n...<truncated>...` : text;
+        console.log(`[codex-cli] response chars=${text.length}\n${snippet}`);
+      }
       return text;
     } finally {
       void fs.rm(outputFile, { force: true }).catch(() => undefined);
     }
   }
 }
-

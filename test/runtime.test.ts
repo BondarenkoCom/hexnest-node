@@ -518,5 +518,258 @@ describe("NodeRuntime", () => {
 
     await runtime.stop();
   });
-});
 
+  it("does not process review jobs in node runtime", async () => {
+    const calls = {
+      getReviewJobs: 0,
+      startReviewJob: 0,
+      completeReviewJob: 0
+    };
+
+    const client = {
+      registerNode: async () => ({ nodeId: "node-1", nodeToken: "token-1", status: "approved" as const }),
+      getNodeStatus: async () => ({
+        nodeId: "node-1",
+        approvalStatus: "approved" as const,
+        status: "online" as const,
+        lastHeartbeatAt: null,
+        lastHeartbeatStatus: null
+      }),
+      heartbeat: async () => ({ ok: true, pendingInvitations: [] }),
+      submitUsage: async () => ({ accepted: 0, totalOwed: 0 }),
+      markOffline: async () => undefined,
+      getReviewJobs: async () => {
+        calls.getReviewJobs += 1;
+        return { nodeId: "node-1", count: 0, jobs: [] };
+      },
+      startReviewJob: async () => {
+        calls.startReviewJob += 1;
+        return { ok: true, job: {} };
+      },
+      completeReviewJob: async (_nodeId: string, _jobId: string, _payload: any) => {
+        calls.completeReviewJob += 1;
+        return { ok: true, artifact: {} };
+      },
+      failReviewJob: async () => ({ ok: true, job: {} }),
+      joinRoom: async () => ({ roomId: "room-1", joinedAgent: { id: "joined-1", name: "fake-agent" } }),
+      postRoomMessage: async () => undefined,
+      getRoomContext: async (_roomId: string, role: string) => ({
+        roomId: "room-1",
+        roomName: "Room 1",
+        task: "Research market dynamics",
+        role,
+        phase: "independent_answers",
+        timeline: [],
+        artifacts: [],
+        rules: "Cite sources."
+      })
+    };
+
+    const runtime = new NodeRuntime(makeNodeConfig(), [new FakeAdapter()], {
+      clientFactory: () => client as any
+    });
+
+    await runtime.start();
+    await sleep(40);
+    await runtime.stop();
+
+    expect(calls.getReviewJobs).toBe(0);
+    expect(calls.startReviewJob).toBe(0);
+    expect(calls.completeReviewJob).toBe(0);
+  });
+
+  it("restarts a room session by rejoining when joined agent id is missing", async () => {
+    const calls = {
+      joinRoom: 0,
+      postRoomMessage: 0
+    };
+
+    const client = {
+      registerNode: async () => ({ nodeId: "node-1", nodeToken: "token-1", status: "approved" as const }),
+      getNodeStatus: async () => ({
+        nodeId: "node-1",
+        approvalStatus: "approved" as const,
+        status: "online" as const,
+        lastHeartbeatAt: null,
+        lastHeartbeatStatus: null
+      }),
+      heartbeat: async () => ({ ok: true, pendingInvitations: [] }),
+      submitUsage: async () => ({ accepted: 0, totalOwed: 0 }),
+      markOffline: async () => undefined,
+      joinRoom: async () => {
+        calls.joinRoom += 1;
+        return {
+          roomId: "room-1",
+          joinedAgent: { id: "joined-after-restart", name: "fake-agent" }
+        };
+      },
+      postRoomMessage: async () => {
+        calls.postRoomMessage += 1;
+      },
+      getRoomContext: async (_roomId: string, role: string) => ({
+        roomId: "room-1",
+        roomName: "Room 1",
+        task: "Research market dynamics",
+        role,
+        phase: "independent_answers",
+        timeline: [],
+        artifacts: [],
+        rules: "Cite sources."
+      })
+    };
+
+    const database = {
+      isReady: () => true,
+      getNodeConfig: () => null,
+      setNodeIdentity: () => undefined,
+      getModelConfigs: () => [],
+      getModelConfig: () => ({
+        id: "model-1",
+        type: "OllamaAdapter",
+        name: "fake-agent",
+        model: "fake-model",
+        enabled: true,
+        agentMode: "recruitable" as const,
+        active: true,
+        createdAt: 1,
+        updatedAt: 1
+      }),
+      getRoomSession: () => ({
+        roomId: "room-1",
+        agentName: "fake-agent",
+        role: "researcher",
+        joinedAgentId: undefined,
+        autonomous: false,
+        status: "error" as const,
+        createdAt: 1,
+        updatedAt: 1
+      }),
+      upsertRoomSession: (state: unknown) => state
+    };
+
+    const runtime = new NodeRuntime(makeNodeConfig(), [new FakeAdapter()], {
+      clientFactory: () => client as any,
+      uuidFactory: () => "usage-1",
+      database: database as any
+    });
+
+    await runtime.start();
+    const result = await runtime.restartManualRoomSession("room-1", "fake-agent");
+    expect(result.started).toBe(true);
+    await sleep(30);
+
+    expect(calls.joinRoom).toBe(1);
+    expect(calls.postRoomMessage).toBe(1);
+
+    await runtime.stop();
+  });
+
+  it("recovers joined agent id from room roster when join returns name-taken conflict", async () => {
+    const calls = {
+      joinRoom: 0,
+      getRoom: 0,
+      postRoomMessage: 0
+    };
+
+    const client = {
+      registerNode: async () => ({ nodeId: "node-1", nodeToken: "token-1", status: "approved" as const }),
+      getNodeStatus: async () => ({
+        nodeId: "node-1",
+        approvalStatus: "approved" as const,
+        status: "online" as const,
+        lastHeartbeatAt: null,
+        lastHeartbeatStatus: null
+      }),
+      heartbeat: async () => ({ ok: true, pendingInvitations: [] }),
+      submitUsage: async () => ({ accepted: 0, totalOwed: 0 }),
+      markOffline: async () => undefined,
+      joinRoom: async () => {
+        calls.joinRoom += 1;
+        throw new CoreApiError("Core API failed 409 Conflict: agent name already taken in this room: second", "http", {
+          status: 409,
+          statusText: "Conflict"
+        });
+      },
+      getRoom: async () => {
+        calls.getRoom += 1;
+        return {
+          id: "room-1",
+          name: "Room 1",
+          task: "Research market dynamics",
+          subnest: "general",
+          status: "active",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          connectedAgents: [{ id: "joined-existing", name: "second" }],
+          settings: { pythonShellEnabled: false },
+          pythonJobs: [],
+          timeline: [],
+          artifacts: []
+        };
+      },
+      postRoomMessage: async () => {
+        calls.postRoomMessage += 1;
+      },
+      getRoomContext: async (_roomId: string, role: string) => ({
+        roomId: "room-1",
+        roomName: "Room 1",
+        task: "Research market dynamics",
+        role,
+        phase: "independent_answers",
+        timeline: [],
+        artifacts: [],
+        rules: "Cite sources."
+      })
+    };
+
+    class SecondAdapter extends FakeAdapter {
+      name = "second";
+    }
+
+    const database = {
+      isReady: () => true,
+      getNodeConfig: () => null,
+      setNodeIdentity: () => undefined,
+      getModelConfigs: () => [],
+      getModelConfig: () => ({
+        id: "model-1",
+        type: "OllamaAdapter",
+        name: "second",
+        model: "fake-model",
+        enabled: true,
+        agentMode: "recruitable" as const,
+        active: true,
+        createdAt: 1,
+        updatedAt: 1
+      }),
+      getRoomSession: () => ({
+        roomId: "room-1",
+        agentName: "second",
+        role: "researcher",
+        joinedAgentId: undefined,
+        autonomous: false,
+        status: "error" as const,
+        createdAt: 1,
+        updatedAt: 1
+      }),
+      upsertRoomSession: (state: unknown) => state
+    };
+
+    const runtime = new NodeRuntime(makeNodeConfig(), [new SecondAdapter()], {
+      clientFactory: () => client as any,
+      uuidFactory: () => "usage-1",
+      database: database as any
+    });
+
+    await runtime.start();
+    const result = await runtime.restartManualRoomSession("room-1", "second");
+    expect(result.started).toBe(true);
+    await sleep(30);
+
+    expect(calls.joinRoom).toBe(1);
+    expect(calls.getRoom).toBe(1);
+    expect(calls.postRoomMessage).toBe(1);
+
+    await runtime.stop();
+  });
+});

@@ -51,10 +51,209 @@ describe("BaseCliAdapter", () => {
     expect(prompt).toContain("You are test-cli-adapter in HexNest room.");
     expect(prompt).toContain("Assigned role: cli-role.");
     expect(prompt).toContain("Task: Test task");
+    expect(prompt).toContain("STEP 2 OUTPUT PREFERENCE:");
+    expect(prompt).toContain("full_text, summary, intent, and optional claims");
+    expect(prompt).toContain("fall back to a normal plain-text reply");
+    expect(prompt).toContain("Participate as a live collaborator in an ongoing discussion");
+    expect(prompt).not.toContain("Follow DECIDE -> ACT -> REPORT.");
     
     // Output verification
     expect(response.text).toBe("CLI command complete");
     expect(response.confidence).toBeGreaterThan(0);
+  });
+
+  it("includes compact summary and claims in the cli prompt context", async () => {
+    const adapter = new TestCliAdapter();
+
+    await adapter.respond({
+      roomId: "r1",
+      roomName: "Test Room",
+      task: "Test task",
+      role: "cli-role",
+      phase: "open_room",
+      rules: "",
+      actionableEvents: [
+        {
+          id: "a1",
+          timestamp: "T1",
+          phase: "open_room",
+          from: "agent-a",
+          to: "room",
+          scope: "room",
+          intent: "question",
+          text: "Can we reduce rollout scope first?",
+          summary: "Reduce rollout scope first.",
+          claims: [{ text: "Smaller rollout is easier to verify." }]
+        }
+      ],
+      recentCompacts: [
+        {
+          messageId: "m1",
+          summary: "Compact bridge summary",
+          claims: [{ text: "Bridge-first rollout lowers coordination risk." }],
+          intent: "propose",
+          representationSource: "reviewed",
+          score: 0.93
+        }
+      ],
+      memoryArtifacts: [
+        {
+          id: "mem-1",
+          artifactKind: "room_snapshot",
+          summary: "Room snapshot summary",
+          highlights: ["h1"],
+          openQuestions: ["q1"],
+          createdAt: "2026-04-25T05:00:00.000Z"
+        }
+      ],
+      normalizedClaims: [
+        {
+          id: "claim-1",
+          canonicalText: "Bridge-first rollout lowers coordination risk.",
+          canonicalKey: "bridge-first rollout lowers coordination risk",
+          evidenceCount: 3,
+          updatedAt: "2026-04-25T05:01:00.000Z"
+        }
+      ],
+      claimRelations: [
+        {
+          id: "rel-1",
+          fromClaimId: "claim-1",
+          toClaimId: "claim-2",
+          relationType: "supports",
+          updatedAt: "2026-04-25T05:02:00.000Z"
+        }
+      ],
+      timeline: [
+        {
+          id: "m1",
+          timestamp: "T2",
+          phase: "open_room",
+          from: "agent-b",
+          to: "room",
+          scope: "room",
+          intent: "propose",
+          text: "Use the bridge path before replacing reads.",
+          summary: "Bridge before replacing reads.",
+          claims: ["Bridge-first rollout protects the legacy path."]
+        }
+      ],
+      artifacts: [],
+    });
+
+    const prompt = adapter.executeCliCalls[0];
+    expect(prompt).toContain("Recent compacts:");
+    expect(prompt).toContain("Derived memory artifacts:");
+    expect(prompt).toContain("Claim-aware context:");
+    expect(prompt).toContain("- claim-1: Bridge-first rollout lowers coordination risk. {evidence=3}");
+    expect(prompt).toContain("- claim-1 supports claim-2");
+    expect(prompt).toContain("- Room snapshot summary {kind=room_snapshot; highlights=h1; open=q1}");
+    expect(prompt).toContain("- m1 {summary=Compact bridge summary; claims=Bridge-first rollout lowers coordination risk.; intent=propose; source=reviewed; score=0.93}");
+    expect(prompt).toContain("Use the bridge path before replacing reads. {summary=Bridge before replacing reads.; claims=Bridge-first rollout protects the legacy path.}");
+    expect(prompt).toContain("Can we reduce rollout scope first? {summary=Reduce rollout scope first.; claims=Smaller rollout is easier to verify.}");
+  });
+
+  it("extracts step1 envelope from a fenced json cli response", async () => {
+    const adapter = new TestCliAdapter();
+    adapter.mockResponse = [
+      "```json",
+      JSON.stringify({
+        full_text: "The current plan is good enough for rollout.",
+        summary: "Proceed with rollout.",
+        intent: "agree"
+      }),
+      "```"
+    ].join("\n");
+
+    const response = await adapter.respond({
+      roomId: "r1",
+      roomName: "Test Room",
+      task: "Test task",
+      role: "cli-role",
+      phase: "open_room",
+      rules: "",
+      timeline: [],
+      artifacts: [],
+    });
+
+    expect(response.text).toBe("The current plan is good enough for rollout.");
+    expect(response.step1Envelope).toEqual({
+      parseMode: "preferred_json",
+      fullText: "The current plan is good enough for rollout.",
+      summary: "Proceed with rollout.",
+      intent: "agree"
+    });
+  });
+
+  it("extracts step1 envelope from a fenced json cli response wrapped in prose", async () => {
+    const adapter = new TestCliAdapter();
+    adapter.mockResponse = [
+      "Here is the compact result.",
+      "```json",
+      JSON.stringify({
+        full_text: "We should keep the bridge and measure first.",
+        summary: "Keep the bridge and measure first.",
+        intent: "refine",
+        claims: ["The bridge lowers rollout risk."]
+      }),
+      "```",
+      "Done."
+    ].join("\n");
+
+    const response = await adapter.respond({
+      roomId: "r1",
+      roomName: "Test Room",
+      task: "Test task",
+      role: "cli-role",
+      phase: "open_room",
+      rules: "",
+      timeline: [],
+      artifacts: [],
+    });
+
+    expect(response.text).toBe("We should keep the bridge and measure first.");
+    expect(response.step1Envelope).toEqual({
+      parseMode: "preferred_json",
+      fullText: "We should keep the bridge and measure first.",
+      summary: "Keep the bridge and measure first.",
+      intent: "refine",
+      claims: [{ text: "The bridge lowers rollout risk." }]
+    });
+  });
+
+  it("extracts step1 envelope from labeled cli text", async () => {
+    const adapter = new TestCliAdapter();
+    adapter.mockResponse = [
+      "full_text: We should bridge first and inspect the read path.",
+      "summary: Bridge first and inspect reads.",
+      "intent: propose",
+      "claims:",
+      "- The bridge preserves compatibility.",
+      "- Read-path changes should come later."
+    ].join("\n");
+
+    const response = await adapter.respond({
+      roomId: "r1",
+      roomName: "Test Room",
+      task: "Test task",
+      role: "cli-role",
+      phase: "open_room",
+      rules: "",
+      timeline: [],
+      artifacts: [],
+    });
+
+    expect(response.text).toBe("We should bridge first and inspect the read path.");
+    expect(response.step1Envelope).toEqual({
+      parseMode: "preferred_json",
+      fullText: "We should bridge first and inspect the read path.",
+      summary: "Bridge first and inspect reads.",
+      intent: "propose",
+      claims: [
+        { text: "The bridge preserves compatibility." },
+        { text: "Read-path changes should come later." }
+      ]
+    });
   });
   
   it("estimates costs properly", async () => {

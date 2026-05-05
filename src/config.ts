@@ -581,4 +581,3 @@ export async function loadRuntimeSetupAsync(baseEnv: NodeJS.ProcessEnv = process
   const adapters = buildAdapters(database, baseEnv);
   return { config, adapters, database };
 }
-

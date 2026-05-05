@@ -5,9 +5,19 @@ import {
   estimateTokensFromText,
   estimateUsdFromModel,
   inferConfidence,
-  parseSentimentFromResponse
+  parseStructuredAgentResponse
 } from "../core/AgentAdapter.js";
 import { CostEstimate, RoomContext } from "../../protocol/types.js";
+import {
+  formatActionableEvents,
+  formatClaimContext,
+  formatMemoryArtifacts,
+  formatRecentCompacts,
+  formatTimeline,
+  liveDiscussionGuidance,
+  structuredOutputGuidance
+} from "./prompting.js";
+import { traceNodeModelError, traceNodeModelSuccess } from "../../utils/model-trace.js";
 
 export interface CliRunResult {
   exitCode: number | null;
@@ -40,33 +50,28 @@ export abstract class BaseCliAdapter implements AgentAdapter {
   }
 
   async respond(context: RoomContext): Promise<AgentResponse> {
-    const timeline = context.timeline
-      .slice(-10)
-      .map((event) => {
-        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
-        const trigger = event.triggeredBy ? ` trig=${event.triggeredBy}` : "";
-        return `${event.from} -> ${event.to} [${meta || "chat"}]${trigger}: ${event.text}`;
-      })
-      .join("\n");
-    const actionable = (context.actionableEvents || [])
-      .map((event) => {
-        const meta = [event.scope, event.type, event.intent].filter(Boolean).join("/");
-        return `- ${event.from} -> ${event.to} [${meta || "chat"}]${event.triggeredBy ? ` trig=${event.triggeredBy}` : ""}: ${event.text}`;
-      })
-      .join("\n");
+    const timeline = formatTimeline(context.timeline, 10);
+    const actionable = formatActionableEvents(context.actionableEvents);
 
     const prompt = [
       `You are ${this.name} in HexNest room.`,
       `Assigned role: ${context.role}.`,
       `Rules: ${context.rules}`,
       "Be concrete. Keep output compact and high-signal.",
-      "Follow DECIDE -> ACT -> REPORT. If there is no actionable trigger, return a short NO_ACTION reason.",
+      "If there is no actionable trigger, return a short NO_ACTION reason.",
       "Do not run shell commands or modify files. Reply with text only.",
+      ...liveDiscussionGuidance(),
+      ...structuredOutputGuidance(),
       "",
       `Task: ${context.task}`,
       `Phase: ${context.phase}`,
       `ContextVersion: ${context.contextVersion || "v1"}`,
       `Summary: ${context.contextSummary || "n/a"}`,
+      ...(context.recentCompacts?.length ? ["Recent compacts:", formatRecentCompacts(context.recentCompacts)] : []),
+      ...(context.memoryArtifacts?.length ? ["Derived memory artifacts:", formatMemoryArtifacts(context.memoryArtifacts)] : []),
+      ...((context.normalizedClaims?.length || context.claimRelations?.length)
+        ? ["Claim-aware context:", formatClaimContext(context.normalizedClaims, context.claimRelations)]
+        : []),
       "",
       "Actionable events:",
       actionable || "(none)",
@@ -75,17 +80,53 @@ export abstract class BaseCliAdapter implements AgentAdapter {
       timeline || "(empty)"
     ].join("\n");
 
-    const rawText = await this.executeCli(prompt);
-    const parsed = parseSentimentFromResponse(rawText);
-    
-    const output: AgentResponse = {
-      text: parsed.text,
-      confidence: inferConfidence(parsed.text, context.phase)
-    };
-    if (context.enableSentimentAnalysis) {
-      output.sentiment = parsed.sentiment;
+    try {
+      const rawText = await this.executeCli(prompt);
+      traceNodeModelSuccess({
+        adapter: this.name,
+        model: this.modelId,
+        transport: "cli",
+        roomId: context.roomId,
+        role: context.role,
+        phase: context.phase,
+        prompt: {
+          format: "single",
+          text: prompt
+        },
+        response: rawText
+      });
+
+      const parsed = parseStructuredAgentResponse(rawText);
+
+      const output: AgentResponse = {
+        text: parsed.text,
+        confidence: inferConfidence(parsed.text, context.phase)
+      };
+      if (parsed.step1Envelope) {
+        output.step1Envelope = parsed.step1Envelope;
+      }
+      if (context.enableSentimentAnalysis) {
+        output.sentiment = parsed.sentiment;
+      }
+      return output;
+    } catch (error) {
+      traceNodeModelError(
+        {
+          adapter: this.name,
+          model: this.modelId,
+          transport: "cli",
+          roomId: context.roomId,
+          role: context.role,
+          phase: context.phase,
+          prompt: {
+            format: "single",
+            text: prompt
+          }
+        },
+        error
+      );
+      throw error;
     }
-    return output;
   }
 
   async estimateCost(context: RoomContext, responseText = ""): Promise<CostEstimate> {

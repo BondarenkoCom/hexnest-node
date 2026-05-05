@@ -12,7 +12,9 @@ import {
   CoreRoomStats,
   CoreRoomWebhookInfo,
   CoreRoomsListResponse,
+  ClaimRelation,
   CreateCoreRoomInput,
+  NormalizedClaim,
   DeleteNodeResponse,
   HeartbeatPayload,
   NodeApprovalStatusResponse,
@@ -22,6 +24,8 @@ import {
   RegisterNodeRequest,
   RegisterNodeResponse,
   RoomContext,
+  RoomMemoryArtifact,
+  RecentCompact,
   SubmitUsageResponse,
   UsageRecord,
   AgentDescriptor
@@ -145,6 +149,151 @@ function summarizeErrorBody(body: string, contentType?: string | null): string {
   }
 
   return trimAndCollapse(normalizedBody);
+}
+
+function buildContextSummary(timeline: RoomContext["timeline"], artifactsCount: number): string {
+  const recentSummaries = timeline
+    .map((event) => trimAndCollapse(String(event.summary || ""), 160))
+    .filter(Boolean)
+    .slice(-3);
+
+  if (recentSummaries.length > 0) {
+    return `Recent summaries: ${recentSummaries.join(" | ")}`;
+  }
+
+  const actionableCount = timeline.filter((event) => {
+    const normalizedIntent = String(event.intent || "").trim().toLowerCase();
+    return Boolean(event.scope === "direct" || event.triggeredBy || ACTIONABLE_INTENTS.has(normalizedIntent));
+  }).length;
+
+  return `timeline=${timeline.length}; actionable=${actionableCount}; artifacts=${artifactsCount}`;
+}
+
+function buildMemorySummary(memoryArtifacts: RoomMemoryArtifact[]): string {
+  const summaries = memoryArtifacts
+    .map((item) => trimAndCollapse(String(item.summary || ""), 140))
+    .filter(Boolean)
+    .slice(0, 2);
+  if (!summaries.length) {
+    return "";
+  }
+  return `Memory: ${summaries.join(" | ")}`;
+}
+
+function buildClaimSummary(claims: NormalizedClaim[], relations: ClaimRelation[]): string {
+  if (!claims.length && !relations.length) {
+    return "";
+  }
+  return `Claims: ${claims.length}; relations: ${relations.length}`;
+}
+
+function buildRecentCompacts(room: CoreRoomSnapshot): RecentCompact[] {
+  const rawRecentCompacts = Array.isArray(room.recentCompacts) ? room.recentCompacts : [];
+  return rawRecentCompacts
+    .map((item) => {
+      const value = item as RecentCompact;
+      const compact: RecentCompact = {
+        messageId: String(value.messageId || ""),
+        intent: String(value.intent || "unknown"),
+        representationSource: String(value.representationSource || "self_declared")
+      };
+      if (value.summary) {
+        compact.summary = String(value.summary);
+      }
+      if (Array.isArray(value.claims)) {
+        compact.claims = value.claims as Array<{ text: string } | string>;
+      }
+      if (typeof value.score === "number") {
+        compact.score = value.score;
+      }
+      return compact;
+    })
+    .filter((item) => Boolean(item.messageId));
+}
+
+function buildMemoryArtifacts(room: CoreRoomSnapshot): RoomMemoryArtifact[] {
+  const raw = Array.isArray(room.memoryArtifacts) ? room.memoryArtifacts : [];
+  return raw
+    .map((item) => {
+      const value = item as RoomMemoryArtifact;
+      const artifactKind = value.artifactKind === "room_snapshot" ? "room_snapshot" : "segment_summary";
+      const summary = String(value.summary || "").trim();
+      if (!summary) {
+        return null;
+      }
+      const parsed: RoomMemoryArtifact = {
+        id: String(value.id || ""),
+        artifactKind,
+        summary,
+        createdAt: String(value.createdAt || "")
+      };
+      if (Array.isArray(value.highlights)) {
+        parsed.highlights = value.highlights.map((entry) => String(entry)).filter(Boolean);
+      }
+      if (Array.isArray(value.openQuestions)) {
+        parsed.openQuestions = value.openQuestions.map((entry) => String(entry)).filter(Boolean);
+      }
+      if (value.phaseHint) parsed.phaseHint = String(value.phaseHint);
+      if (value.coverageStartMessageId) parsed.coverageStartMessageId = String(value.coverageStartMessageId);
+      if (value.coverageEndMessageId) parsed.coverageEndMessageId = String(value.coverageEndMessageId);
+      if (typeof value.coverageCount === "number") parsed.coverageCount = value.coverageCount;
+      if (value.sourceMeta && typeof value.sourceMeta === "object") {
+        parsed.sourceMeta = {
+          phase: value.sourceMeta.phase ? String(value.sourceMeta.phase) : undefined,
+          emphasis: value.sourceMeta.emphasis ? String(value.sourceMeta.emphasis) : undefined,
+          rank: typeof value.sourceMeta.rank === "number" ? value.sourceMeta.rank : undefined,
+          policyVersion: value.sourceMeta.policyVersion ? String(value.sourceMeta.policyVersion) : undefined
+        };
+      }
+      return parsed;
+    })
+    .filter((item): item is RoomMemoryArtifact => Boolean(item && item.id));
+}
+
+function buildNormalizedClaims(raw: unknown): NormalizedClaim[] {
+  const list = Array.isArray(raw) ? raw : [];
+  return list
+    .map((item) => {
+      const value = item as Record<string, unknown>;
+      const id = String(value.id || "").trim();
+      const canonicalText = String(value.canonicalText || value.canonical_text || "").trim();
+      if (!id || !canonicalText) return null;
+      return {
+        id,
+        canonicalText,
+        canonicalKey: String(value.canonicalKey || value.canonical_key || "").trim() || canonicalText.toLowerCase(),
+        evidenceCount: Number(value.evidenceCount || value.evidence_count || 0),
+        updatedAt: String(value.updatedAt || value.updated_at || "")
+      } as NormalizedClaim;
+    })
+    .filter((item): item is NormalizedClaim => Boolean(item));
+}
+
+function buildClaimRelations(raw: unknown): ClaimRelation[] {
+  const list = Array.isArray(raw) ? raw : [];
+  return list
+    .map((item) => {
+      const value = item as Record<string, unknown>;
+      const relationTypeRaw = String(value.relationType || value.relation_type || "").trim().toLowerCase();
+      const relationType =
+        relationTypeRaw === "supports" || relationTypeRaw === "opposes" || relationTypeRaw === "refines"
+          ? relationTypeRaw
+          : null;
+      if (!relationType) return null;
+      const id = String(value.id || "").trim();
+      const fromClaimId = String(value.fromClaimId || value.from_claim_id || "").trim();
+      const toClaimId = String(value.toClaimId || value.to_claim_id || "").trim();
+      if (!id || !fromClaimId || !toClaimId) return null;
+      return {
+        id,
+        fromClaimId,
+        toClaimId,
+        relationType,
+        updatedAt: String(value.updatedAt || value.updated_at || ""),
+        provenanceJson: value.provenanceJson ?? value.provenance_json
+      } as ClaimRelation;
+    })
+    .filter((item): item is ClaimRelation => Boolean(item));
 }
 
 export class HexNestClient implements HexNestClientLike {
@@ -393,6 +542,9 @@ export class HexNestClient implements HexNestClientLike {
     if (input.metadata && typeof input.metadata === "object") {
       body.metadata = input.metadata;
     }
+    if (input.parseMode) {
+      body.parseMode = input.parseMode;
+    }
 
     await this.request(`/api/rooms/${encodeURIComponent(input.roomId)}/messages`, {
       method: "POST",
@@ -404,7 +556,7 @@ export class HexNestClient implements HexNestClientLike {
   async getRoomContext(roomId: string, role: string): Promise<RoomContext> {
     const encodedRoomId = encodeURIComponent(roomId);
     const [room, messages] = await Promise.all([
-      this.request<Record<string, unknown>>(`/api/rooms/${encodedRoomId}`, { authRequired: true }),
+      this.getRoom(roomId),
       this.request<Record<string, unknown>>(`/api/rooms/${encodedRoomId}/messages?limit=30`, { authRequired: true })
     ]);
 
@@ -423,6 +575,8 @@ export class HexNestClient implements HexNestClientLike {
         intent: value.intent ? String(value.intent) : undefined,
         triggeredBy: value.triggeredBy ? String(value.triggeredBy) : null,
         text: String(value.text || ""),
+        summary: value.summary ? String(value.summary) : undefined,
+        claims: Array.isArray(value.claims) ? (value.claims as Array<{ text: string } | string>) : undefined,
         sentiment:
           value.sentiment && typeof value.sentiment === "object"
             ? (value.sentiment as RoomContext["timeline"][number]["sentiment"])
@@ -446,17 +600,23 @@ export class HexNestClient implements HexNestClientLike {
       .slice(-6);
 
     const rawArtifacts = Array.isArray(room.artifacts) ? room.artifacts : [];
-    const artifacts = rawArtifacts.map((item, index) => {
-      const value = item as Record<string, unknown>;
-      return {
-        id: String(value.id || `artifact-${index}`),
-        type: (String(value.type || "note") as "synthesis" | "critique" | "note" | "data"),
-        label: String(value.label || ""),
-        content: String(value.content || ""),
-        producer: String(value.producer || ""),
-        timestamp: String(value.timestamp || "")
-      };
-    });
+    const artifacts = rawArtifacts.map((item, index) => ({
+      id: String(item?.id || `artifact-${index}`),
+      type: (String(item?.type || "note") as "synthesis" | "critique" | "note" | "data"),
+      label: String(item?.label || ""),
+      content: String(item?.content || ""),
+      producer: String(item?.producer || ""),
+      timestamp: String(item?.timestamp || "")
+    }));
+    const recentCompacts = buildRecentCompacts(room);
+    const memoryArtifacts = buildMemoryArtifacts(room);
+    const normalizedClaims = buildNormalizedClaims((room as any).claimContext?.claims || (messages as any).claimContext?.claims);
+    const claimRelations = buildClaimRelations((room as any).claimContext?.relations || (messages as any).claimContext?.relations);
+    const settings = room.settings;
+    const template = room.template;
+    const contextSummaryBase = buildContextSummary(timeline, artifacts.length);
+    const memorySummary = buildMemorySummary(memoryArtifacts);
+    const claimSummary = buildClaimSummary(normalizedClaims, claimRelations);
 
     return {
       roomId,
@@ -464,14 +624,18 @@ export class HexNestClient implements HexNestClientLike {
       task: String(room.task || ""),
       role,
       phase: String(room.phase || "open_room"),
-      debateFastMode: Boolean((room.settings as Record<string, unknown> | undefined)?.debateFastMode),
-      enableSentimentAnalysis: Boolean((room.settings as Record<string, unknown> | undefined)?.enableSentimentAnalysis),
+      debateFastMode: Boolean(settings?.debateFastMode),
+      enableSentimentAnalysis: Boolean(settings?.enableSentimentAnalysis),
       contextVersion: "v2",
       timeline,
       actionableEvents,
-      contextSummary: `timeline=${timeline.length}; actionable=${actionableEvents.length}; artifacts=${artifacts.length}`,
+      recentCompacts,
+      ...(memoryArtifacts.length ? { memoryArtifacts } : {}),
+      ...(normalizedClaims.length ? { normalizedClaims } : {}),
+      ...(claimRelations.length ? { claimRelations } : {}),
+      contextSummary: [contextSummaryBase, memorySummary, claimSummary].filter(Boolean).join(" | "),
       artifacts,
-      rules: String((room.template as Record<string, unknown> | undefined)?.rules || "")
+      rules: String(template?.rules || "")
     };
   }
 
@@ -519,7 +683,7 @@ export class HexNestClient implements HexNestClientLike {
         signal: controller.signal
       });
 
-      console.log(`[HexNestClient] ${options.method || "GET"} ${path} auth=${options.authRequired ? "YES" : "NO"}`);
+      // console.log(`[HexNestClient] ${options.method || "GET"} ${path} auth=${options.authRequired ? "YES" : "NO"}`);
 
       if (!response.ok) {
         const body = await response.text();
@@ -629,7 +793,7 @@ export class HexNestClient implements HexNestClientLike {
         signal: controller.signal
       });
 
-      console.log(`[HexNestClient] ${options.method || "GET"} ${path} auth=${options.authRequired ? "YES" : "NO"} status=${response.status}`);
+      // console.log(`[HexNestClient] ${options.method || "GET"} ${path} auth=${options.authRequired ? "YES" : "NO"} status=${response.status}`);
 
       if (!response.ok) {
         const body = await response.text();
