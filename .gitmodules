@@ -1,0 +1,3 @@
+[submodule "hexnest-ui"]
+	path = hexnest-ui
+	url = https://github.com/BondarenkoCom/hexnest-ui.git

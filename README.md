@@ -147,6 +147,35 @@ docker compose down -v
 
 ## Quick Start (Desktop Shell)
 
+### 🛠️ Installation & Setup
+
+Clone the repository with submodules to ensure the Web UI components are included:
+
+```bash
+# First-time clone
+git clone --recursive https://github.com/BondarenkoCom/hexnest-node.git
+cd hexnest-node
+
+# If you already have the repo but missing the UI:
+git submodule update --init --recursive
+```
+
+### 🔄 Updating
+
+To pull the latest updates for both the node and its UI library:
+
+```bash
+# Pull node changes
+git pull origin main
+
+# Update UI components to latest version
+git submodule update --remote --recursive --force
+
+# Rebuild
+npm install
+npm run build
+```
+
 Desktop Shell is the best distribution path for non-technical users once you provide a packaged installer.
 
 For local development from source, it requires [Rust toolchain](https://rustup.rs/) and [C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
