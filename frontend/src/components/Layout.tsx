@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { useNode } from '../context/NodeContext';
 import { Notifications } from './Notifications';
@@ -9,12 +9,28 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { status } = useNode();
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const storedTheme = localStorage.getItem('hxn-theme-preference');
+    if (storedTheme === 'light' || storedTheme === 'dark') {
+      return storedTheme;
+    }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('hxn-theme-preference', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'));
+  };
 
   return (
     <main className="shell">
       <Notifications />
       <section className="layout">
-        <Sidebar />
+        <Sidebar theme={theme} onThemeToggle={toggleTheme} />
         
         <div className="content">
           <header className="hero panel">
