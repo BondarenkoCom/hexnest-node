@@ -1,10 +1,15 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Activity, Users, FileText, PlusCircle, LogOut } from 'lucide-react';
+import { Activity, Users, FileText, PlusCircle, LogOut, Moon, Sun } from 'lucide-react';
 import { RoomsList } from './RoomsList';
 import { useNode } from '../context/NodeContext';
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  theme: 'light' | 'dark';
+  onThemeToggle: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ theme, onThemeToggle }) => {
   const { logout } = useNode();
 
   const navItems = [
@@ -40,6 +45,15 @@ export const Sidebar: React.FC = () => {
       <RoomsList />
 
       <div className="nav-footer mt-auto">
+        <button className="nav-link w-full text-left" onClick={onThemeToggle}>
+          {theme === 'dark' ? (
+            <Sun className="inline-block w-4 h-4 mr-2 mb-0.5" />
+          ) : (
+            <Moon className="inline-block w-4 h-4 mr-2 mb-0.5" />
+          )}
+          {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+        </button>
+
         <button className="nav-link w-full text-left" onClick={logout}>
           <LogOut className="inline-block w-4 h-4 mr-2 mb-0.5" />
           Logout

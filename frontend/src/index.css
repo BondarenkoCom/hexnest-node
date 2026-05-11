@@ -1,6 +1,7 @@
 @import "@hexnest/ui/styles.css";
 
 :root {
+  color-scheme: dark;
   /* Aliases to --hxn-* tokens */
   --void: var(--hxn-void);
   --deep: var(--hxn-surface);
@@ -24,6 +25,62 @@
   --fs-md: 1.15rem;
   --fs-lg: 1.35rem;
   --lh: 1.55;
+  --app-bg:
+    radial-gradient(circle at 12% 18%, rgba(255, 46, 157, 0.17), transparent 36%),
+    radial-gradient(circle at 88% 2%, rgba(74, 217, 255, 0.2), transparent 34%),
+    linear-gradient(170deg, #07111b 0%, #030a12 52%, #020406 100%);
+  --app-scanline: rgba(22, 210, 255, 0.025);
+  --panel-grad-1: rgba(3, 14, 22, 0.95);
+  --panel-grad-2: rgba(1, 7, 13, 0.98);
+  --panel-cyan-glow: rgba(74, 217, 255, 0.12);
+  --panel-inner-line: rgba(74, 217, 255, 0.08);
+  --control-bg: rgba(8, 20, 33, 0.75);
+  --control-border: rgba(22, 210, 255, 0.24);
+  --control-border-hover: rgba(22, 210, 255, 0.5);
+  --text-soft: #d0e4f4;
+}
+
+:root[data-theme='dark'] {
+  --void: #040a11;
+  --deep: #0a1725;
+  --deep-2: #102133;
+  --panel: #0a1623;
+  --line: rgba(95, 181, 255, 0.36);
+  --line-soft: rgba(95, 181, 255, 0.22);
+  --text: #eaf5ff;
+  --muted: #9cb6cd;
+  --cyan: #58d2ff;
+  --cyan-soft: #9ee9ff;
+  --blood: #ff4f83;
+  --blood-soft: #ff8daf;
+  --warn: #ffc06e;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --void: #f3f8ff;
+  --deep: #e8f1fc;
+  --deep-2: #dde9f7;
+  --panel: #ffffff;
+  --line: rgba(24, 74, 126, 0.28);
+  --line-soft: rgba(24, 74, 126, 0.18);
+  --text: #10263f;
+  --muted: #4a6482;
+  --cyan: #0b84d8;
+  --cyan-soft: #176fb3;
+  --blood: #d63d61;
+  --blood-soft: #bf2f4f;
+  --warn: #9a6400;
+  --app-bg: #ffffff;
+  --app-scanline: rgba(16, 38, 63, 0.03);
+  --panel-grad-1: rgba(255, 255, 255, 0.94);
+  --panel-grad-2: rgba(242, 249, 255, 0.98);
+  --panel-cyan-glow: rgba(11, 132, 216, 0.1);
+  --panel-inner-line: rgba(11, 132, 216, 0.08);
+  --control-bg: rgba(255, 255, 255, 0.86);
+  --control-border: rgba(24, 74, 126, 0.24);
+  --control-border-hover: rgba(11, 132, 216, 0.55);
+  --text-soft: #355170;
 }
 
       * {
@@ -41,10 +98,7 @@
       }
 
       body {
-        background:
-          radial-gradient(circle at 12% 18%, rgba(255, 46, 157, 0.17), transparent 36%),
-          radial-gradient(circle at 88% 2%, rgba(74, 217, 255, 0.2), transparent 34%),
-          linear-gradient(170deg, #07111b 0%, #030a12 52%, #020406 100%);
+        background: var(--app-bg);
       }
 
       body::before {
@@ -54,8 +108,8 @@
         pointer-events: none;
         background: repeating-linear-gradient(
           to bottom,
-          rgba(22, 210, 255, 0.025) 0,
-          rgba(22, 210, 255, 0.025) 1px,
+          var(--app-scanline) 0,
+          var(--app-scanline) 1px,
           transparent 3px,
           transparent 6px
         );
@@ -82,11 +136,11 @@
         background:
           radial-gradient(circle at 18% 22%, rgba(74, 217, 255, 0.05), transparent 56%),
           radial-gradient(circle at 86% 88%, rgba(255, 46, 157, 0.05), transparent 58%),
-          linear-gradient(180deg, rgba(3, 14, 22, 0.95), rgba(1, 7, 13, 0.98)),
+          linear-gradient(180deg, var(--panel-grad-1), var(--panel-grad-2)),
           var(--panel);
         box-shadow:
-          inset 0 0 0 1px rgba(74, 217, 255, 0.08),
-          0 0 18px rgba(74, 217, 255, 0.12),
+          inset 0 0 0 1px var(--panel-inner-line),
+          0 0 18px var(--panel-cyan-glow),
           0 0 24px rgba(10, 18, 30, 0.9);
       }
 
@@ -280,17 +334,17 @@
         display: block;
         text-decoration: none;
         color: var(--text);
-        border: 1px solid rgba(22, 210, 255, 0.2);
+        border: 1px solid var(--control-border);
         border-radius: 11px;
         padding: 10px 12px;
-        background: rgba(8, 20, 33, 0.75);
+        background: var(--control-bg);
         font-weight: 600;
         font-size: var(--fs-sm);
         cursor: pointer;
       }
 
       .nav-link:hover {
-        border-color: rgba(22, 210, 255, 0.48);
+        border-color: var(--control-border-hover);
       }
 
       .nav-link.active {
@@ -595,7 +649,7 @@
 
       .feature-body {
         margin: 0;
-        color: #d0e4f4;
+        color: var(--text-soft);
         font-size: var(--fs-sm);
         line-height: var(--lh);
       }
@@ -1689,9 +1743,9 @@
       }
 
       .auth-form input {
-        border: 1px solid rgba(22, 210, 255, 0.25);
+        border: 1px solid var(--control-border);
         border-radius: 11px;
-        background: rgba(7, 18, 29, 0.88);
+        background: var(--control-bg);
         color: var(--text);
         font-family: inherit;
         font-size: var(--fs-sm);
@@ -1700,7 +1754,7 @@
       }
 
       .auth-form input:focus {
-        border-color: rgba(22, 210, 255, 0.64);
+        border-color: var(--control-border-hover);
         outline: none;
         box-shadow: 0 0 0 2px rgba(22, 210, 255, 0.18);
       }
@@ -2001,8 +2055,8 @@
 
       .form-control {
         width: 100%;
-        background: rgba(7, 18, 30, 0.4);
-        border: 1px solid var(--line-soft);
+        background: var(--control-bg);
+        border: 1px solid var(--control-border);
         border-radius: 12px;
         padding: 12px 16px;
         color: var(--text);
@@ -2010,17 +2064,16 @@
         font-size: var(--fs-sm);
         transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         backdrop-filter: blur(4px);
-        color-scheme: dark;
+        color-scheme: inherit;
       }
 
       .form-control:hover {
-        background: rgba(7, 18, 30, 0.6);
-        border-color: rgba(74, 217, 255, 0.3);
+        border-color: var(--control-border-hover);
       }
 
       .form-control:focus {
         outline: none;
-        background: rgba(7, 18, 30, 0.8);
+        background: var(--control-bg);
         border-color: var(--cyan);
         box-shadow: 
           0 0 0 4px rgba(74, 217, 255, 0.1),
@@ -2113,4 +2166,110 @@
       .load-more-btn:active {
         transform: translateY(0);
         background: rgba(74, 217, 255, 0.12);
+      }
+
+      /* Unified theme surfaces to avoid mixed dark/light UI */
+      :root[data-theme='dark'] {
+        --surface-1: rgba(7, 18, 29, 0.88);
+        --surface-2: rgba(4, 12, 20, 0.78);
+        --surface-3: rgba(4, 12, 20, 0.7);
+        --surface-4: #050b12;
+        --overlay-1: rgba(9, 19, 33, 0.96);
+        --overlay-2: rgba(4, 8, 14, 0.98);
+        --text-strong: #e7f8ff;
+      }
+
+      :root[data-theme='light'] {
+  --surface-1: #f4f7fb;
+  --surface-2: #edf2f8;
+  --surface-3: #e7eef6;
+  --surface-4: #dde6f1;
+  --overlay-1: #f7fbff;
+  --overlay-2: #eaf1f9;
+  --text-strong: #0f2b45;
+}
+
+      .stat-box,
+      .summary-card,
+      .readiness-card,
+      .mini-item,
+      .room-detail-panel,
+      .room-highlight,
+      .room-artifact-card,
+      .room-artifact-shell,
+      .room-job-card,
+      .room-job-output,
+      .room-hero-meta,
+      .room-participation-card,
+      .room-sidebar-card,
+      .room-timeline-card,
+      .aya-stage,
+      .aya-bubble,
+      .aya-loader,
+      .notification.info {
+        background: var(--surface-1);
+      }
+
+      .room-item,
+      .room-empty,
+      .feature-card,
+      .readiness-block,
+      .room-artifact-summary,
+      .room-event,
+      .room-meta-item,
+      .room-code-inline {
+        background: var(--surface-2);
+      }
+
+      .room-artifact-content,
+      .room-job-output pre,
+      .code-block,
+      .room-code-block {
+        background: var(--surface-4);
+        color: var(--text-strong);
+      }
+
+      .modal-content,
+      .modal-panel {
+        background: linear-gradient(180deg, var(--overlay-1), var(--overlay-2)), var(--panel);
+      }
+
+      .auth-toggle,
+      .modal-footer .btn-secondary {
+        color: var(--text-strong);
+      }
+
+      /* Force consistent light theme across utility-based dark blocks */
+      :root[data-theme='light'] .panel {
+        background:
+          radial-gradient(circle at 18% 22%, rgba(11, 132, 216, 0.06), transparent 56%),
+          radial-gradient(circle at 86% 88%, rgba(214, 61, 97, 0.04), transparent 58%),
+          linear-gradient(180deg, #ffffff, #f4f8fd),
+          var(--panel);
+        box-shadow:
+          inset 0 0 0 1px rgba(11, 132, 216, 0.08),
+          0 8px 24px rgba(16, 38, 63, 0.08);
+      }
+
+      :root[data-theme='light'] .bg-void-dark,
+      :root[data-theme='light'] .bg-void-dark\/20,
+      :root[data-theme='light'] .bg-void-dark\/40,
+      :root[data-theme='light'] .bg-void-dark\/60 {
+        background-color: var(--surface-1) !important;
+      }
+
+      :root[data-theme='light'] .room-code-block,
+      :root[data-theme='light'] .code-block {
+        background: #edf3fa;
+        border-color: rgba(24, 74, 126, 0.22);
+        color: #16324f;
+      }
+
+      :root[data-theme='light'] .chip,
+      :root[data-theme='light'] .state-pill,
+      :root[data-theme='light'] .room-event-type,
+      :root[data-theme='light'] .room-job-status {
+        background: #edf3fa;
+        border-color: rgba(24, 74, 126, 0.26);
+        color: #1f466d;
       }
