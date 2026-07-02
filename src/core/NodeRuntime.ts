@@ -188,6 +188,7 @@ export class NodeRuntime {
       throw new Error("Node runtime is not running");
     }
 
+    const wasConnected = this.coreConnected;
     const providedUserToken = auth?.userToken?.trim();
     const providedUserEmail = auth?.userEmail?.trim();
     if (providedUserToken) {
@@ -203,12 +204,20 @@ export class NodeRuntime {
       throw new Error("Core connection is not configured in node settings");
     }
 
+    // If we were not yet connected and we have new user credentials,
+    // clear the pending/previous identity to force a fresh registration.
+    if (!wasConnected && (providedUserToken || providedUserEmail)) {
+      await this.resetLocalIdentity("refreshing pending identity with new user auth");
+    }
+
     await this.disconnectFromCore(false);
 
     try {
       await this.connectToCore();
     } catch (error) {
-      this.enterLocalMode(error);
+      if (!(error instanceof CoreConnectionSupersededError)) {
+        this.enterLocalMode(error);
+      }
       throw error;
     }
 

@@ -519,7 +519,12 @@ export class RoomAgentSession {
     }
 
     const fullText = this.normalizeRawFallbackText(decoratedText);
-    return fullText;
+    return {
+      full_text: fullText,
+      summary: this.buildFallbackSummary(fullText),
+      intent: this.inferFallbackIntent(fullText),
+      claims: []
+    };
   }
 
   private buildParseMode(response: AgentResponse): "preferred_json" | "minimal_json" | "raw_fallback" | "parse_failed" {
