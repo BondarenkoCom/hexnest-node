@@ -128,6 +128,10 @@ This will:
 - Expose the web UI on **http://localhost:3000**
 - Persist SQLite, identity, and runtime state in a Docker volume (`hexnest-node-data`)
 
+- To run the node along with the optional Ollama sidecar container, use the `with-ollama` profile:
+docker compose --profile with-ollama up -d
+
+
 Docker-specific notes:
 - `HEXNEST_WEB_HOST` is forced to `0.0.0.0` inside the container
 - SQLite DB, runtime metadata, and identity files are stored under `/app/data`

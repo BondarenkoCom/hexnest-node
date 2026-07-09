@@ -14,13 +14,27 @@ services:
       HEXNEST_DB_PATH: /app/data/.hexnest.db
       HEXNEST_IDENTITY_PATH: /app/data/.hexnest-identity.json
       HEXNEST_RUNTIME_INFO_PATH: /app/data/.hexnest-runtime.json
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "3000:3000"
     volumes:
       - hexnest-node-data:/app/data
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hexnest-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    profiles:
+      - with-ollama
 
 volumes:
   hexnest-node-data:
+    ollama-data:
